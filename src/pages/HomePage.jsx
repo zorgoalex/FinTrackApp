@@ -1,24 +1,22 @@
-import { Plus, Home } from 'lucide-react'
+import { Plus } from 'lucide-react'
 
 export function HomePage() {
   return (
-    <div className="container mx-auto max-w-md">
-      {/* Шапка для десктопа */}
-      <header className="bg-white shadow-sm border-b px-4 py-3 hidden lg:block">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold text-gray-900">ФинУчёт</h1>
-          <div className="flex items-center space-x-2">
-            <span className="text-sm text-gray-600">Персональный</span>
-            <div className="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center">
-              <span className="text-white text-sm font-medium">П</span>
-            </div>
+    <div className="container mx-auto max-w-7xl p-4">
+      {/* Шапка для десктопа, управляемая из Layout */}
+      <header className="hidden lg:flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-semibold text-gray-900">Главная</h1>
+        <div className="flex items-center space-x-2">
+          <span className="text-sm text-gray-600">Персональный</span>
+          <div className="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center">
+            <span className="text-white text-sm font-medium">П</span>
           </div>
         </div>
       </header>
 
       {/* Виджеты аналитики */}
-      <main className="p-4 space-y-4">
-        <div className="grid grid-cols-1 gap-4">
+      <main className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* За сегодня */}
           <div className="card">
             <h2 className="text-lg font-medium text-gray-900 mb-3">За сегодня</h2>
@@ -98,13 +96,8 @@ export function HomePage() {
       </main>
 
       {/* FAB кнопка */}
-      <button className="fab">
+      <button className="fab" title="Добавить операцию">
         <Plus size={24} />
-      </button>
-
-      {/* Кнопка домой (всегда видна) */}
-      <button className="fixed bottom-6 left-6 w-12 h-12 bg-gray-600 hover:bg-gray-700 text-white rounded-full shadow-lg flex items-center justify-center transition-all duration-200 z-50">
-        <Home size={20} />
       </button>
     </div>
   )

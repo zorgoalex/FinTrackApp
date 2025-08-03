@@ -3,11 +3,16 @@ import { HomePage } from './pages/HomePage'
 import { LoginPage } from './pages/LoginPage'
 import { Layout } from './components/Layout'
 import { ProtectedRoute } from './components/ProtectedRoute'
+import { SignupPage } from './pages/SignupPage' // <-- Добавлен импорт
 
 const router = createBrowserRouter([
   {
     path: '/login',
     element: <LoginPage />
+  },
+  {
+    path: '/signup', // <-- Добавлен маршрут для страницы регистрации
+    element: <SignupPage />
   },
   {
     path: '/',
@@ -16,7 +21,8 @@ const router = createBrowserRouter([
       {
         index: true,
         element: <HomePage />
-      }
+      },
+      // Здесь можно будет добавлять другие защищенные страницы
     ]
   }
 ])
