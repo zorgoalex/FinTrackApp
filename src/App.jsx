@@ -1,9 +1,9 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
-import { HomePage } from './pages/HomePage'
-import { LoginPage } from './pages/LoginPage'
-import { Layout } from './components/Layout'
-import { ProtectedRoute } from './components/ProtectedRoute'
-import { SignupPage } from './pages/SignupPage' // <-- Добавлен импорт
+import HomePage from './pages/HomePage';
+import LoginPage from './pages/LoginPage';
+import Layout from './components/Layout';
+import ProtectedRoute from './components/ProtectedRoute';
+import SignupPage from './pages/SignupPage';
 
 const router = createBrowserRouter([
   {

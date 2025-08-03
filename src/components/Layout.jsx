@@ -3,7 +3,7 @@ import { Outlet, Link } from 'react-router-dom'
 import { Menu, X, Home, Users, Settings, BarChart3, Calendar, CreditCard, LogOut } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
-export function Layout() {
+export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { user, logout } = useAuth()
 

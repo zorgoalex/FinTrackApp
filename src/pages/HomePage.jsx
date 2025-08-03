@@ -1,6 +1,6 @@
 import { Plus } from 'lucide-react'
 
-export function HomePage() {
+export default function HomePage() {
   return (
     <div className="container mx-auto max-w-7xl p-4">
       {/* Шапка для десктопа, управляемая из Layout */}

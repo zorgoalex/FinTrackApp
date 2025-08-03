@@ -1,109 +1,44 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 
-export function SignupPage() {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const { signUp } = useAuth();
+export default function SignupPage() {
   const navigate = useNavigate();
+  const { signUp, loading, error } = useAuth();
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [localError, setLocalError] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (password.length < 6) {
-      setError('Пароль должен быть не менее 6 символов');
+    setLocalError("");
+    if (!password || password.length < 6) {
+      setLocalError("Пароль должен быть не менее 6 символов");
       return;
     }
-    setError('');
-    setLoading(true);
-    try {
-      await signUp(email, password, name);
-      navigate('/');
-    } catch (err) {
-      setError('Не удалось зарегистрироваться. Возможно, такой пользователь уже существует.');
-    }
-    setLoading(false);
+    const ok = await signUp(name, email, password);
+    if (ok) navigate("/");
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Регистрация в ФинУчёт
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Создайте аккаунт для управления финансами
-          </p>
-        </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">{error}</div>}
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                Имя
-              </label>
-              <input
-                id="name"
-                name="name"
-                type="text"
-                autoComplete="name"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="input-field mt-1"
-                placeholder="Ваше имя"
-              />
-            </div>
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="input-field mt-1"
-                placeholder="Введите ваш email"
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Пароль
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="input-field mt-1"
-                placeholder="Создайте пароль"
-              />
-            </div>
-          </div>
-
-          <div>
-            <button type="submit" className="btn-primary w-full" disabled={loading}>
-              {loading ? 'Регистрация...' : 'Зарегистрироваться'}
-            </button>
-          </div>
-
-          <div className="text-center">
-            <Link to="/login" className="text-sm text-primary-600 hover:text-primary-500">
-              Уже есть аккаунт? Войти
-            </Link>
-          </div>
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="card w-full max-w-sm">
+        <h1 className="text-xl font-semibold mb-4">Регистрация</h1>
+        {(error || localError) && (
+          <div className="text-red-600 text-sm mb-3">{error || localError}</div>
+        )}
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <input type="text" className="input" placeholder="Имя" value={name} onChange={(e)=>setName(e.target.value)} required />
+          <input type="email" className="input" placeholder="Email" value={email} onChange={(e)=>setEmail(e.target.value)} required />
+          <input type="password" className="input" placeholder="Пароль" value={password} onChange={(e)=>setPassword(e.target.value)} required />
+          <button className="btn btn-primary w-full" disabled={loading}>
+            {loading ? "Создаём..." : "Зарегистрироваться"}
+          </button>
         </form>
+        <div className="mt-4 text-sm text-center">
+          Уже есть аккаунт? <Link to="/login" className="text-blue-600">Войти</Link>
+        </div>
       </div>
     </div>
   );
