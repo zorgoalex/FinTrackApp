@@ -13,14 +13,19 @@ export function AuthProvider({ children }) {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const session = supabase.auth.getSession();
-
-    if (session?.user) {
+    // Получаем текущую сессию
+    const getInitialSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session?.user) {
         const profile = { id: session.user.id, email: session.user.email };
         localStorage.setItem("user", JSON.stringify(profile));
         setUser(profile);
-    }
-    setLoading(false);
+      }
+      setLoading(false);
+    };
+    
+    getInitialSession();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       const supaUser = session?.user || null;

@@ -1,9 +1,11 @@
-import { createBrowserRouter, RouterProvider } from 'react-router-dom'
-import HomePage from './pages/HomePage';
+import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
+import WorkspaceSelectPage from './pages/WorkspaceSelectPage';
+import WorkspacePage from './pages/WorkspacePage';
 import LoginPage from './pages/LoginPage';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import SignupPage from './pages/SignupPage';
+import { WorkspaceProvider } from './contexts/WorkspaceContext';
 
 const router = createBrowserRouter([
   {
@@ -11,8 +13,22 @@ const router = createBrowserRouter([
     element: <LoginPage />
   },
   {
-    path: '/signup', // <-- Добавлен маршрут для страницы регистрации
+    path: '/signup',
     element: <SignupPage />
+  },
+  {
+    path: '/workspaces',
+    element: <ProtectedRoute><WorkspaceSelectPage /></ProtectedRoute>
+  },
+  {
+    path: '/workspace/:workspaceId',
+    element: <ProtectedRoute><WorkspaceProvider><Layout /></WorkspaceProvider></ProtectedRoute>,
+    children: [
+      {
+        index: true,
+        element: <WorkspacePage />
+      }
+    ]
   },
   {
     path: '/',
@@ -20,9 +36,8 @@ const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <HomePage />
-      },
-      // Здесь можно будет добавлять другие защищенные страницы
+        element: <Navigate to="/workspaces" replace />
+      }
     ]
   }
 ])

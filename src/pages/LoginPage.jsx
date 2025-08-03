@@ -17,7 +17,7 @@ export default function LoginPage() {
       return;
     }
     const ok = await login(email, password);
-    if (ok) navigate("/");
+    if (ok) navigate("/workspaces");
   };
 
   return (

@@ -18,7 +18,7 @@ export default function SignupPage() {
       return;
     }
     const ok = await signUp(name, email, password);
-    if (ok) navigate("/");
+    if (ok) navigate("/workspaces");
   };
 
   return (
