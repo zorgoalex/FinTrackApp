@@ -3,42 +3,38 @@ import { Outlet, Link } from 'react-router-dom'
 import { Menu, X, Home, Users, Settings, BarChart3, Calendar, CreditCard, LogOut, Building2 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useWorkspace } from '../contexts/WorkspaceContext'
+import { usePermissions } from '../hooks/usePermissions'
+import WorkspaceSwitcher from './WorkspaceSwitcher'
 
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { user, logout } = useAuth()
-  const { currentWorkspace, loading: workspaceLoading } = useWorkspace()
+  const { currentWorkspace, loading: workspaceLoading, workspaceId } = useWorkspace()
+  const { canViewWorkspaceSettings } = usePermissions()
   
   console.log('Layout render:', { currentWorkspace });
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen)
 
   const menuItems = [
-    { icon: Home, label: 'Главная', path: '/' },
+    { icon: Home, label: 'Главная', path: workspaceId ? `/workspace/${workspaceId}` : '/' },
     { icon: CreditCard, label: 'Операции', path: '/operations' },
     { icon: Calendar, label: 'Запланированные', path: '/scheduled' },
     { icon: BarChart3, label: 'Аналитика', path: '/analytics' },
     { icon: Users, label: 'Справочники', path: '/directories' },
-    { icon: Settings, label: 'Настройки', path: '/settings' },
+    ...(canViewWorkspaceSettings ? [{ 
+      icon: Settings, 
+      label: 'Настройки', 
+      path: workspaceId ? `/workspace/${workspaceId}/settings` : '/settings' 
+    }] : []),
   ]
 
   const SidebarContent = () => (
     <>
       <div className="flex items-center justify-between p-4 border-b">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">ФинУчёт</h2>
-          {currentWorkspace && (
-            <div className="flex items-center text-sm text-gray-600 mt-1">
-              <Building2 size={14} className="mr-1" />
-              <span>{currentWorkspace.name}</span>
-              {currentWorkspace.is_personal && (
-                <span className="ml-2 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">Личное</span>
-              )}
-            </div>
-          )}
-          {workspaceLoading && (
-            <div className="text-sm text-gray-500 mt-1">Загрузка...</div>
-          )}
+        <div className="flex-1">
+          <h2 className="text-lg font-semibold text-gray-900 mb-3">ФинУчёт</h2>
+          <WorkspaceSwitcher />
         </div>
         <button onClick={toggleSidebar} className="p-1 lg:hidden">
           <X size={24} className="text-gray-600" />
@@ -99,23 +95,13 @@ export default function Layout() {
             <button onClick={toggleSidebar} className="p-1">
               <Menu size={24} className="text-gray-600" />
             </button>
-            <div>
-              <h1 className="text-xl font-semibold text-gray-900">ФинУчёт</h1>
-              {currentWorkspace && (
-                <div className="text-sm text-gray-600">{currentWorkspace.name}</div>
-              )}
+            <div className="flex-1 mx-4">
+              <WorkspaceSwitcher />
             </div>
-            <div className="flex items-center space-x-2">
-              {currentWorkspace && (
-                <span className="hidden sm:inline text-sm text-gray-600">
-                  {currentWorkspace.is_personal ? 'Личное' : 'Общее'}
-                </span>
-              )}
-              <div className="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center">
-                <span className="text-white text-sm font-medium">
-                  {currentWorkspace?.name?.charAt(0) || 'П'}
-                </span>
-              </div>
+            <div className="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center">
+              <span className="text-white text-sm font-medium">
+                {user?.email?.charAt(0).toUpperCase() || 'П'}
+              </span>
             </div>
           </div>
         </header>

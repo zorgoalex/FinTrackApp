@@ -1,6 +1,8 @@
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
 import WorkspaceSelectPage from './pages/WorkspaceSelectPage';
+import WorkspaceCreatePage from './pages/WorkspaceCreatePage';
 import WorkspacePage from './pages/WorkspacePage';
+import WorkspaceSettingsPage from './pages/WorkspaceSettingsPage';
 import LoginPage from './pages/LoginPage';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -21,12 +23,20 @@ const router = createBrowserRouter([
     element: <ProtectedRoute><WorkspaceSelectPage /></ProtectedRoute>
   },
   {
+    path: '/workspaces/create',
+    element: <ProtectedRoute><WorkspaceCreatePage /></ProtectedRoute>
+  },
+  {
     path: '/workspace/:workspaceId',
     element: <ProtectedRoute><WorkspaceProvider><Layout /></WorkspaceProvider></ProtectedRoute>,
     children: [
       {
         index: true,
         element: <WorkspacePage />
+      },
+      {
+        path: 'settings',
+        element: <WorkspaceSettingsPage />
       }
     ]
   },
