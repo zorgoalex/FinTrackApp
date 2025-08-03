@@ -241,6 +241,9 @@ __pycache__/
 .copilot/
 .aider*
 
+# AI helpers folder - ignore all files
+AI_helpers/
+
 # AI helpers folder - ignore documentation and PRD files
 AI_helpers/*.md
 AI_helpers/*.prd
