@@ -51,7 +51,7 @@ export default function WorkspaceSwitcher() {
   }, []);
 
   // Фильтрация workspace по поиску
-  const filteredWorkspaces = allWorkspaces.filter(workspace =>
+  const filteredWorkspaces = (allWorkspaces || []).filter(workspace =>
     workspace.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -116,7 +116,7 @@ export default function WorkspaceSwitcher() {
       {isOpen && (
         <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50">
           {/* Поиск */}
-          {allWorkspaces.length > 3 && (
+          {(allWorkspaces || []).length > 3 && (
             <div className="p-3 border-b border-gray-100">
               <input
                 type="text"

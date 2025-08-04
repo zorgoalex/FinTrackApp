@@ -8,21 +8,33 @@ const roleIcons = {
   owner: Crown,
   admin: Shield,
   member: User,
-  viewer: Eye
+  viewer: Eye,
+  Owner: Crown,
+  Admin: Shield,
+  Member: User,
+  Viewer: Eye
 };
 
 const roleLabels = {
   owner: 'Владелец',
   admin: 'Администратор', 
   member: 'Участник',
-  viewer: 'Наблюдатель'
+  viewer: 'Наблюдатель',
+  Owner: 'Владелец',
+  Admin: 'Администратор', 
+  Member: 'Участник',
+  Viewer: 'Наблюдатель'
 };
 
 const roleColors = {
   owner: 'text-yellow-600 bg-yellow-100',
   admin: 'text-purple-600 bg-purple-100',
   member: 'text-blue-600 bg-blue-100',
-  viewer: 'text-gray-600 bg-gray-100'
+  viewer: 'text-gray-600 bg-gray-100',
+  Owner: 'text-yellow-600 bg-yellow-100',
+  Admin: 'text-purple-600 bg-purple-100',
+  Member: 'text-blue-600 bg-blue-100',
+  Viewer: 'text-gray-600 bg-gray-100'
 };
 
 export default function WorkspaceSettingsPage() {
@@ -251,7 +263,7 @@ export default function WorkspaceSettingsPage() {
                   </label>
                   <div className="flex items-center">
                     {(() => {
-                      const RoleIcon = roleIcons[userRole];
+                      const RoleIcon = roleIcons[userRole] || User;
                       return (
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${roleColors[userRole]}`}>
                           <RoleIcon size={12} className="mr-1" />
@@ -298,7 +310,7 @@ export default function WorkspaceSettingsPage() {
               
               <div className="space-y-3">
                 {workspaceMembers.map((member) => {
-                  const RoleIcon = roleIcons[member.role];
+                  const RoleIcon = roleIcons[member.role] || User;
                   const canManageThisMember = canManageRoles && member.role !== 'owner';
                   
                   return (

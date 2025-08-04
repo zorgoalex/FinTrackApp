@@ -14,6 +14,11 @@ export function usePermissions() {
     canViewOperations
   } = useWorkspace();
 
+  console.log('usePermissions - userRole:', userRole);
+
+  // Нормализуем роль к нижнему регистру для проверок
+  const normalizedRole = userRole?.toLowerCase();
+
   // Детальные проверки прав
   const permissions = {
     // Основные права
@@ -24,43 +29,43 @@ export function usePermissions() {
     canView: canViewOperations,
     
     // Детальные права
-    canInviteMembers: ['owner', 'admin'].includes(userRole),
-    canInviteAdmins: userRole === 'owner',
-    canRemoveMembers: userRole === 'owner',
-    canChangeRoles: userRole === 'owner',
-    canViewMembers: ['owner', 'admin', 'member', 'viewer'].includes(userRole),
+    canInviteMembers: ['owner', 'admin'].includes(normalizedRole),
+    canInviteAdmins: normalizedRole === 'owner',
+    canRemoveMembers: normalizedRole === 'owner',
+    canChangeRoles: normalizedRole === 'owner',
+    canViewMembers: ['owner', 'admin', 'member', 'viewer'].includes(normalizedRole),
     
     // Права на операции
-    canCreateOperations: ['owner', 'admin', 'member'].includes(userRole),
-    canEditOwnOperations: ['owner', 'admin', 'member'].includes(userRole),
-    canEditAllOperations: ['owner', 'admin'].includes(userRole),
-    canDeleteOperations: ['owner', 'admin'].includes(userRole),
-    canViewOperations: ['owner', 'admin', 'member', 'viewer'].includes(userRole),
+    canCreateOperations: ['owner', 'admin', 'member'].includes(normalizedRole),
+    canEditOwnOperations: ['owner', 'admin', 'member'].includes(normalizedRole),
+    canEditAllOperations: ['owner', 'admin'].includes(normalizedRole),
+    canDeleteOperations: ['owner', 'admin'].includes(normalizedRole),
+    canViewOperations: ['owner', 'admin', 'member', 'viewer'].includes(normalizedRole),
     
     // Права на настройки
-    canEditWorkspaceSettings: ['owner', 'admin'].includes(userRole),
-    canViewWorkspaceSettings: ['owner', 'admin'].includes(userRole),
-    canManageWorkspace: userRole === 'owner',
+    canEditWorkspaceSettings: ['owner', 'admin'].includes(normalizedRole),
+    canViewWorkspaceSettings: ['owner', 'admin'].includes(normalizedRole),
+    canManageWorkspace: normalizedRole === 'owner',
     
     // Права на справочники (для будущих фаз)
-    canEditDirectories: ['owner', 'admin'].includes(userRole),
-    canViewDirectories: ['owner', 'admin', 'member', 'viewer'].includes(userRole),
+    canEditDirectories: ['owner', 'admin'].includes(normalizedRole),
+    canViewDirectories: ['owner', 'admin', 'member', 'viewer'].includes(normalizedRole),
     
     // Права на аналитику
-    canViewAnalytics: ['owner', 'admin', 'member', 'viewer'].includes(userRole),
-    canExportData: ['owner', 'admin', 'member'].includes(userRole),
+    canViewAnalytics: ['owner', 'admin', 'member', 'viewer'].includes(normalizedRole),
+    canExportData: ['owner', 'admin', 'member'].includes(normalizedRole),
     
     // Дополнительные проверки
-    isOwner: userRole === 'owner',
-    isAdmin: userRole === 'admin',
-    isMember: userRole === 'member',
-    isViewer: userRole === 'viewer',
-    hasManagementRights: ['owner', 'admin'].includes(userRole),
-    hasEditRights: ['owner', 'admin', 'member'].includes(userRole),
+    isOwner: normalizedRole === 'owner',
+    isAdmin: normalizedRole === 'admin',
+    isMember: normalizedRole === 'member',
+    isViewer: normalizedRole === 'viewer',
+    hasManagementRights: ['owner', 'admin'].includes(normalizedRole),
+    hasEditRights: ['owner', 'admin', 'member'].includes(normalizedRole),
     
     // Права на выход/удаление
-    canLeaveWorkspace: ['member', 'viewer'].includes(userRole),
-    canDeleteWorkspace: userRole === 'owner'
+    canLeaveWorkspace: ['member', 'viewer'].includes(normalizedRole),
+    canDeleteWorkspace: normalizedRole === 'owner'
   };
 
   return permissions;

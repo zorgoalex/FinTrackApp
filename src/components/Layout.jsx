@@ -24,7 +24,7 @@ export default function Layout() {
     { icon: Users, label: 'Справочники', path: '/directories' },
     ...(canViewWorkspaceSettings ? [{ 
       icon: Settings, 
-      label: 'Настройки', 
+      label: 'Настройки пространства', 
       path: workspaceId ? `/workspace/${workspaceId}/settings` : '/settings' 
     }] : []),
   ]

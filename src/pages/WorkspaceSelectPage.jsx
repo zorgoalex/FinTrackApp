@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Settings } from 'lucide-react';
 import { supabase } from '../contexts/AuthContext';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -104,6 +105,11 @@ export default function WorkspaceSelectPage() {
     navigate(`/workspace/${workspaceId}`);
   };
 
+  const openSettings = (e, workspaceId) => {
+    e.stopPropagation(); // Предотвращаем выбор workspace при клике на настройки
+    navigate(`/workspace/${workspaceId}/settings`);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -143,16 +149,31 @@ export default function WorkspaceSelectPage() {
         ) : (
           <div className="space-y-3 mb-6">
             {workspaces.map((workspace) => (
-              <button
+              <div
                 key={workspace.workspace_id}
-                onClick={() => selectWorkspace(workspace.workspace_id)}
-                className="w-full p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-left"
+                className="relative border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
               >
-                <div className="font-medium">{workspace.workspaces.name}</div>
-                <div className="text-sm text-gray-500">
-                  {workspace.workspaces.is_personal ? 'Личное' : 'Общее'} • {workspace.role}
-                </div>
-              </button>
+                <button
+                  onClick={() => selectWorkspace(workspace.workspace_id)}
+                  className="w-full p-4 text-left pr-12"
+                >
+                  <div className="font-medium">{workspace.workspaces.name}</div>
+                  <div className="text-sm text-gray-500">
+                    {workspace.workspaces.is_personal ? 'Личное' : 'Общее'} • {workspace.role}
+                  </div>
+                </button>
+                
+                {/* Кнопка настроек */}
+                {(workspace.role === 'Owner' || workspace.role === 'Admin') && (
+                  <button
+                    onClick={(e) => openSettings(e, workspace.workspace_id)}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+                    title="Настройки workspace"
+                  >
+                    <Settings size={16} />
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         )}
