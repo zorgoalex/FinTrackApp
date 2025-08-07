@@ -261,25 +261,28 @@ export function WorkspaceProvider({ children }) {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('workspace_invitations')
-        .insert({
-          workspace_id: workspaceId,
-          invited_by: user.id,
-          invited_email: email,
-          role: role
-        })
-        .select()
-        .single();
+      // Invoke the 'invite-user' Edge Function
+      const { data, error } = await supabase.functions.invoke('invite-user', {
+        body: {
+          workspaceId: workspaceId,
+          email: email,
+          role: role,
+        },
+      });
 
-      if (error) throw error;
+      if (error) {
+        // The function might return a specific error message from its response
+        const errorMessage = error.context?.errorMessage || error.message;
+        throw new Error(errorMessage);
+      }
 
-      // Обновить список приглашений
+      // Refresh the list of pending invitations
       await loadPendingInvitations();
       
       return data;
     } catch (err) {
       console.error('WorkspaceContext: Error inviting user', err);
+      // Re-throw the error so the UI can catch it and display it
       throw err;
     }
   };

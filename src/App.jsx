@@ -7,6 +7,7 @@ import LoginPage from './pages/LoginPage';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import SignupPage from './pages/SignupPage';
+import InvitationAcceptPage from './pages/InvitationAcceptPage';
 import { WorkspaceProvider } from './contexts/WorkspaceContext';
 
 const router = createBrowserRouter([
@@ -17,6 +18,10 @@ const router = createBrowserRouter([
   {
     path: '/signup',
     element: <SignupPage />
+  },
+  {
+    path: '/accept-invitation',
+    element: <ProtectedRoute><InvitationAcceptPage /></ProtectedRoute>
   },
   {
     path: '/workspaces',
