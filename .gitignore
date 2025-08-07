@@ -194,7 +194,6 @@ temp/
 
 # Dataset files
 *.csv
-*.json
 *.parquet
 *.arrow
 data/
