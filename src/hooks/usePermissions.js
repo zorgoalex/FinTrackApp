@@ -14,7 +14,6 @@ export function usePermissions() {
     canViewOperations
   } = useWorkspace();
 
-  console.log('usePermissions - userRole:', userRole);
 
   // Нормализуем роль к нижнему регистру для проверок
   const normalizedRole = userRole?.toLowerCase();

@@ -50,7 +50,10 @@ export default function WorkspaceSettingsPage() {
     removeUser,
     changeUserRole,
     deleteWorkspace,
-    leaveWorkspace 
+    leaveWorkspace,
+    canInviteUsers: canInviteUsersFromWorkspace,
+    canManageRoles: canManageRolesFromWorkspace,
+    canDeleteWorkspace: canDeleteWorkspaceFromWorkspace
   } = useWorkspace();
   
   const { 
@@ -59,6 +62,9 @@ export default function WorkspaceSettingsPage() {
     canDeleteWorkspace,
     canLeaveWorkspace 
   } = usePermissions();
+
+  // Используем значение из WorkspaceContext, так как там правильная логика
+  const shouldShowInvitesTab = canInviteUsersFromWorkspace;
 
   const [activeTab, setActiveTab] = useState('general');
   const [inviteEmail, setInviteEmail] = useState('');
@@ -191,7 +197,7 @@ export default function WorkspaceSettingsPage() {
   const tabs = [
     { id: 'general', label: 'Общие', icon: Settings },
     { id: 'members', label: 'Участники', icon: Users },
-    ...(canInviteUsers ? [{ id: 'invites', label: 'Приглашения', icon: Mail }] : [])
+    ...(shouldShowInvitesTab ? [{ id: 'invites', label: 'Приглашения', icon: Mail }] : [])
   ];
 
   return (
@@ -289,7 +295,7 @@ export default function WorkspaceSettingsPage() {
                     </button>
                   )}
                   
-                  {canDeleteWorkspace && (
+                  {canDeleteWorkspaceFromWorkspace && (
                     <button
                       onClick={handleDeleteWorkspace}
                       className="flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
@@ -311,19 +317,19 @@ export default function WorkspaceSettingsPage() {
               <div className="space-y-3">
                 {workspaceMembers.map((member) => {
                   const RoleIcon = roleIcons[member.role] || User;
-                  const canManageThisMember = canManageRoles && member.role !== 'owner';
+                  const canManageThisMember = canManageRolesFromWorkspace && member.role.toLowerCase() !== 'owner';
                   
                   return (
-                    <div key={member.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
+                    <div key={member.user_id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
                       <div className="flex items-center space-x-3">
                         <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
                           <span className="text-sm font-medium text-gray-700">
-                            {member.users?.email?.charAt(0).toUpperCase()}
+                            {member.email?.charAt(0).toUpperCase()}
                           </span>
                         </div>
                         <div>
                           <p className="text-sm font-medium text-gray-900">
-                            {member.users?.email}
+                            {member.email}
                           </p>
                           <div className="flex items-center">
                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${roleColors[member.role]}`}>
@@ -338,7 +344,7 @@ export default function WorkspaceSettingsPage() {
                         <div className="flex items-center space-x-2">
                           <select
                             value={member.role}
-                            onChange={(e) => handleChangeRole(member.user_id, e.target.value, member.users?.email)}
+                            onChange={(e) => handleChangeRole(member.user_id, e.target.value, member.email)}
                             className="text-xs border border-gray-300 rounded px-2 py-1"
                           >
                             <option value="admin">Администратор</option>
@@ -347,7 +353,7 @@ export default function WorkspaceSettingsPage() {
                           </select>
                           
                           <button
-                            onClick={() => handleRemoveUser(member.user_id, member.users?.email)}
+                            onClick={() => handleRemoveUser(member.user_id, member.email)}
                             className="text-red-600 hover:text-red-800 p-1"
                             title="Исключить"
                           >
@@ -363,7 +369,7 @@ export default function WorkspaceSettingsPage() {
           )}
 
           {/* Приглашения */}
-          {activeTab === 'invites' && canInviteUsers && (
+          {activeTab === 'invites' && shouldShowInvitesTab && (
             <div className="space-y-6">
               {/* Форма приглашения */}
               <div className="bg-white shadow rounded-lg p-6">
@@ -393,7 +399,7 @@ export default function WorkspaceSettingsPage() {
                       onChange={(e) => setInviteRole(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      {canManageRoles && <option value="admin">Администратор</option>}
+                      {canManageRolesFromWorkspace && <option value="admin">Администратор</option>}
                       <option value="member">Участник</option>
                       <option value="viewer">Наблюдатель</option>
                     </select>

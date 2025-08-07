@@ -122,7 +122,8 @@ export function WorkspaceProvider({ children }) {
       await updateLastAccessed();
       
       // Загрузить участников и приглашения если есть права
-      if (['owner', 'admin'].includes(memberData?.role)) {
+      const role = memberData?.role?.toLowerCase();
+      if (['owner', 'admin'].includes(role)) {
         await loadWorkspaceMembers();
         await loadPendingInvitations();
       }
@@ -136,31 +137,70 @@ export function WorkspaceProvider({ children }) {
   };
 
   const loadWorkspaceMembers = async () => {
-    if (!workspaceId) return;
+    if (!workspaceId) {
+      console.log('WorkspaceContext: No workspaceId for loading members');
+      return;
+    }
+    
+    console.log('WorkspaceContext: Loading members for workspace', workspaceId);
     
     try {
-      const { data, error } = await supabase
+      // 1. Загружаем данные участников workspace
+      const { data: membersData, error: membersError } = await supabase
         .from('workspace_members')
         .select(`
-          id,
           user_id,
           role,
           is_active,
           joined_at,
-          last_accessed_at,
-          users:user_id(id, email)
+          last_accessed_at
         `)
         .eq('workspace_id', workspaceId)
         .eq('is_active', true);
       
-      if (error) {
-        console.error('WorkspaceContext: Error loading members', error);
+      if (membersError) {
+        console.error('WorkspaceContext: Error loading members', membersError);
         return;
       }
+
+      if (!membersData || membersData.length === 0) {
+        setWorkspaceMembers([]);
+        return;
+      }
+
+      // 2. Загружаем email пользователей с fallback логикой
+      let usersData = [];
+
+      // Для текущего пользователя мы знаем email
+      if (user && user.email) {
+        usersData.push({ id: user.id, email: user.email });
+      }
+
+      // 3. Объединяем данные участников с email
+      const membersWithEmails = membersData.map(member => {
+        const userEmail = usersData?.find(user => user.id === member.user_id)?.email;
+        const isCurrentUser = member.user_id === user?.id;
+        
+        let displayEmail;
+        if (userEmail) {
+          displayEmail = userEmail;
+        } else if (isCurrentUser) {
+          displayEmail = user?.email || 'Вы';
+        } else {
+          displayEmail = `Участник (${member.user_id.slice(0, 8)})`;
+        }
+        
+        return {
+          ...member,
+          email: displayEmail
+        };
+      });
+
+      setWorkspaceMembers(membersWithEmails);
       
-      setWorkspaceMembers(data || []);
     } catch (err) {
       console.error('WorkspaceContext: Error loading members', err);
+      setWorkspaceMembers([]);
     }
   };
 
@@ -216,7 +256,7 @@ export function WorkspaceProvider({ children }) {
   };
 
   const inviteUser = async (email, role) => {
-    if (!workspaceId || !['owner', 'admin'].includes(userRole)) {
+    if (!workspaceId || !['owner', 'admin'].includes(userRole?.toLowerCase())) {
       throw new Error('Недостаточно прав для приглашения пользователей');
     }
 
@@ -245,7 +285,7 @@ export function WorkspaceProvider({ children }) {
   };
 
   const removeUser = async (userId) => {
-    if (!workspaceId || userRole !== 'owner') {
+    if (!workspaceId || userRole?.toLowerCase() !== 'owner') {
       throw new Error('Только владелец может исключать участников');
     }
 
@@ -268,7 +308,7 @@ export function WorkspaceProvider({ children }) {
   };
 
   const changeUserRole = async (userId, newRole) => {
-    if (!workspaceId || userRole !== 'owner') {
+    if (!workspaceId || userRole?.toLowerCase() !== 'owner') {
       throw new Error('Только владелец может изменять роли');
     }
 
@@ -291,7 +331,7 @@ export function WorkspaceProvider({ children }) {
   };
 
   const deleteWorkspace = async () => {
-    if (!workspaceId || userRole !== 'owner') {
+    if (!workspaceId || userRole?.toLowerCase() !== 'owner') {
       throw new Error('Только владелец может удалить рабочее пространство');
     }
 
@@ -313,7 +353,7 @@ export function WorkspaceProvider({ children }) {
   };
 
   const leaveWorkspace = async () => {
-    if (!workspaceId || !['member', 'viewer'].includes(userRole)) {
+    if (!workspaceId || !['member', 'viewer'].includes(userRole?.toLowerCase())) {
       throw new Error('Только участники и наблюдатели могут покинуть пространство');
     }
 
@@ -336,11 +376,12 @@ export function WorkspaceProvider({ children }) {
   };
 
   // Проверки прав
-  const canInviteUsers = ['owner', 'admin'].includes(userRole);
-  const canManageRoles = userRole === 'owner';
-  const canDeleteWorkspace = userRole === 'owner';
-  const canEditOperations = ['owner', 'admin', 'member'].includes(userRole);
-  const canViewOperations = ['owner', 'admin', 'member', 'viewer'].includes(userRole);
+  const canInviteUsers = ['owner', 'admin'].includes(userRole?.toLowerCase());
+  const canManageRoles = userRole?.toLowerCase() === 'owner';
+  const canDeleteWorkspace = userRole?.toLowerCase() === 'owner';
+  const canEditOperations = ['owner', 'admin', 'member'].includes(userRole?.toLowerCase());
+  const canViewOperations = ['owner', 'admin', 'member', 'viewer'].includes(userRole?.toLowerCase());
+
 
   const value = {
     // Основное состояние
