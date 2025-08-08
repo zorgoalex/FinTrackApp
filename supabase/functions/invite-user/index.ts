@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { emailConfig } from '../_shared/email-config.ts';
+import emailTemplate from '../_shared/invite-email.html.ts';
 
 Deno.serve(async (req) => {
   // Handle CORS preflight request
@@ -82,9 +83,7 @@ Deno.serve(async (req) => {
     const APP_URL = Deno.env.get('APP_BASE_URL') || 'http://localhost:3000';
     const acceptUrl = `${APP_URL}/accept-invitation?token=${invitation.invitation_token}`;
 
-    // Read the HTML template from the shared file
-    // Note: Deno.readTextFile needs --allow-read permission
-    const emailTemplate = await Deno.readTextFile(new URL('../_shared/invite-email.html', import.meta.url).pathname);
+    // The HTML template is now imported directly as a string constant.
 
     // Populate the template with dynamic data
     const emailHtml = emailTemplate
