@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Mail, Settings, Trash2, UserPlus, Shield, Crown, Eye, User } from 'lucide-react';
+import { Users, Mail, Settings, Trash2, UserPlus, Shield, Crown, Eye, User, MinusCircle } from 'lucide-react';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { usePermissions } from '../hooks/usePermissions';
 
@@ -51,6 +51,7 @@ export default function WorkspaceSettingsPage() {
     changeUserRole,
     deleteWorkspace,
     leaveWorkspace,
+    cancelInvitation,
     canInviteUsers: canInviteUsersFromWorkspace,
     canManageRoles: canManageRolesFromWorkspace,
     canDeleteWorkspace: canDeleteWorkspaceFromWorkspace
@@ -71,6 +72,19 @@ export default function WorkspaceSettingsPage() {
   const [inviteRole, setInviteRole] = useState('member');
   const [isInviting, setIsInviting] = useState(false);
   const [inviteError, setInviteError] = useState('');
+
+  // Обработка отмены приглашения
+  const handleCancelInvitation = async (invitationId, email) => {
+    if (!confirm(`Вы уверены, что хотите отменить приглашение для ${email}?`)) {
+      return;
+    }
+    try {
+      await cancelInvitation(invitationId);
+      alert('Приглашение отменено');
+    } catch (err) {
+      alert(err.message || 'Ошибка при отмене приглашения');
+    }
+  };
 
   // Обработка приглашения пользователя
   const handleInviteUser = async (e) => {
@@ -442,6 +456,13 @@ export default function WorkspaceSettingsPage() {
                           <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
                             Ожидание
                           </span>
+                          <button
+                            onClick={() => handleCancelInvitation(invitation.id, invitation.invited_email)}
+                            className="text-red-600 hover:text-red-800 p-1"
+                            title="Отменить приглашение"
+                          >
+                            <Trash2 size={14} />
+                          </button>
                         </div>
                       </div>
                     ))}
