@@ -378,6 +378,28 @@ export function WorkspaceProvider({ children }) {
     }
   };
 
+  const cancelInvitation = async (invitationId) => {
+    if (!workspaceId || !['owner', 'admin'].includes(userRole?.toLowerCase())) {
+      throw new Error('Недостаточно прав для отмены приглашений');
+    }
+
+    try {
+      const { error } = await supabase
+        .from('workspace_invitations')
+        .delete()
+        .eq('id', invitationId);
+
+      if (error) throw error;
+
+      // Refresh the list of pending invitations
+      await loadPendingInvitations();
+
+    } catch (err) {
+      console.error('WorkspaceContext: Error canceling invitation', err);
+      throw new Error('Ошибка при отмене приглашения');
+    }
+  };
+
   // Проверки прав
   const canInviteUsers = ['owner', 'admin'].includes(userRole?.toLowerCase());
   const canManageRoles = userRole?.toLowerCase() === 'owner';
@@ -414,7 +436,8 @@ export function WorkspaceProvider({ children }) {
     removeUser,
     changeUserRole,
     deleteWorkspace,
-    leaveWorkspace
+    leaveWorkspace,
+    cancelInvitation
   };
 
   return (
