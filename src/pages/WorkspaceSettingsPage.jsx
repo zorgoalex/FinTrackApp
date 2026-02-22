@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Mail, Settings, Trash2, UserPlus, Shield, Crown, Eye, User, MinusCircle } from 'lucide-react';
+import { Users, Mail, Settings, Trash2, UserPlus, Shield, Crown, Eye, User, MinusCircle, RefreshCw } from 'lucide-react';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { usePermissions } from '../hooks/usePermissions';
 
@@ -39,15 +39,16 @@ const roleColors = {
 
 export default function WorkspaceSettingsPage() {
   const navigate = useNavigate();
-  const { 
-    currentWorkspace, 
+  const {
+    currentWorkspace,
     userRole,
-    workspaceMembers, 
+    workspaceMembers,
     pendingInvitations,
     loading,
     error,
     inviteUser,
     removeUser,
+    resendInvitation,
     changeUserRole,
     deleteWorkspace,
     leaveWorkspace,
@@ -71,6 +72,7 @@ export default function WorkspaceSettingsPage() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('member');
   const [isInviting, setIsInviting] = useState(false);
+  const [isResending, setIsResending] = useState(false);
   const [inviteError, setInviteError] = useState('');
 
   // Обработка отмены приглашения
@@ -83,6 +85,19 @@ export default function WorkspaceSettingsPage() {
       alert('Приглашение отменено');
     } catch (err) {
       alert(err.message || 'Ошибка при отмене приглашения');
+    }
+  };
+
+  // Обработка повторной отправки приглашения
+  const handleResendInvitation = async (invitationId) => {
+    setIsResending(true);
+    try {
+      await resendInvitation(invitationId);
+      alert('Приглашение отправлено повторно');
+    } catch (err) {
+      alert(err.message || 'Ошибка при повторной отправке приглашения');
+    } finally {
+      setIsResending(false);
     }
   };
 
@@ -437,7 +452,15 @@ export default function WorkspaceSettingsPage() {
               {/* Активные приглашения */}
               {pendingInvitations.length > 0 && (
                 <div className="bg-white shadow rounded-lg p-6">
-                  <h2 className="text-lg font-medium mb-4">Активные приглашения ({pendingInvitations.length})</h2>
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-medium">Активные приглашения ({pendingInvitations.length})</h2>
+                    <button
+                      onClick={() => navigate(`/workspace/${workspaceId}/settings/invites/history`)}
+                      className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center"
+                    >
+                      История
+                    </button>
+                  </div>
                   
                   <div className="space-y-3">
                     {pendingInvitations.map((invitation) => (
@@ -456,6 +479,14 @@ export default function WorkspaceSettingsPage() {
                           <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
                             Ожидание
                           </span>
+                          <button
+                            onClick={() => handleResendInvitation(invitation.id)}
+                            className="text-blue-600 hover:text-blue-800 p-1"
+                            title="Отправить снова"
+                            disabled={isResending}
+                          >
+                            <RefreshCw size={14} className={isResending ? 'animate-spin' : ''} />
+                          </button>
                           <button
                             onClick={() => handleCancelInvitation(invitation.id, invitation.invited_email)}
                             className="text-red-600 hover:text-red-800 p-1"

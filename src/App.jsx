@@ -8,6 +8,7 @@ import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import SignupPage from './pages/SignupPage';
 import InvitationAcceptPage from './pages/InvitationAcceptPage';
+import InvitationHistoryPage from './pages/InvitationHistoryPage';
 import { WorkspaceProvider } from './contexts/WorkspaceContext';
 
 const router = createBrowserRouter([
@@ -34,16 +35,20 @@ const router = createBrowserRouter([
   {
     path: '/workspace/:workspaceId',
     element: <ProtectedRoute><WorkspaceProvider><Layout /></WorkspaceProvider></ProtectedRoute>,
-    children: [
-      {
-        index: true,
-        element: <WorkspacePage />
-      },
-      {
-        path: 'settings',
-        element: <WorkspaceSettingsPage />
-      }
-    ]
+      children: [
+        {
+          index: true,
+          element: <WorkspacePage />
+        },
+        {
+          path: 'settings',
+          element: <WorkspaceSettingsPage />
+        },
+        {
+          path: 'settings/invites/history',
+          element: <InvitationHistoryPage />
+        }
+      ]
   },
   {
     path: '/',

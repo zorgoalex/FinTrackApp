@@ -87,12 +87,13 @@ export function usePermission(permission) {
  */
 export function useHasRole(roles) {
   const { userRole } = useWorkspace();
+  const normalizedRole = userRole?.toLowerCase();
   
   if (Array.isArray(roles)) {
-    return roles.includes(userRole);
+    return roles.map(r => r.toLowerCase()).includes(normalizedRole);
   }
   
-  return userRole === roles;
+  return normalizedRole === roles.toLowerCase();
 }
 
 /**
@@ -102,6 +103,7 @@ export function useHasRole(roles) {
  */
 export function useHasMinRole(minRole) {
   const { userRole } = useWorkspace();
+  const normalizedRole = userRole?.toLowerCase();
   
   const roleHierarchy = {
     'viewer': 1,
@@ -110,8 +112,8 @@ export function useHasMinRole(minRole) {
     'owner': 4
   };
   
-  const userLevel = roleHierarchy[userRole] || 0;
-  const minLevel = roleHierarchy[minRole] || 0;
+  const userLevel = roleHierarchy[normalizedRole] || 0;
+  const minLevel = roleHierarchy[minRole.toLowerCase()] || 0;
   
   return userLevel >= minLevel;
 }

@@ -141,15 +141,16 @@ export function WorkspaceProvider({ children }) {
       console.log('WorkspaceContext: No workspaceId for loading members');
       return;
     }
-    
+
     console.log('WorkspaceContext: Loading members for workspace', workspaceId);
-    
+
     try {
-      // 1. Загружаем данные участников workspace
+      // Загружаем данные участников workspace вместе с email (из нового поля user_email)
       const { data: membersData, error: membersError } = await supabase
         .from('workspace_members')
         .select(`
           user_id,
+          user_email,
           role,
           is_active,
           joined_at,
@@ -157,7 +158,7 @@ export function WorkspaceProvider({ children }) {
         `)
         .eq('workspace_id', workspaceId)
         .eq('is_active', true);
-      
+
       if (membersError) {
         console.error('WorkspaceContext: Error loading members', membersError);
         return;
@@ -168,28 +169,19 @@ export function WorkspaceProvider({ children }) {
         return;
       }
 
-      // 2. Загружаем email пользователей с fallback логикой
-      let usersData = [];
-
-      // Для текущего пользователя мы знаем email
-      if (user && user.email) {
-        usersData.push({ id: user.id, email: user.email });
-      }
-
-      // 3. Объединяем данные участников с email
+      // Объединяем данные участников с email (используем user_email из БД)
       const membersWithEmails = membersData.map(member => {
-        const userEmail = usersData?.find(user => user.id === member.user_id)?.email;
         const isCurrentUser = member.user_id === user?.id;
-        
         let displayEmail;
-        if (userEmail) {
-          displayEmail = userEmail;
+
+        if (member.user_email) {
+          displayEmail = member.user_email;
         } else if (isCurrentUser) {
           displayEmail = user?.email || 'Вы';
         } else {
           displayEmail = `Участник (${member.user_id.slice(0, 8)})`;
         }
-        
+
         return {
           ...member,
           email: displayEmail
@@ -197,7 +189,7 @@ export function WorkspaceProvider({ children }) {
       });
 
       setWorkspaceMembers(membersWithEmails);
-      
+
     } catch (err) {
       console.error('WorkspaceContext: Error loading members', err);
       setWorkspaceMembers([]);
@@ -400,6 +392,60 @@ export function WorkspaceProvider({ children }) {
     }
   };
 
+  const resendInvitation = async (invitationId) => {
+    if (!workspaceId || !['owner', 'admin'].includes(userRole?.toLowerCase())) {
+      throw new Error('Недостаточно прав для повторной отправки приглашений');
+    }
+
+    try {
+      // Проверить что приглашение существует и в статусе pending
+      const { data: invitation, error: fetchError } = await supabase
+        .from('workspace_invitations')
+        .select('*')
+        .eq('id', invitationId)
+        .single();
+
+      if (fetchError || !invitation) {
+        throw new Error('Приглашение не найдено');
+      }
+
+      if (invitation.status !== 'pending') {
+        throw new Error('Можно повторно отправить только ожидающие приглашения');
+      }
+
+      if (invitation.email_sent_count >= 3) {
+        throw new Error('Превышен лимит повторных отправок (максимум 3)');
+      }
+
+      // Обновить expires_at (+7 дней от текущей даты)
+      const newExpiresAt = new Date();
+      newExpiresAt.setDate(newExpiresAt.getDate() + 7);
+
+      // Вызвать invite-user Edge Function для повторной отправки
+      const { data, error } = await supabase.functions.invoke('invite-user', {
+        body: {
+          workspaceId: workspaceId,
+          email: invitation.invited_email,
+          role: invitation.role,
+          invitationId: invitationId, // Для обновления существующего приглашения
+        },
+      });
+
+      if (error) {
+        const errorMessage = error.context?.errorMessage || error.message;
+        throw new Error(errorMessage);
+      }
+
+      // Refresh the list of pending invitations
+      await loadPendingInvitations();
+
+      return data;
+    } catch (err) {
+      console.error('WorkspaceContext: Error resending invitation', err);
+      throw err;
+    }
+  };
+
   // Проверки прав
   const canInviteUsers = ['owner', 'admin'].includes(userRole?.toLowerCase());
   const canManageRoles = userRole?.toLowerCase() === 'owner';
@@ -437,7 +483,8 @@ export function WorkspaceProvider({ children }) {
     changeUserRole,
     deleteWorkspace,
     leaveWorkspace,
-    cancelInvitation
+    cancelInvitation,
+    resendInvitation
   };
 
   return (

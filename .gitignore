@@ -241,10 +241,5 @@ __pycache__/
 .aider*
 
 # AI helpers folder - ignore all files
-AI_helpers/
+ai_docs/
 
-# AI helpers folder - ignore documentation and PRD files
-AI_helpers/*.md
-AI_helpers/*.prd
-AI_helpers/**/*.md
-AI_helpers/**/*.prd
