@@ -9,7 +9,23 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 405,
+    });
+  }
+
   try {
+    const resendApiKey = Deno.env.get('RESEND_API_KEY');
+    const appBaseUrl = Deno.env.get('APP_BASE_URL');
+    if (!resendApiKey || !appBaseUrl) {
+      return new Response(JSON.stringify({ error: 'Server misconfiguration: RESEND_API_KEY and APP_BASE_URL are required.' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500,
+      });
+    }
+
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -29,8 +45,18 @@ Deno.serve(async (req) => {
 
     // Validate request body
     const { workspaceId, email, role } = await req.json();
-    if (!workspaceId || !email || !role) {
+    const normalizedEmail = typeof email === 'string' ? email.toLowerCase().trim() : '';
+    const normalizedRole = typeof role === 'string' ? role.trim() : '';
+    const allowedRoles = ['Admin', 'Member', 'Viewer'];
+
+    if (!workspaceId || !normalizedEmail || !normalizedRole) {
       return new Response(JSON.stringify({ error: 'Missing required fields: workspaceId, email, role' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400,
+      });
+    }
+    if (!allowedRoles.includes(normalizedRole)) {
+      return new Response(JSON.stringify({ error: 'Invalid role. Allowed values: Admin, Member, Viewer.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,
       });
@@ -54,8 +80,8 @@ Deno.serve(async (req) => {
       .from('workspace_invitations')
       .insert({
         workspace_id: workspaceId,
-        invited_email: email,
-        role: role,
+        invited_email: normalizedEmail,
+        role: normalizedRole,
         invited_by: invitingUser.id,
         status: 'pending',
       })
@@ -80,8 +106,7 @@ Deno.serve(async (req) => {
     const { data: workspace } = await supabaseAdmin.from('workspaces').select('name').eq('id', workspaceId).single();
 
     // Construct email content
-    const APP_URL = Deno.env.get('APP_BASE_URL') || 'http://localhost:3000';
-    const acceptUrl = `${APP_URL}/accept-invitation?token=${invitation.invitation_token}`;
+    const acceptUrl = `${appBaseUrl}/accept-invitation?token=${invitation.invitation_token}`;
 
     // The HTML template is now imported directly as a string constant.
 
@@ -89,7 +114,7 @@ Deno.serve(async (req) => {
     const emailHtml = emailTemplate
       .replace('{{inviter_email}}', invitingUser.email)
       .replace('{{workspace_name}}', workspace?.name || 'a workspace')
-      .replace('{{role}}', role)
+      .replace('{{role}}', normalizedRole)
       .replace('{{accept_url}}', acceptUrl)
       .replace('{{expires_at}}', new Date(invitation.expires_at).toLocaleString('ru-RU'));
 
@@ -98,11 +123,11 @@ Deno.serve(async (req) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${emailConfig.apiKey}`,
+        'Authorization': `Bearer ${resendApiKey}`,
       },
       body: JSON.stringify({
         from: `${emailConfig.fromName} <${emailConfig.fromEmail}>`,
-        to: [email],
+        to: [normalizedEmail],
         subject: `Invitation to join workspace: ${workspace?.name}`,
         html: emailHtml,
       }),
@@ -112,12 +137,18 @@ Deno.serve(async (req) => {
     if (resendResponse.ok) {
         await supabaseAdmin
           .from('workspace_invitations')
-          .update({ email_sent_at: new Date().toISOString(), email_sent_count: 1 })
+          .update({
+            email_sent_at: new Date().toISOString(),
+            email_sent_count: (invitation.email_sent_count ?? 0) + 1,
+          })
           .eq('id', invitation.id);
     } else {
-        console.warn('Failed to send email, but invitation was created.');
         const errorBody = await resendResponse.text();
         console.error('Resend API Error:', errorBody);
+        return new Response(JSON.stringify({ error: `Failed to send invitation email: ${errorBody || 'Unknown Resend error'}` }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 500,
+        });
     }
 
     return new Response(JSON.stringify({ success: true, invitation_id: invitation.id }), {

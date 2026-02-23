@@ -7,6 +7,13 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 405,
+    });
+  }
+
   try {
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -56,6 +63,16 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Security check: Ensure the logged-in user is the one who was invited
+    const invitedEmail = invitation.invited_email?.trim().toLowerCase();
+    const acceptingEmail = acceptingUser.email?.trim().toLowerCase();
+    if (invitedEmail !== acceptingEmail) {
+        return new Response(JSON.stringify({ error: 'This invitation is intended for a different email address.' }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 403, // Forbidden
+        });
+    }
+
     if (new Date(invitation.expires_at) < new Date()) {
       // Optionally update status to 'expired' in the DB
       await supabaseAdmin.from('workspace_invitations').update({ status: 'expired' }).eq('id', invitation.id);
@@ -65,15 +82,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Security check: Ensure the logged-in user is the one who was invited
-    if (invitation.invited_email !== acceptingUser.email) {
-        return new Response(JSON.stringify({ error: 'This invitation is intended for a different email address.' }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 403, // Forbidden
-        });
-    }
-
     // 3. Add the user to the workspace_members table
+    let memberInserted = false;
     const { error: memberError } = await supabaseAdmin
       .from('workspace_members')
       .insert({
@@ -93,6 +103,8 @@ Deno.serve(async (req) => {
                 status: 500,
             });
         }
+    } else {
+      memberInserted = true;
     }
 
     // 4. Update the invitation status to 'accepted'
@@ -105,8 +117,24 @@ Deno.serve(async (req) => {
       .eq('id', invitation.id);
 
     if (updateError) {
-        console.error('Error updating invitation status:', updateError);
-        // This is not ideal, the user is a member but the invitation is still pending.
+      console.error('Error updating invitation status:', updateError);
+
+      if (memberInserted) {
+        const { error: rollbackError } = await supabaseAdmin
+          .from('workspace_members')
+          .delete()
+          .eq('workspace_id', invitation.workspace_id)
+          .eq('user_id', acceptingUser.id);
+
+        if (rollbackError) {
+          console.error('Rollback failed after invitation update error:', rollbackError);
+        }
+      }
+
+      return new Response(JSON.stringify({ error: 'Failed to finalize invitation acceptance.' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500,
+      });
     }
 
     // 5. Return a success response

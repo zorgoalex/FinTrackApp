@@ -80,7 +80,10 @@ export function AuthProvider({ children }) {
       const { error: signErr } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { name } }
+        options: {
+          data: { name },
+          emailRedirectTo: window.location.origin
+        }
       });
       if (signErr) throw signErr;
       return true;
