@@ -172,7 +172,7 @@ export default function WorkspaceSwitcher() {
                       className={isActive ? 'text-blue-600' : 'text-gray-400'} 
                     />
                     <div className="flex-1 min-w-0">
-                      <div className={`text-sm font-medium truncate ${
+                      <div className={`text-sm ${workspaceRole === 'owner' ? 'font-bold' : 'font-medium'} truncate ${
                         isActive ? 'text-blue-900' : 'text-gray-900'
                       }`}>
                         {workspace.name}
