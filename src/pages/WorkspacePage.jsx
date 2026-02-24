@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import useOperations from '../hooks/useOperations';
+import AddOperationModal from '../components/AddOperationModal';
 
 const amountFormatter = new Intl.NumberFormat('ru-RU', {
   maximumFractionDigits: 0
@@ -25,9 +26,12 @@ export default function WorkspacePage() {
   const {
     operations,
     summary,
+    addOperation,
     loading: operationsLoading,
     error: operationsError
   } = useOperations(workspaceId);
+
+  const [modalType, setModalType] = useState(null); // null = closed, 'income'|'expense'|'salary'
 
   const todayTotalColor = useMemo(() => (
     (summary?.today?.total || 0) >= 0 ? 'text-green-600' : 'text-red-600'
@@ -42,10 +46,7 @@ export default function WorkspacePage() {
   };
 
   const openOperationForm = (type) => {
-    const paramsForUrl = new URLSearchParams();
-    if (type) paramsForUrl.set('type', type);
-    if (workspaceId) paramsForUrl.set('workspaceId', workspaceId);
-    navigate(`/operations?${paramsForUrl.toString()}`);
+    setModalType(type || 'income');
   };
 
   const openOperations = () => {
@@ -230,6 +231,14 @@ export default function WorkspacePage() {
           <span className="text-2xl">+</span>
         </button>
       </div>
+
+      {modalType && (
+        <AddOperationModal
+          type={modalType}
+          onClose={() => setModalType(null)}
+          onSave={addOperation}
+        />
+      )}
 
     </div>
   );
