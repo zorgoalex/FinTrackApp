@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import useOperations from '../hooks/useOperations';
@@ -24,6 +24,38 @@ export default function WorkspacePage() {
   } = useOperations(workspaceId);
 
   const [modalType, setModalType] = useState(null); // null = closed, 'income'|'expense'|'salary'
+
+  // Режим итоговых блоков: 'compact' | 'expanded'
+  const [summaryMode, setSummaryMode] = useState(
+    () => localStorage.getItem('summaryMode') || 'expanded'
+  );
+  const [summaryPinned, setSummaryPinned] = useState(
+    () => localStorage.getItem('summaryPinned') === 'true'
+  );
+  const [todayOpen, setTodayOpen] = useState(true);
+  const [monthOpen, setMonthOpen] = useState(true);
+
+  const toggleSummaryMode = useCallback(() => {
+    setSummaryMode((prev) => {
+      const next = prev === 'compact' ? 'expanded' : 'compact';
+      if (summaryPinned) localStorage.setItem('summaryMode', next);
+      return next;
+    });
+  }, [summaryPinned]);
+
+  const togglePin = useCallback(() => {
+    setSummaryPinned((prev) => {
+      const next = !prev;
+      if (next) {
+        localStorage.setItem('summaryPinned', 'true');
+        localStorage.setItem('summaryMode', summaryMode);
+      } else {
+        localStorage.removeItem('summaryPinned');
+        localStorage.removeItem('summaryMode');
+      }
+      return next;
+    });
+  }, [summaryMode]);
 
   const todayTotalColor = useMemo(() => (
     (summary?.today?.total || 0) >= 0 ? 'text-green-600' : 'text-red-600'
@@ -96,51 +128,126 @@ export default function WorkspacePage() {
     <div className={`min-h-screen relative ${currentWorkspace?.is_personal ? 'bg-amber-50' : 'bg-gray-50'}`}>
       <div className="max-w-2xl mx-auto p-4">
         <div className="space-y-4 mb-20">
+          {/* ── Итоговые блоки ── */}
           {operationsLoading ? (
-            <>
-              <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200 animate-pulse">
-                <div className="h-4 bg-gray-200 rounded w-28 mb-4"></div>
-                <div className="h-8 bg-gray-200 rounded w-40 mb-3"></div>
-                <div className="h-3 bg-gray-200 rounded w-full"></div>
+            <div className="grid grid-cols-2 gap-3">
+              {[0, 1].map((i) => (
+                <div key={i} className="bg-white rounded-lg shadow-sm p-4 border border-gray-200 animate-pulse">
+                  <div className="h-3 bg-gray-200 rounded w-20 mb-3"></div>
+                  <div className="h-6 bg-gray-200 rounded w-28"></div>
+                </div>
+              ))}
+            </div>
+          ) : summaryMode === 'compact' ? (
+            /* ── Компактный вид: два блока в одну строку ── */
+            <div className="relative">
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { label: '📊 Сегодня', total: summary?.today?.total || 0,  color: todayTotalColor },
+                  { label: '📈 Месяц',   total: summary?.month?.total || 0, color: monthTotalColor },
+                ].map(({ label, total, color }) => (
+                  <div key={label} className="bg-white rounded-lg shadow-sm px-3 py-2.5 border border-gray-200">
+                    <div className="text-xs text-gray-500 mb-1">{label}</div>
+                    <div className={`text-lg font-bold leading-tight ${color}`}>
+                      {formatSignedAmount(total)}
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200 animate-pulse">
-                <div className="h-4 bg-gray-200 rounded w-28 mb-4"></div>
-                <div className="h-8 bg-gray-200 rounded w-40 mb-3"></div>
-                <div className="h-3 bg-gray-200 rounded w-full"></div>
+              {/* Тогл и пин */}
+              <div className="flex justify-end gap-1.5 mt-2">
+                <button
+                  onClick={togglePin}
+                  title={summaryPinned ? 'Открепить вид' : 'Закрепить вид'}
+                  className={`text-xs px-2 py-1 rounded border transition-colors ${
+                    summaryPinned
+                      ? 'bg-amber-100 border-amber-300 text-amber-700'
+                      : 'bg-white border-gray-300 text-gray-500 hover:border-gray-400'
+                  }`}
+                >
+                  {summaryPinned ? '📌 Закреплено' : '📌'}
+                </button>
+                <button
+                  onClick={toggleSummaryMode}
+                  title="Развернуть"
+                  className="text-xs px-2 py-1 rounded border bg-white border-gray-300 text-gray-500 hover:border-gray-400 transition-colors"
+                >
+                  ⊞ Подробно
+                </button>
               </div>
-            </>
+            </div>
           ) : (
-            <>
-              <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-medium text-gray-600">📊 За сегодня</h3>
-                  <button onClick={openAnalytics} className="text-xs text-blue-600 hover:text-blue-800">
-                    Детали
+            /* ── Расширенный вид: аккордион ── */
+            <div className="space-y-3">
+              {[
+                {
+                  key: 'today', label: '📊 За сегодня',
+                  total: summary?.today?.total || 0,
+                  color: todayTotalColor,
+                  income: summary?.today?.income || 0,
+                  expense: summary?.today?.expense || 0,
+                  salary: summary?.today?.salary || 0,
+                  open: todayOpen, toggle: () => setTodayOpen((v) => !v),
+                },
+                {
+                  key: 'month', label: '📈 За месяц',
+                  total: summary?.month?.total || 0,
+                  color: monthTotalColor,
+                  income: summary?.month?.income || 0,
+                  expense: summary?.month?.expense || 0,
+                  salary: summary?.month?.salary || 0,
+                  open: monthOpen, toggle: () => setMonthOpen((v) => !v),
+                },
+              ].map(({ key, label, total, color, income, expense, salary, open, toggle }) => (
+                <div key={key} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                  <button
+                    onClick={toggle}
+                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-medium text-gray-600">{label}</span>
+                      <span className={`text-xl font-bold ${color}`}>
+                        {formatSignedAmount(total)}
+                      </span>
+                    </div>
+                    <span className="text-gray-400 text-sm">{open ? '▲' : '▼'}</span>
                   </button>
+                  {open && (
+                    <div className="px-4 pb-3 border-t border-gray-100">
+                      <div className="text-xs text-gray-500 pt-2 space-y-0.5">
+                        <div>Доходы: <span className="text-green-600 font-medium">+{formatUnsignedAmount(income)}</span></div>
+                        <div>Расходы: <span className="text-red-600 font-medium">−{formatUnsignedAmount(expense)}</span></div>
+                        <div>Зарплаты: <span className="text-blue-600 font-medium">−{formatUnsignedAmount(salary)}</span></div>
+                      </div>
+                      <button onClick={openAnalytics} className="mt-2 text-xs text-blue-600 hover:text-blue-800">
+                        Детали →
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <div className={`text-2xl font-bold ${todayTotalColor}`}>
-                  {formatSignedAmount(summary?.today?.total || 0)}
-                </div>
-                <div className="text-xs text-gray-500 mt-1">
-                  Доходы: +{formatUnsignedAmount(summary?.today?.income || 0)} • Расходы: -{formatUnsignedAmount(summary?.today?.expense || 0)} • Зарплаты: -{formatUnsignedAmount(summary?.today?.salary || 0)}
-                </div>
+              ))}
+              {/* Тогл и пин */}
+              <div className="flex justify-end gap-1.5">
+                <button
+                  onClick={togglePin}
+                  title={summaryPinned ? 'Открепить вид' : 'Закрепить вид'}
+                  className={`text-xs px-2 py-1 rounded border transition-colors ${
+                    summaryPinned
+                      ? 'bg-amber-100 border-amber-300 text-amber-700'
+                      : 'bg-white border-gray-300 text-gray-500 hover:border-gray-400'
+                  }`}
+                >
+                  {summaryPinned ? '📌 Закреплено' : '📌'}
+                </button>
+                <button
+                  onClick={toggleSummaryMode}
+                  title="Свернуть"
+                  className="text-xs px-2 py-1 rounded border bg-white border-gray-300 text-gray-500 hover:border-gray-400 transition-colors"
+                >
+                  ⊟ Компактно
+                </button>
               </div>
-
-              <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-medium text-gray-600">📈 За месяц</h3>
-                  <button onClick={openAnalytics} className="text-xs text-blue-600 hover:text-blue-800">
-                    Детали
-                  </button>
-                </div>
-                <div className={`text-2xl font-bold ${monthTotalColor}`}>
-                  {formatSignedAmount(summary?.month?.total || 0)}
-                </div>
-                <div className="text-xs text-gray-500 mt-1">
-                  Доходы: +{formatUnsignedAmount(summary?.month?.income || 0)} • Расходы: -{formatUnsignedAmount(summary?.month?.expense || 0)} • Зарплаты: -{formatUnsignedAmount(summary?.month?.salary || 0)}
-                </div>
-              </div>
-            </>
+            </div>
           )}
 
           {operationsError && (
