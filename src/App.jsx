@@ -1,4 +1,5 @@
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
+import ComingSoonPage from './pages/ComingSoonPage';
 import WorkspaceSelectPage from './pages/WorkspaceSelectPage';
 import WorkspaceCreatePage from './pages/WorkspaceCreatePage';
 import WorkspacePage from './pages/WorkspacePage';
@@ -78,6 +79,10 @@ const router = createBrowserRouter([
   {
     path: '/',
     element: <ProtectedRoute><Navigate to="/workspaces" replace /></ProtectedRoute>
+  },
+  {
+    path: '*',
+    element: <ComingSoonPage />
   }
 ])
 
