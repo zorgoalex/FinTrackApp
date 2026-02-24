@@ -83,26 +83,14 @@ export function WorkspaceProvider({ children }) {
       const ownerIds = Array.from(new Set(Object.values(ownersByWorkspaceId).filter(Boolean)));
       let ownersByUserId = {};
       if (ownerIds.length > 0) {
-        // Пробуем получить имя/email владельца из profiles; при ошибке используем owner_id как fallback
-        const { data: profilesData, error: profilesError } = await supabase
-          .from('profiles')
-          .select('*')
-          .in('id', ownerIds);
-
-        if (profilesError) {
-          console.warn('WorkspaceContext: Profiles are unavailable, using owner_id fallback', profilesError);
-        } else {
-          ownersByUserId = (profilesData || []).reduce((acc, profile) => {
-            const ownerName =
-              profile.full_name ||
-              profile.display_name ||
-              profile.name ||
-              profile.email ||
-              null;
-            acc[profile.id] = ownerName;
-            return acc;
-          }, {});
-        }
+        const emailPromises = ownerIds.map(id =>
+          supabase.rpc('get_user_email', { user_id: id }).then(({ data }) => ({ id, email: data }))
+        );
+        const emailResults = await Promise.all(emailPromises);
+        ownersByUserId = emailResults.reduce((acc, { id, email }) => {
+          acc[id] = email || id;
+          return acc;
+        }, {});
       }
       
       const workspaces = data?.map(item => ({
