@@ -159,26 +159,26 @@ export default function WorkspacePage() {
 
           <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
             <h3 className="text-sm font-medium text-gray-900 mb-3">Быстрые действия</h3>
-            <div className="grid grid-cols-3 gap-3">
-              <button onClick={() => openOperationForm('income')} className="flex flex-col items-center p-3 bg-green-50 hover:bg-green-100 rounded-lg transition-colors">
-                <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center mb-1">
-                  <span className="text-white text-sm">+</span>
+            <div className="grid grid-cols-3 gap-2">
+              <button onClick={() => openOperationForm('income')} className="flex items-center justify-center gap-1.5 px-2 py-1.5 bg-green-50 hover:bg-green-100 rounded-lg transition-colors">
+                <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center shrink-0">
+                  <span className="text-white text-xs leading-none">+</span>
                 </div>
-                <span className="text-xs text-green-700">Доход</span>
+                <span className="text-xs font-medium text-green-700 truncate">Доход</span>
               </button>
 
-              <button onClick={() => openOperationForm('expense')} className="flex flex-col items-center p-3 bg-red-50 hover:bg-red-100 rounded-lg transition-colors">
-                <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center mb-1">
-                  <span className="text-white text-sm">-</span>
+              <button onClick={() => openOperationForm('expense')} className="flex items-center justify-center gap-1.5 px-2 py-1.5 bg-red-50 hover:bg-red-100 rounded-lg transition-colors">
+                <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center shrink-0">
+                  <span className="text-white text-xs leading-none">−</span>
                 </div>
-                <span className="text-xs text-red-700">Расход</span>
+                <span className="text-xs font-medium text-red-700 truncate">Расход</span>
               </button>
 
-              <button onClick={() => openOperationForm('salary')} className="flex flex-col items-center p-3 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
-                <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center mb-1">
-                  <span className="text-white text-sm">💰</span>
+              <button onClick={() => openOperationForm('salary')} className="flex items-center justify-center gap-1.5 px-2 py-1.5 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
+                <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center shrink-0">
+                  <span className="text-xs leading-none">💰</span>
                 </div>
-                <span className="text-xs text-blue-700">Зарплата</span>
+                <span className="text-xs font-medium text-blue-700 truncate">Зарплата</span>
               </button>
             </div>
           </div>
