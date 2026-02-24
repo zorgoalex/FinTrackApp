@@ -18,10 +18,10 @@ export default function Layout() {
 
   const menuItems = [
     { icon: Home, label: 'Главная', path: workspaceId ? `/workspace/${workspaceId}` : '/' },
-    { icon: CreditCard, label: 'Операции', path: '/operations' },
-    { icon: Calendar, label: 'Запланированные', path: '/scheduled' },
-    { icon: BarChart3, label: 'Аналитика', path: '/analytics' },
-    { icon: Users, label: 'Справочники', path: '/directories' },
+    { icon: CreditCard, label: 'Операции', path: workspaceId ? `/operations?workspaceId=${workspaceId}` : '/operations' },
+    { icon: Calendar, label: 'Запланированные', path: workspaceId ? `/scheduled?workspaceId=${workspaceId}` : '/scheduled' },
+    { icon: BarChart3, label: 'Аналитика', path: workspaceId ? `/analytics?workspaceId=${workspaceId}` : '/analytics' },
+    { icon: Users, label: 'Справочники', path: workspaceId ? `/directories?workspaceId=${workspaceId}` : '/directories' },
     ...(canViewWorkspaceSettings ? [{ 
       icon: Settings, 
       label: 'Настройки пространства', 
