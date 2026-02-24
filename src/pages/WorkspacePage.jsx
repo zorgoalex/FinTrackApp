@@ -50,11 +50,11 @@ export default function WorkspacePage() {
   };
 
   const openOperations = () => {
-    navigate('/operations');
+    navigate(workspaceId ? `/operations?workspaceId=${workspaceId}` : '/operations');
   };
 
   const openAnalytics = () => {
-    navigate('/analytics');
+    navigate(workspaceId ? `/analytics?workspaceId=${workspaceId}` : '/analytics');
   };
 
   if (loading) {
