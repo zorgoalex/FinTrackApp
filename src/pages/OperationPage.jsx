@@ -5,21 +5,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { usePermissions } from '../hooks/usePermissions';
 import useOperations from '../hooks/useOperations';
+import { formatSignedAmount, parseAmount, normalizeAmountInput } from '../utils/formatters';
 
 const OPERATION_TYPES = {
-  income: { label: 'Доход', sign: '+', color: 'text-green-600' },
-  expense: { label: 'Расход', sign: '-', color: 'text-red-600' },
-  salary: { label: 'Зарплата', sign: '-', color: 'text-blue-600' }
+  income: { label: 'Доход',    sign: '+', color: 'text-green-600' },
+  expense: { label: 'Расход',  sign: '−', color: 'text-red-600' },
+  salary: { label: 'Зарплата', sign: '−', color: 'text-blue-600' }
 };
-
-const amountFormatter = new Intl.NumberFormat('ru-RU', {
-  maximumFractionDigits: 0
-});
-
-function formatAmount(operationType, amount) {
-  const info = OPERATION_TYPES[operationType] || OPERATION_TYPES.expense;
-  return `${info.sign}${amountFormatter.format(Math.abs(Number(amount) || 0))} ₽`;
-}
 
 function formatOperationDate(value) {
   if (!value) return 'Без даты';
@@ -178,7 +170,7 @@ export function OperationPage() {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    const amount = Number(formData.amount);
+    const amount = parseAmount(formData.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
       setFormError('Сумма должна быть больше нуля');
       return;
@@ -359,7 +351,7 @@ export function OperationPage() {
                     {typeInfo.label}
                   </div>
                   <div className="text-lg font-semibold text-gray-900">
-                    {formatAmount(operation.type, operation.amount)}
+                    {formatSignedAmount(operation.type, operation.amount)}
                   </div>
                   <div className="text-sm text-gray-700 mt-1 break-words">
                     {operation.description || 'Без описания'}
@@ -412,11 +404,13 @@ export function OperationPage() {
                 </label>
                 <input
                   id="operationAmount"
-                  type="number"
-                  min="0"
-                  step="1"
+                  type="text"
+                  inputMode="decimal"
                   value={formData.amount}
-                  onChange={(event) => setFormData((prev) => ({ ...prev, amount: event.target.value }))}
+                  onChange={(event) => setFormData((prev) => ({
+                    ...prev,
+                    amount: normalizeAmountInput(event.target.value)
+                  }))}
                   className="input-field"
                   placeholder="0"
                   required

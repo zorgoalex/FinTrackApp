@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
+import { parseAmount, normalizeAmountInput } from '../utils/formatters';
 
 const OPERATION_TYPES = {
   income:  { label: 'Доход',    color: 'text-green-600', bg: 'bg-green-600 hover:bg-green-700' },
@@ -40,7 +41,7 @@ export default function AddOperationModal({ type: initialType, onClose, onSave }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const amount = Number(form.amount);
+    const amount = parseAmount(form.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
       setError('Введите корректную сумму');
       return;
@@ -95,11 +96,13 @@ export default function AddOperationModal({ type: initialType, onClose, onSave }
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Сумма</label>
             <input
-              type="number"
-              min="0"
-              step="1"
+              type="text"
+              inputMode="decimal"
               value={form.amount}
-              onChange={set('amount')}
+              onChange={(e) => setForm((prev) => ({
+                ...prev,
+                amount: normalizeAmountInput(e.target.value)
+              }))}
               className="input-field"
               placeholder="0"
               required

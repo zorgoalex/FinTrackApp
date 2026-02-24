@@ -3,18 +3,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import useOperations from '../hooks/useOperations';
 import AddOperationModal from '../components/AddOperationModal';
-
-const amountFormatter = new Intl.NumberFormat('ru-RU', {
-  maximumFractionDigits: 0
-});
-
-function formatUnsignedAmount(value) {
-  return `${amountFormatter.format(Math.abs(Number(value) || 0))} ₽`;
-}
+import { formatUnsignedAmount, formatSignedAmount as formatBalance } from '../utils/formatters';
 
 function formatSignedAmount(value) {
-  const normalized = Number(value) || 0;
-  return `${normalized >= 0 ? '+' : '-'}${formatUnsignedAmount(normalized)}`;
+  return formatBalance(value >= 0 ? 'income' : 'expense', value);
 }
 
 export default function WorkspacePage() {
@@ -197,9 +189,7 @@ export default function WorkspacePage() {
                 {operations.slice(0, 5).map(op => {
                   const typeColors = { income: 'text-green-600', expense: 'text-red-600', salary: 'text-blue-600' };
                   const typeLabels = { income: 'Доход', expense: 'Расход', salary: 'Зарплата' };
-                  const sign = op.type === 'income' ? '+' : '-';
                   const color = typeColors[op.type] || 'text-gray-600';
-                  const fmt = new Intl.NumberFormat('ru-RU').format(Math.abs(Number(op.amount)));
                   return (
                     <div key={op.id} className="py-2 flex items-center justify-between">
                       <div className="min-w-0">
@@ -209,7 +199,7 @@ export default function WorkspacePage() {
                         )}
                       </div>
                       <span className={`text-sm font-semibold ${color} ml-2 whitespace-nowrap`}>
-                        {sign}{fmt} ₽
+                        {formatSignedAmount(op.type === 'income' ? op.amount : -Math.abs(op.amount))}
                       </span>
                     </div>
                   );
