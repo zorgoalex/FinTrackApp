@@ -23,6 +23,7 @@ export default function WorkspacePage() {
   const workspaceId = params.workspaceId || workspaceIdFromContext;
 
   const {
+    operations,
     summary,
     loading: operationsLoading,
     error: operationsError
@@ -188,11 +189,38 @@ export default function WorkspacePage() {
                 Все операции
               </button>
             </div>
-            <div className="text-center py-8 text-gray-500">
-              <div className="text-4xl mb-2">📝</div>
-              <p className="text-sm">Перейдите в раздел операций</p>
-              <p className="text-xs">Там можно просмотреть и добавить записи</p>
-            </div>
+            {operationsLoading ? (
+              <div className="text-center py-6 text-gray-400 text-sm">Загрузка...</div>
+            ) : operations && operations.length > 0 ? (
+              <div className="divide-y divide-gray-100">
+                {operations.slice(0, 5).map(op => {
+                  const typeColors = { income: 'text-green-600', expense: 'text-red-600', salary: 'text-blue-600' };
+                  const typeLabels = { income: 'Доход', expense: 'Расход', salary: 'Зарплата' };
+                  const sign = op.type === 'income' ? '+' : '-';
+                  const color = typeColors[op.type] || 'text-gray-600';
+                  const fmt = new Intl.NumberFormat('ru-RU').format(Math.abs(Number(op.amount)));
+                  return (
+                    <div key={op.id} className="py-2 flex items-center justify-between">
+                      <div className="min-w-0">
+                        <span className={`text-xs font-medium ${color}`}>{typeLabels[op.type]}</span>
+                        {op.description && (
+                          <p className="text-xs text-gray-500 truncate max-w-[180px]">{op.description}</p>
+                        )}
+                      </div>
+                      <span className={`text-sm font-semibold ${color} ml-2 whitespace-nowrap`}>
+                        {sign}{fmt} ₽
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <div className="text-4xl mb-2">📝</div>
+                <p className="text-sm">Операций пока нет</p>
+                <p className="text-xs">Добавьте первую запись</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
