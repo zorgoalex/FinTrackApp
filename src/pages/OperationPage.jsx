@@ -293,23 +293,23 @@ export function OperationPage() {
         )}
       </div>
 
-      {/* Category filter */}
-      {categories.length > 0 && (
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-xs text-gray-500">Категория:</span>
-          <select
-            value={filterCategory}
-            onChange={(e) => setFilterCategory(e.target.value)}
-            className="text-sm border border-gray-300 rounded-md px-2 py-1"
-            data-testid="category-filter"
-          >
-            <option value="">Все категории</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        </div>
-      )}
+      {/* Category filter — show always so user knows it exists */}
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-xs text-gray-500 shrink-0">Категория:</span>
+        <select
+          value={filterCategory}
+          onChange={(e) => setFilterCategory(e.target.value)}
+          className="text-sm border border-gray-300 rounded-md px-2 py-1 flex-1 max-w-[200px]"
+          data-testid="category-filter"
+        >
+          <option value="">Все категории</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name} ({c.type === 'income' ? 'доход' : 'расход'})
+            </option>
+          ))}
+        </select>
+      </div>
 
       {/* Tag filter */}
       {tags.length > 0 && (

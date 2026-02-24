@@ -131,19 +131,29 @@ export function useOperations(workspaceId) {
         throw loadError;
       }
 
-      // Fetch tags for all operations
+      // Fetch tags for all operations (two-query approach to avoid PostgREST join RLS issues)
       const opIds = (data || []).map((o) => o.id);
       let tagsByOpId = {};
       if (opIds.length > 0) {
         const { data: tagLinks } = await supabase
           .from('operation_tags')
-          .select('operation_id, tags(id, name, color)')
+          .select('operation_id, tag_id')
           .in('operation_id', opIds);
 
-        if (tagLinks) {
+        if (tagLinks && tagLinks.length > 0) {
+          const tagIds = [...new Set(tagLinks.map((l) => l.tag_id))];
+          const { data: tagData } = await supabase
+            .from('tags')
+            .select('id, name, color')
+            .in('id', tagIds);
+
+          const tagMap = {};
+          (tagData || []).forEach((t) => { tagMap[t.id] = t; });
+
           tagLinks.forEach((link) => {
             if (!tagsByOpId[link.operation_id]) tagsByOpId[link.operation_id] = [];
-            if (link.tags) tagsByOpId[link.operation_id].push(link.tags);
+            const tag = tagMap[link.tag_id];
+            if (tag) tagsByOpId[link.operation_id].push(tag);
           });
         }
       }

@@ -7,12 +7,10 @@ export default function TagInput({ allTags = [], selected = [], onChange, placeh
 
   const selectedNames = new Set(selected.map((t) => t.name.toLowerCase()));
 
-  const filtered = inputValue.trim()
-    ? allTags
-        .filter((t) => !selectedNames.has(t.name.toLowerCase()))
-        .filter((t) => t.name.toLowerCase().includes(inputValue.trim().toLowerCase()))
-        .slice(0, 5)
-    : [];
+  const filtered = allTags
+    .filter((t) => !selectedNames.has(t.name.toLowerCase()))
+    .filter((t) => !inputValue.trim() || t.name.toLowerCase().includes(inputValue.trim().toLowerCase()))
+    .slice(0, 8);
 
   useEffect(() => {
     const handleClickOutside = (e) => {

@@ -51,7 +51,9 @@ export default function AddOperationModal({ type: initialType, workspaceId, onCl
 
   const handleAddCategory = async () => {
     if (!newCatName.trim()) return;
-    const created = await addCategory({ name: newCatName.trim(), type: newCatType });
+    // Always use current operation type (income/expense), salary gets 'expense'
+    const catType = form.type === 'income' ? 'income' : 'expense';
+    const created = await addCategory({ name: newCatName.trim(), type: catType });
     if (created) {
       setForm((prev) => ({ ...prev, categoryId: created.id }));
       setNewCatName('');
@@ -148,7 +150,7 @@ export default function AddOperationModal({ type: initialType, workspaceId, onCl
                 </button>
               </div>
               {showNewCat && (
-                <div className="mt-2 flex gap-2 items-end">
+                <div className="mt-2 flex gap-2 items-center">
                   <input
                     type="text"
                     value={newCatName}
@@ -156,21 +158,13 @@ export default function AddOperationModal({ type: initialType, workspaceId, onCl
                     placeholder="Название категории"
                     className="input-field flex-1 text-sm"
                     data-testid="new-category-name"
+                    autoFocus
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddCategory(); } }}
                   />
-                  <select
-                    value={newCatType}
-                    onChange={(e) => setNewCatType(e.target.value)}
-                    className="input-field text-sm w-28"
-                    data-testid="new-category-type"
-                  >
-                    <option value="income">Доход</option>
-                    <option value="expense">Расход</option>
-                  </select>
                   <button
                     type="button"
                     onClick={handleAddCategory}
-                    className="px-3 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                    className="px-3 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors whitespace-nowrap"
                     data-testid="save-category-btn"
                   >
                     OK
