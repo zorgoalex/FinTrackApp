@@ -1,6 +1,9 @@
 import { useState } from 'react';
-import { X } from 'lucide-react';
+import { X, Plus } from 'lucide-react';
 import { parseAmount, normalizeAmountInput, formatAmountInput } from '../utils/formatters';
+import useCategories from '../hooks/useCategories';
+import useTags from '../hooks/useTags';
+import TagInput from './TagInput';
 
 const OPERATION_TYPES = {
   income:  { label: 'Доход',    color: 'text-green-600', bg: 'bg-green-600 hover:bg-green-700' },
@@ -16,29 +19,45 @@ function todayDateString() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-/**
- * Модальное окно быстрого добавления операции.
- *
- * Props:
- *   type        — 'income' | 'expense' | 'salary'
- *   onClose     — callback закрытия
- *   onSave      — async (payload) => void  (payload = { type, amount, description, operation_date })
- */
-export default function AddOperationModal({ type: initialType, onClose, onSave }) {
+export default function AddOperationModal({ type: initialType, workspaceId, onClose, onSave }) {
+  const { categories, addCategory } = useCategories(workspaceId);
+  const { tags } = useTags(workspaceId);
+
   const [form, setForm] = useState({
     type:          initialType || 'income',
     amount:        '',
     description:   '',
     operationDate: todayDateString(),
+    categoryId:    '',
+    selectedTags:  [],
   });
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
   const [amountFocused, setAmountFocused] = useState(false);
 
+  // Inline category creation
+  const [showNewCat, setShowNewCat] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatType, setNewCatType] = useState('expense');
+
   const typeInfo = OPERATION_TYPES[form.type] || OPERATION_TYPES.income;
 
   const set = (field) => (e) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
+
+  const filteredCategories = form.type === 'salary'
+    ? []
+    : categories.filter((c) => c.type === form.type);
+
+  const handleAddCategory = async () => {
+    if (!newCatName.trim()) return;
+    const created = await addCategory({ name: newCatName.trim(), type: newCatType });
+    if (created) {
+      setForm((prev) => ({ ...prev, categoryId: created.id }));
+      setNewCatName('');
+      setShowNewCat(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -55,6 +74,8 @@ export default function AddOperationModal({ type: initialType, onClose, onSave }
         amount,
         description:    form.description,
         operation_date: form.operationDate,
+        category_id:    form.categoryId || null,
+        tagNames:       form.selectedTags.map((t) => t.name),
       });
       onClose();
     } catch (err) {
@@ -66,7 +87,7 @@ export default function AddOperationModal({ type: initialType, onClose, onSave }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md">
+      <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b">
           <h2 className={`text-base font-semibold ${typeInfo.color}`}>
@@ -84,7 +105,11 @@ export default function AddOperationModal({ type: initialType, onClose, onSave }
             <label className="block text-sm font-medium text-gray-700 mb-1">Тип</label>
             <select
               value={form.type}
-              onChange={set('type')}
+              onChange={(e) => {
+                const newType = e.target.value;
+                setForm((prev) => ({ ...prev, type: newType, categoryId: '' }));
+                setNewCatType(newType === 'salary' ? 'expense' : newType);
+              }}
               className="input-field"
             >
               <option value="income">Доход</option>
@@ -92,6 +117,68 @@ export default function AddOperationModal({ type: initialType, onClose, onSave }
               <option value="salary">Зарплата</option>
             </select>
           </div>
+
+          {/* Категория */}
+          {form.type !== 'salary' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Категория</label>
+              <div className="flex gap-2">
+                <select
+                  value={form.categoryId}
+                  onChange={set('categoryId')}
+                  className="input-field flex-1"
+                  name="category"
+                >
+                  <option value="">Без категории</option>
+                  {filteredCategories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowNewCat(!showNewCat);
+                    setNewCatType(form.type);
+                  }}
+                  className="px-2 py-1 border border-gray-300 rounded-lg text-gray-500 hover:text-indigo-600 hover:border-indigo-400 transition-colors"
+                  title="Добавить категорию"
+                  data-testid="add-category-btn"
+                >
+                  <Plus size={16} />
+                </button>
+              </div>
+              {showNewCat && (
+                <div className="mt-2 flex gap-2 items-end">
+                  <input
+                    type="text"
+                    value={newCatName}
+                    onChange={(e) => setNewCatName(e.target.value)}
+                    placeholder="Название категории"
+                    className="input-field flex-1 text-sm"
+                    data-testid="new-category-name"
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddCategory(); } }}
+                  />
+                  <select
+                    value={newCatType}
+                    onChange={(e) => setNewCatType(e.target.value)}
+                    className="input-field text-sm w-28"
+                    data-testid="new-category-type"
+                  >
+                    <option value="income">Доход</option>
+                    <option value="expense">Расход</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={handleAddCategory}
+                    className="px-3 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                    data-testid="save-category-btn"
+                  >
+                    OK
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Сумма */}
           <div>
@@ -122,6 +209,17 @@ export default function AddOperationModal({ type: initialType, onClose, onSave }
               className="input-field"
               rows={2}
               placeholder="Комментарий к операции"
+            />
+          </div>
+
+          {/* Теги */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Теги</label>
+            <TagInput
+              allTags={tags}
+              selected={form.selectedTags}
+              onChange={(newTags) => setForm((prev) => ({ ...prev, selectedTags: newTags }))}
+              placeholder="Добавить тег..."
             />
           </div>
 

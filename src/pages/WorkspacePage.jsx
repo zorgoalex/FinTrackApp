@@ -332,6 +332,7 @@ export default function WorkspacePage() {
       {modalType && (
         <AddOperationModal
           type={modalType}
+          workspaceId={workspaceId}
           onClose={() => setModalType(null)}
           onSave={addOperation}
         />

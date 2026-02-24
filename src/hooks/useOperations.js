@@ -122,7 +122,7 @@ export function useOperations(workspaceId) {
 
       const { data, error: loadError } = await supabase
         .from('operations')
-        .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at')
+        .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id')
         .eq('workspace_id', workspaceId)
         .order('operation_date', { ascending: false })
         .order('created_at', { ascending: false });
@@ -131,9 +131,27 @@ export function useOperations(workspaceId) {
         throw loadError;
       }
 
-      const mappedOperations = (data || []).map((operation) => (
-        mapOperationWithDisplayName(operation, authUser)
-      ));
+      // Fetch tags for all operations
+      const opIds = (data || []).map((o) => o.id);
+      let tagsByOpId = {};
+      if (opIds.length > 0) {
+        const { data: tagLinks } = await supabase
+          .from('operation_tags')
+          .select('operation_id, tags(id, name, color)')
+          .in('operation_id', opIds);
+
+        if (tagLinks) {
+          tagLinks.forEach((link) => {
+            if (!tagsByOpId[link.operation_id]) tagsByOpId[link.operation_id] = [];
+            if (link.tags) tagsByOpId[link.operation_id].push(link.tags);
+          });
+        }
+      }
+
+      const mappedOperations = (data || []).map((operation) => ({
+        ...mapOperationWithDisplayName(operation, authUser),
+        tags: tagsByOpId[operation.id] || []
+      }));
 
       setOperations(mappedOperations);
     } catch (loadException) {
@@ -176,8 +194,11 @@ export function useOperations(workspaceId) {
       amount: Number(data?.amount) || 0,
       type,
       description: data?.description || '',
-      operation_date: data?.operation_date || new Date().toISOString().slice(0, 10)
+      operation_date: data?.operation_date || new Date().toISOString().slice(0, 10),
+      category_id: data?.category_id || null
     };
+
+    const tagNames = data?.tagNames || [];
 
     try {
       setLoading(true);
@@ -186,11 +207,34 @@ export function useOperations(workspaceId) {
       const { data: insertedData, error: insertError } = await supabase
         .from('operations')
         .insert([payload])
-        .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at')
+        .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id')
         .single();
 
       if (insertError) {
         throw insertError;
+      }
+
+      // Create tags and link them
+      if (tagNames.length > 0 && insertedData?.id) {
+        const tagIds = [];
+        for (const tagName of tagNames) {
+          const trimmed = tagName.trim();
+          if (!trimmed) continue;
+          const { data: tagRow } = await supabase
+            .from('tags')
+            .upsert(
+              { workspace_id: workspaceId, name: trimmed },
+              { onConflict: 'workspace_id,name' }
+            )
+            .select('id')
+            .single();
+          if (tagRow?.id) tagIds.push(tagRow.id);
+        }
+        if (tagIds.length > 0) {
+          await supabase
+            .from('operation_tags')
+            .insert(tagIds.map((tagId) => ({ operation_id: insertedData.id, tag_id: tagId })));
+        }
       }
 
       await loadOperations();

@@ -5,7 +5,10 @@ import { useAuth } from '../contexts/AuthContext';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { usePermissions } from '../hooks/usePermissions';
 import useOperations from '../hooks/useOperations';
-import { formatSignedAmount, parseAmount, normalizeAmountInput, formatAmountInput } from '../utils/formatters';
+import useCategories from '../hooks/useCategories';
+import useTags from '../hooks/useTags';
+import AddOperationModal from '../components/AddOperationModal';
+import { formatSignedAmount } from '../utils/formatters';
 
 const OPERATION_TYPES = {
   income: { label: 'Доход',    sign: '+', color: 'text-green-600' },
@@ -52,13 +55,17 @@ export function OperationPage() {
     deleteOperation
   } = useOperations(workspaceId);
 
+  const { categories } = useCategories(workspaceId);
+  const { tags } = useTags(workspaceId);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [formError, setFormError] = useState('');
+  const [modalType, setModalType] = useState('income');
   const [authorEmails, setAuthorEmails] = useState({});
-  const [amountFocused, setAmountFocused] = useState(false);
-  const [filterType, setFilterType] = useState(null); // null = все
-  const [sortField, setSortField] = useState('date');   // 'date' | 'amount'
-  const [sortDir, setSortDir]   = useState('desc');      // 'asc' | 'desc'
+  const [filterType, setFilterType] = useState(null);
+  const [filterCategory, setFilterCategory] = useState('');
+  const [filterTags, setFilterTags] = useState([]);
+  const [sortField, setSortField] = useState('date');
+  const [sortDir, setSortDir] = useState('desc');
 
   const toggleSort = (field) => {
     if (sortField === field) {
@@ -68,31 +75,25 @@ export function OperationPage() {
       setSortDir('desc');
     }
   };
-  const [formData, setFormData] = useState({
-    type: getDefaultType(searchParams),
-    amount: '',
-    description: '',
-    operationDate: new Date().toISOString().slice(0, 10)
-  });
 
-  useEffect(() => {
-    setFormData((prev) => ({
-      ...prev,
-      type: getDefaultType(searchParams)
-    }));
-  }, [searchParams]);
-
-    const monthlyOperations = useMemo(() => (
+  const monthlyOperations = useMemo(() => (
     (operations || []).filter((operation) => (
       isDateInCurrentMonth(operation.operation_date || operation.created_at)
     ))
   ), [operations]);
 
-  // Отфильтрованные и отсортированные операции для отображения
   const visibleOperations = useMemo(() => {
-    const filtered = filterType
+    let filtered = filterType
       ? monthlyOperations.filter((op) => op.type === filterType)
       : [...monthlyOperations];
+
+    if (filterCategory)
+      filtered = filtered.filter((op) => op.category_id === filterCategory);
+
+    if (filterTags.length > 0)
+      filtered = filtered.filter((op) =>
+        filterTags.some((tagId) => op.tags?.some((t) => t.id === tagId))
+      );
 
     return filtered.sort((a, b) => {
       let valA, valB;
@@ -100,13 +101,12 @@ export function OperationPage() {
         valA = Math.abs(Number(a.amount) || 0);
         valB = Math.abs(Number(b.amount) || 0);
       } else {
-        // date
         valA = new Date(a.operation_date || a.created_at).getTime();
         valB = new Date(b.operation_date || b.created_at).getTime();
       }
       return sortDir === 'asc' ? valA - valB : valB - valA;
     });
-  }, [monthlyOperations, filterType, sortField, sortDir]);
+  }, [monthlyOperations, filterType, filterCategory, filterTags, sortField, sortDir]);
 
   useEffect(() => {
     const loadEmails = async () => {
@@ -134,23 +134,17 @@ export function OperationPage() {
 
   const closeModal = () => {
     setIsModalOpen(false);
-    setFormError('');
-    setFormData({
-      type: getDefaultType(searchParams),
-      amount: '',
-      description: '',
-      operationDate: new Date().toISOString().slice(0, 10)
-    });
   };
 
   const openAddModal = (type) => {
-    if (!permissions.canCreateOperations) {
-      return;
-    }
-
-    setFormError('');
-    setFormData((prev) => ({ ...prev, type }));
+    if (!permissions.canCreateOperations) return;
+    setModalType(type);
     setIsModalOpen(true);
+  };
+
+  const handleModalSave = async (payload) => {
+    const result = await addOperation(payload);
+    if (result) closeModal();
   };
 
   const canDeleteRecord = (operation) => {
@@ -166,29 +160,6 @@ export function OperationPage() {
     if (!confirmed) return;
 
     await deleteOperation(operationId);
-  };
-
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-
-    const amount = parseAmount(formData.amount);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      setFormError('Сумма должна быть больше нуля');
-      return;
-    }
-
-    const created = await addOperation({
-      type: formData.type,
-      amount,
-      description: formData.description,
-      operation_date: formData.operationDate
-    });
-
-    if (!created) {
-      return;
-    }
-
-    closeModal();
   };
 
   const getAuthorText = (operation) => {
@@ -264,15 +235,14 @@ export function OperationPage() {
         )}
       </div>
 
-      {(error || formError) && (
+      {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 mb-4">
-          {formError || error}
+          {error}
         </div>
       )}
 
       {/* Фильтр + Сортировка */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
-        {/* Фильтр по типу */}
         {[
           { key: null,      label: 'Все' },
           { key: 'income',  label: '+ Доход' },
@@ -292,10 +262,8 @@ export function OperationPage() {
           </button>
         ))}
 
-        {/* Разделитель */}
         <span className="text-gray-300 select-none">|</span>
 
-        {/* Сортировка по дате */}
         <button
           onClick={() => toggleSort('date')}
           className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors flex items-center gap-1 ${
@@ -307,7 +275,6 @@ export function OperationPage() {
           Дата {sortField === 'date' ? (sortDir === 'desc' ? '↓' : '↑') : '↕'}
         </button>
 
-        {/* Сортировка по сумме */}
         <button
           onClick={() => toggleSort('amount')}
           className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors flex items-center gap-1 ${
@@ -326,6 +293,48 @@ export function OperationPage() {
         )}
       </div>
 
+      {/* Category filter */}
+      {categories.length > 0 && (
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-xs text-gray-500">Категория:</span>
+          <select
+            value={filterCategory}
+            onChange={(e) => setFilterCategory(e.target.value)}
+            className="text-sm border border-gray-300 rounded-md px-2 py-1"
+            data-testid="category-filter"
+          >
+            <option value="">Все категории</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Tag filter */}
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-3" data-testid="tag-filter">
+          {tags.map((tag) => {
+            const active = filterTags.includes(tag.id);
+            return (
+              <button
+                key={tag.id}
+                onClick={() => setFilterTags((prev) =>
+                  active ? prev.filter((id) => id !== tag.id) : [...prev, tag.id]
+                )}
+                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                  active
+                    ? 'bg-indigo-600 text-white border-indigo-600'
+                    : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400'
+                }`}
+              >
+                #{tag.name} {active && '×'}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 divide-y divide-gray-100">
         {loading && monthlyOperations.length === 0 ? (
           <div className="p-8 text-center text-gray-500">
@@ -334,8 +343,8 @@ export function OperationPage() {
           </div>
         ) : visibleOperations.length === 0 ? (
           <div className="p-8 text-center text-gray-500">
-            {filterType
-              ? `Нет операций типа «${OPERATION_TYPES[filterType]?.label}» за этот месяц.`
+            {filterType || filterCategory || filterTags.length > 0
+              ? 'Нет операций, соответствующих фильтру.'
               : 'В этом месяце операций пока нет.'}
           </div>
         ) : (
@@ -357,6 +366,25 @@ export function OperationPage() {
                   <div className="text-sm text-gray-700 mt-1 break-words">
                     {operation.description || 'Без описания'}
                   </div>
+                  {/* Category */}
+                  {operation.category_id && categories.length > 0 && (
+                    <span className="text-xs text-gray-500 mt-0.5 block">
+                      {categories.find((c) => c.id === operation.category_id)?.name}
+                    </span>
+                  )}
+                  {/* Tags */}
+                  {operation.tags?.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {operation.tags.slice(0, 2).map((tag) => (
+                        <span key={tag.id} className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                          #{tag.name}
+                        </span>
+                      ))}
+                      {operation.tags.length > 3 && (
+                        <span className="text-xs text-gray-400">+{operation.tags.length - 2} ещё</span>
+                      )}
+                    </div>
+                  )}
                   <div className="text-xs text-gray-500 mt-1">
                     {getAuthorText(operation)}
                   </div>
@@ -378,87 +406,12 @@ export function OperationPage() {
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-lg shadow-xl border border-gray-200 w-full max-w-md p-4">
-            <h2 className="text-lg font-semibold mb-4">Новая операция</h2>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label htmlFor="operationType" className="block text-sm font-medium text-gray-700 mb-1">
-                  Тип
-                </label>
-                <select
-                  id="operationType"
-                  value={formData.type}
-                  onChange={(event) => setFormData((prev) => ({ ...prev, type: event.target.value }))}
-                  className="input-field"
-                >
-                  <option value="income">Доход</option>
-                  <option value="expense">Расход</option>
-                  <option value="salary">Зарплата</option>
-                </select>
-              </div>
-
-              <div>
-                <label htmlFor="operationAmount" className="block text-sm font-medium text-gray-700 mb-1">
-                  Сумма, ₽
-                </label>
-                <input
-                  id="operationAmount"
-                  type="text"
-                  inputMode="decimal"
-                  value={amountFocused ? formData.amount : formatAmountInput(formData.amount)}
-                  onFocus={() => setAmountFocused(true)}
-                  onBlur={() => setAmountFocused(false)}
-                  onChange={(event) => setFormData((prev) => ({
-                    ...prev,
-                    amount: normalizeAmountInput(event.target.value)
-                  }))}
-                  className="input-field"
-                  placeholder="0"
-                  required
-                />
-              </div>
-
-              <div>
-                <label htmlFor="operationDescription" className="block text-sm font-medium text-gray-700 mb-1">
-                  Описание
-                </label>
-                <textarea
-                  id="operationDescription"
-                  value={formData.description}
-                  onChange={(event) => setFormData((prev) => ({ ...prev, description: event.target.value }))}
-                  className="input-field"
-                  rows="3"
-                  placeholder="Комментарий к операции"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="operationDate" className="block text-sm font-medium text-gray-700 mb-1">
-                  Дата
-                </label>
-                <input
-                  id="operationDate"
-                  type="date"
-                  value={formData.operationDate}
-                  onChange={(event) => setFormData((prev) => ({ ...prev, operationDate: event.target.value }))}
-                  className="input-field"
-                  required
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={closeModal} className="btn-secondary" disabled={loading}>
-                  Отмена
-                </button>
-                <button type="submit" className="btn-primary" disabled={loading}>
-                  Сохранить
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <AddOperationModal
+          type={modalType}
+          workspaceId={workspaceId}
+          onClose={closeModal}
+          onSave={handleModalSave}
+        />
       )}
     </div>
   );
