@@ -63,6 +63,7 @@ export function OperationPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formError, setFormError] = useState('');
   const [authorEmails, setAuthorEmails] = useState({});
+  const [filterType, setFilterType] = useState(null); // null = все
   const [formData, setFormData] = useState({
     type: getDefaultType(searchParams),
     amount: '',
@@ -77,11 +78,18 @@ export function OperationPage() {
     }));
   }, [searchParams]);
 
-  const monthlyOperations = useMemo(() => (
+    const monthlyOperations = useMemo(() => (
     (operations || []).filter((operation) => (
       isDateInCurrentMonth(operation.operation_date || operation.created_at)
     ))
   ), [operations]);
+
+  // Отфильтрованные по типу операции для отображения в списке
+  const visibleOperations = useMemo(() => (
+    filterType
+      ? monthlyOperations.filter((op) => op.type === filterType)
+      : monthlyOperations
+  ), [monthlyOperations, filterType]);
 
   useEffect(() => {
     const loadEmails = async () => {
@@ -242,18 +250,47 @@ export function OperationPage() {
         </div>
       )}
 
+      {/* Фильтр по типу */}
+      <div className="flex gap-2 mb-3 flex-wrap">
+        {[
+          { key: null,      label: 'Все' },
+          { key: 'income',  label: '+ Доход' },
+          { key: 'expense', label: '− Расход' },
+          { key: 'salary',  label: '💰 Зарплата' },
+        ].map(({ key, label }) => (
+          <button
+            key={String(key)}
+            onClick={() => setFilterType(key)}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+              filterType === key
+                ? 'bg-blue-600 text-white border-blue-600'
+                : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400 hover:text-blue-600'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+        {filterType && (
+          <span className="self-center text-xs text-gray-400 ml-1">
+            {visibleOperations.length} из {monthlyOperations.length}
+          </span>
+        )}
+      </div>
+
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 divide-y divide-gray-100">
         {loading && monthlyOperations.length === 0 ? (
           <div className="p-8 text-center text-gray-500">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
             <p className="mt-3">Загрузка операций...</p>
           </div>
-        ) : monthlyOperations.length === 0 ? (
+        ) : visibleOperations.length === 0 ? (
           <div className="p-8 text-center text-gray-500">
-            В этом месяце операций пока нет.
+            {filterType
+              ? `Нет операций типа «${OPERATION_TYPES[filterType]?.label}» за этот месяц.`
+              : 'В этом месяце операций пока нет.'}
           </div>
         ) : (
-          monthlyOperations.map((operation) => {
+          visibleOperations.map((operation) => {
             const typeInfo = OPERATION_TYPES[operation.type] || OPERATION_TYPES.expense;
 
             return (
