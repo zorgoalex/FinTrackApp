@@ -47,7 +47,7 @@ export function WorkspaceProvider({ children }) {
           is_active,
           joined_at,
           last_accessed_at,
-          workspaces(id, name, is_personal, created_at, owner_id)
+          workspaces(id, name, is_personal, created_at)
         `)
         .eq('user_id', user.id)
         .eq('is_active', true);
@@ -56,9 +56,59 @@ export function WorkspaceProvider({ children }) {
         console.error('WorkspaceContext: Error loading all workspaces', error);
         return;
       }
+
+      const workspaceIds = (data || [])
+        .map(item => item.workspace_id)
+        .filter(Boolean);
+
+      // Отдельно подтягиваем owner_id из workspaces для списка переключателя
+      let ownersByWorkspaceId = {};
+      if (workspaceIds.length > 0) {
+        const { data: ownersData, error: ownersError } = await supabase
+          .from('workspaces')
+          .select('id, owner_id')
+          .in('id', workspaceIds)
+          .is('deleted_at', null);
+
+        if (ownersError) {
+          console.error('WorkspaceContext: Error loading workspace owners', ownersError);
+        } else {
+          ownersByWorkspaceId = (ownersData || []).reduce((acc, row) => {
+            acc[row.id] = row.owner_id;
+            return acc;
+          }, {});
+        }
+      }
+
+      const ownerIds = Array.from(new Set(Object.values(ownersByWorkspaceId).filter(Boolean)));
+      let ownersByUserId = {};
+      if (ownerIds.length > 0) {
+        // Пробуем получить имя/email владельца из profiles; при ошибке используем owner_id как fallback
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('profiles')
+          .select('*')
+          .in('id', ownerIds);
+
+        if (profilesError) {
+          console.warn('WorkspaceContext: Profiles are unavailable, using owner_id fallback', profilesError);
+        } else {
+          ownersByUserId = (profilesData || []).reduce((acc, profile) => {
+            const ownerName =
+              profile.full_name ||
+              profile.display_name ||
+              profile.name ||
+              profile.email ||
+              null;
+            acc[profile.id] = ownerName;
+            return acc;
+          }, {});
+        }
+      }
       
       const workspaces = data?.map(item => ({
         ...item.workspaces,
+        owner_id: ownersByWorkspaceId[item.workspace_id] || null,
+        ownerName: ownersByUserId[ownersByWorkspaceId[item.workspace_id]] || null,
         userRole: item.role,
         joinedAt: item.joined_at,
         lastAccessedAt: item.last_accessed_at

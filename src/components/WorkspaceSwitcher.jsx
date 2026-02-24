@@ -78,6 +78,11 @@ export default function WorkspaceSwitcher() {
     return 'member';
   };
 
+  const getOwnerDisplay = (workspace) => {
+    if (!workspace) return '';
+    return workspace.ownerName || workspace.ownerEmail || workspace.owner_id || '';
+  };
+
   if (loading && !currentWorkspace) {
     return (
       <div className="flex items-center space-x-2 px-3 py-2 bg-gray-100 rounded-md animate-pulse">
@@ -149,14 +154,18 @@ export default function WorkspaceSwitcher() {
                 const workspaceRole = getWorkspaceRole(workspace);
                 const WorkspaceRoleIcon = roleIcons[workspaceRole] || User;
                 const isActive = workspace.id === currentWorkspace.id;
+                const isForeignWorkspace = workspaceRole !== 'owner';
+                const ownerDisplay = getOwnerDisplay(workspace);
                 
                 return (
                   <button
                     key={workspace.id}
                     onClick={() => handleWorkspaceSelect(workspace.id)}
-                    className={`w-full flex items-center space-x-3 px-3 py-3 text-left hover:bg-gray-50 transition-colors ${
-                      isActive ? 'bg-blue-50 border-r-2 border-blue-500' : ''
-                    }`}
+                    className={`w-full flex items-center space-x-3 px-3 py-3 text-left transition-colors border-l-2 ${
+                      isForeignWorkspace
+                        ? 'bg-blue-50 border-blue-300 hover:bg-blue-100'
+                        : 'bg-white border-transparent hover:bg-gray-50'
+                    } ${isActive ? 'border-r-2 border-r-blue-500' : ''}`}
                   >
                     <Building2 
                       size={16} 
@@ -175,6 +184,11 @@ export default function WorkspaceSwitcher() {
                         <WorkspaceRoleIcon size={10} className="mr-1" />
                         {roleLabels[workspaceRole] || roleLabels.member}
                       </div>
+                      {isForeignWorkspace && ownerDisplay && (
+                        <div className="text-xs text-gray-500 truncate">
+                          Владелец: {ownerDisplay}
+                        </div>
+                      )}
                     </div>
                     {isActive && (
                       <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
