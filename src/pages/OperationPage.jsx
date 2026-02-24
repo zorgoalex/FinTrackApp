@@ -64,6 +64,17 @@ export function OperationPage() {
   const [formError, setFormError] = useState('');
   const [authorEmails, setAuthorEmails] = useState({});
   const [filterType, setFilterType] = useState(null); // null = все
+  const [sortField, setSortField] = useState('date');   // 'date' | 'amount'
+  const [sortDir, setSortDir]   = useState('desc');      // 'asc' | 'desc'
+
+  const toggleSort = (field) => {
+    if (sortField === field) {
+      setSortDir((d) => d === 'desc' ? 'asc' : 'desc');
+    } else {
+      setSortField(field);
+      setSortDir('desc');
+    }
+  };
   const [formData, setFormData] = useState({
     type: getDefaultType(searchParams),
     amount: '',
@@ -84,12 +95,25 @@ export function OperationPage() {
     ))
   ), [operations]);
 
-  // Отфильтрованные по типу операции для отображения в списке
-  const visibleOperations = useMemo(() => (
-    filterType
+  // Отфильтрованные и отсортированные операции для отображения
+  const visibleOperations = useMemo(() => {
+    const filtered = filterType
       ? monthlyOperations.filter((op) => op.type === filterType)
-      : monthlyOperations
-  ), [monthlyOperations, filterType]);
+      : [...monthlyOperations];
+
+    return filtered.sort((a, b) => {
+      let valA, valB;
+      if (sortField === 'amount') {
+        valA = Math.abs(Number(a.amount) || 0);
+        valB = Math.abs(Number(b.amount) || 0);
+      } else {
+        // date
+        valA = new Date(a.operation_date || a.created_at).getTime();
+        valB = new Date(b.operation_date || b.created_at).getTime();
+      }
+      return sortDir === 'asc' ? valA - valB : valB - valA;
+    });
+  }, [monthlyOperations, filterType, sortField, sortDir]);
 
   useEffect(() => {
     const loadEmails = async () => {
@@ -250,8 +274,9 @@ export function OperationPage() {
         </div>
       )}
 
-      {/* Фильтр по типу */}
-      <div className="flex gap-2 mb-3 flex-wrap">
+      {/* Фильтр + Сортировка */}
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        {/* Фильтр по типу */}
         {[
           { key: null,      label: 'Все' },
           { key: 'income',  label: '+ Доход' },
@@ -270,8 +295,36 @@ export function OperationPage() {
             {label}
           </button>
         ))}
+
+        {/* Разделитель */}
+        <span className="text-gray-300 select-none">|</span>
+
+        {/* Сортировка по дате */}
+        <button
+          onClick={() => toggleSort('date')}
+          className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors flex items-center gap-1 ${
+            sortField === 'date'
+              ? 'bg-gray-700 text-white border-gray-700'
+              : 'bg-white text-gray-600 border-gray-300 hover:border-gray-500'
+          }`}
+        >
+          Дата {sortField === 'date' ? (sortDir === 'desc' ? '↓' : '↑') : '↕'}
+        </button>
+
+        {/* Сортировка по сумме */}
+        <button
+          onClick={() => toggleSort('amount')}
+          className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors flex items-center gap-1 ${
+            sortField === 'amount'
+              ? 'bg-gray-700 text-white border-gray-700'
+              : 'bg-white text-gray-600 border-gray-300 hover:border-gray-500'
+          }`}
+        >
+          Сумма {sortField === 'amount' ? (sortDir === 'desc' ? '↓' : '↑') : '↕'}
+        </button>
+
         {filterType && (
-          <span className="self-center text-xs text-gray-400 ml-1">
+          <span className="text-xs text-gray-400">
             {visibleOperations.length} из {monthlyOperations.length}
           </span>
         )}
