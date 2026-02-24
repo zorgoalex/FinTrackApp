@@ -43,11 +43,24 @@ export function parseAmount(str) {
 }
 
 /**
- * Нормализует ввод суммы: запрещает всё кроме цифр, запятой, точки и пробела.
+ * Нормализует ввод суммы: оставляет только цифры и запятую/точку (без пробелов).
  * Заменяет точку на запятую для единообразия.
  */
 export function normalizeAmountInput(raw) {
   return raw
-    .replace(/[^0-9.,\s]/g, '') // только цифры, точка, запятая, пробел
-    .replace('.', ',');           // точку → запятую
+    .replace(/[^0-9.,]/g, '')   // только цифры, точка, запятая
+    .replace('.', ',');          // точку → запятую
+}
+
+/**
+ * Форматирует строку суммы для отображения в поле ввода (когда не в фокусе).
+ * «25000,5» → «25 000,5»
+ */
+export function formatAmountInput(str) {
+  if (!str && str !== 0) return '';
+  const s = String(str).replace(/\s/g, '');
+  const [intPart, decPart] = s.split(',');
+  // разбиваем целую часть на группы по 3 (неразрывный пробел)
+  const formatted = (intPart || '').replace(/\B(?=(\d{3})+(?!\d))/g, '\u00A0');
+  return decPart !== undefined ? `${formatted},${decPart}` : formatted;
 }

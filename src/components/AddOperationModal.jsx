@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
-import { parseAmount, normalizeAmountInput } from '../utils/formatters';
+import { parseAmount, normalizeAmountInput, formatAmountInput } from '../utils/formatters';
 
 const OPERATION_TYPES = {
   income:  { label: 'Доход',    color: 'text-green-600', bg: 'bg-green-600 hover:bg-green-700' },
@@ -33,6 +33,7 @@ export default function AddOperationModal({ type: initialType, onClose, onSave }
   });
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
+  const [amountFocused, setAmountFocused] = useState(false);
 
   const typeInfo = OPERATION_TYPES[form.type] || OPERATION_TYPES.income;
 
@@ -94,11 +95,13 @@ export default function AddOperationModal({ type: initialType, onClose, onSave }
 
           {/* Сумма */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Сумма</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Сумма, ₽</label>
             <input
               type="text"
               inputMode="decimal"
-              value={form.amount}
+              value={amountFocused ? form.amount : formatAmountInput(form.amount)}
+              onFocus={() => setAmountFocused(true)}
+              onBlur={() => setAmountFocused(false)}
               onChange={(e) => setForm((prev) => ({
                 ...prev,
                 amount: normalizeAmountInput(e.target.value)

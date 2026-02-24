@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { usePermissions } from '../hooks/usePermissions';
 import useOperations from '../hooks/useOperations';
-import { formatSignedAmount, parseAmount, normalizeAmountInput } from '../utils/formatters';
+import { formatSignedAmount, parseAmount, normalizeAmountInput, formatAmountInput } from '../utils/formatters';
 
 const OPERATION_TYPES = {
   income: { label: 'Доход',    sign: '+', color: 'text-green-600' },
@@ -55,6 +55,7 @@ export function OperationPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formError, setFormError] = useState('');
   const [authorEmails, setAuthorEmails] = useState({});
+  const [amountFocused, setAmountFocused] = useState(false);
   const [filterType, setFilterType] = useState(null); // null = все
   const [sortField, setSortField] = useState('date');   // 'date' | 'amount'
   const [sortDir, setSortDir]   = useState('desc');      // 'asc' | 'desc'
@@ -400,13 +401,15 @@ export function OperationPage() {
 
               <div>
                 <label htmlFor="operationAmount" className="block text-sm font-medium text-gray-700 mb-1">
-                  Сумма
+                  Сумма, ₽
                 </label>
                 <input
                   id="operationAmount"
                   type="text"
                   inputMode="decimal"
-                  value={formData.amount}
+                  value={amountFocused ? formData.amount : formatAmountInput(formData.amount)}
+                  onFocus={() => setAmountFocused(true)}
+                  onBlur={() => setAmountFocused(false)}
                   onChange={(event) => setFormData((prev) => ({
                     ...prev,
                     amount: normalizeAmountInput(event.target.value)
