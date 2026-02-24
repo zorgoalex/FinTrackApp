@@ -100,7 +100,7 @@ export default function WorkspacePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 relative">
+    <div className={`min-h-screen relative ${currentWorkspace?.is_personal ? 'bg-amber-50' : 'bg-gray-50'}`}>
       <div className="max-w-2xl mx-auto p-4">
         <div className="space-y-4 mb-20">
           {operationsLoading ? (

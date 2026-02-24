@@ -71,8 +71,11 @@ export default function Layout() {
     </>
   );
 
+  // Личное пространство — кремовый фон, общее — стандартный серый
+  const pageBg = currentWorkspace?.is_personal ? 'bg-amber-50' : 'bg-gray-50'
+
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className={`flex min-h-screen ${pageBg}`}>
       {/* Mobile Sidebar */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 flex lg:hidden" role="dialog" aria-modal="true">
