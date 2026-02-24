@@ -6,6 +6,9 @@ export default {
   ],
   theme: {
     extend: {
+      screens: {
+        xs: '400px',
+      },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
       },
