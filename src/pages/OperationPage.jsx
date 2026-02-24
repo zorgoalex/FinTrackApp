@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 const operationTypes = [
   { id: 'income', name: 'Поступления' },
@@ -10,17 +11,35 @@ const operationTypes = [
 export function OperationPage() {
   const [operationType, setOperationType] = useState('income')
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const workspaceIdFromQuery = searchParams.get('workspaceId')
+
+  useEffect(() => {
+    const queryType = searchParams.get('type')
+    const availableTypes = operationTypes.map((type) => type.id)
+    if (queryType && availableTypes.includes(queryType)) {
+      setOperationType(queryType)
+    }
+  }, [searchParams])
+
+  const goBack = () => {
+    if (workspaceIdFromQuery) {
+      navigate(`/workspace/${workspaceIdFromQuery}`)
+      return
+    }
+    navigate('/workspaces')
+  }
 
   const handleSave = () => {
     // TODO: Implement save logic
-    navigate('/')
+    goBack()
   }
 
   return (
     <div className="container mx-auto max-w-md p-4">
       <header className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Новая операция</h1>
-        <button onClick={() => navigate('/')} className="text-gray-500 hover:text-gray-700">
+        <button onClick={goBack} className="text-gray-500 hover:text-gray-700">
           Закрыть
         </button>
       </header>
@@ -145,7 +164,7 @@ export function OperationPage() {
           <button onClick={handleSave} className="btn-primary">
             Сохранить
           </button>
-          <button onClick={() => navigate('/')} className="btn-secondary">
+          <button onClick={goBack} className="btn-secondary">
             Отмена
           </button>
         </div>

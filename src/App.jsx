@@ -3,12 +3,22 @@ import WorkspaceSelectPage from './pages/WorkspaceSelectPage';
 import WorkspaceCreatePage from './pages/WorkspaceCreatePage';
 import WorkspacePage from './pages/WorkspacePage';
 import WorkspaceSettingsPage from './pages/WorkspaceSettingsPage';
+import { OperationPage } from './pages/OperationPage';
+import AnalyticsPage from './pages/AnalyticsPage';
 import LoginPage from './pages/LoginPage';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import SignupPage from './pages/SignupPage';
 import InvitationAcceptPage from './pages/InvitationAcceptPage';
 import { WorkspaceProvider } from './contexts/WorkspaceContext';
+
+const protectedLayoutWithWorkspace = (
+  <ProtectedRoute>
+    <WorkspaceProvider>
+      <Layout />
+    </WorkspaceProvider>
+  </ProtectedRoute>
+);
 
 const router = createBrowserRouter([
   {
@@ -33,7 +43,7 @@ const router = createBrowserRouter([
   },
   {
     path: '/workspace/:workspaceId',
-    element: <ProtectedRoute><WorkspaceProvider><Layout /></WorkspaceProvider></ProtectedRoute>,
+    element: protectedLayoutWithWorkspace,
     children: [
       {
         index: true,
@@ -46,14 +56,28 @@ const router = createBrowserRouter([
     ]
   },
   {
-    path: '/',
-    element: <ProtectedRoute><Layout /></ProtectedRoute>,
+    path: '/operations',
+    element: protectedLayoutWithWorkspace,
     children: [
       {
         index: true,
-        element: <Navigate to="/workspaces" replace />
+        element: <OperationPage />
       }
     ]
+  },
+  {
+    path: '/analytics',
+    element: protectedLayoutWithWorkspace,
+    children: [
+      {
+        index: true,
+        element: <AnalyticsPage />
+      }
+    ]
+  },
+  {
+    path: '/',
+    element: <ProtectedRoute><Navigate to="/workspaces" replace /></ProtectedRoute>
   }
 ])
 
