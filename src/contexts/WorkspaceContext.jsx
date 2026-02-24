@@ -1,12 +1,15 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from './AuthContext';
 import { useAuth } from './AuthContext';
 
 const WorkspaceContext = createContext({});
 
 export function WorkspaceProvider({ children }) {
-  const { workspaceId } = useParams();
+  const { workspaceId: workspaceIdFromParams } = useParams();
+  const [searchParams] = useSearchParams();
+  // Workspace ID can come from URL path (/workspace/:id) or from query param (?workspaceId=...)
+  const workspaceId = workspaceIdFromParams || searchParams.get('workspaceId') || null;
   const { user } = useAuth();
   const navigate = useNavigate();
   
