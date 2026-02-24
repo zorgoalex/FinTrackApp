@@ -46,7 +46,9 @@ Deno.serve(async (req) => {
     // Validate request body
     const { workspaceId, email, role } = await req.json();
     const normalizedEmail = typeof email === 'string' ? email.toLowerCase().trim() : '';
-    const normalizedRole = typeof role === 'string' ? role.trim() : '';
+    // Capitalize first letter: 'member' → 'Member', 'admin' → 'Admin'
+    const rawRole = typeof role === 'string' ? role.trim() : '';
+    const normalizedRole = rawRole.charAt(0).toUpperCase() + rawRole.slice(1).toLowerCase();
     const allowedRoles = ['Admin', 'Member', 'Viewer'];
 
     if (!workspaceId || !normalizedEmail || !normalizedRole) {
@@ -133,25 +135,32 @@ Deno.serve(async (req) => {
       }),
     });
 
-    // If email is sent successfully, update the invitation record
+    // Update invitation record and track email delivery
+    let emailSent = false;
+    let emailError = '';
     if (resendResponse.ok) {
-        await supabaseAdmin
-          .from('workspace_invitations')
-          .update({
-            email_sent_at: new Date().toISOString(),
-            email_sent_count: (invitation.email_sent_count ?? 0) + 1,
-          })
-          .eq('id', invitation.id);
+      emailSent = true;
+      await supabaseAdmin
+        .from('workspace_invitations')
+        .update({
+          email_sent_at: new Date().toISOString(),
+          email_sent_count: (invitation.email_sent_count ?? 0) + 1,
+        })
+        .eq('id', invitation.id);
     } else {
-        const errorBody = await resendResponse.text();
-        console.error('Resend API Error:', errorBody);
-        return new Response(JSON.stringify({ error: `Failed to send invitation email: ${errorBody || 'Unknown Resend error'}` }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 500,
-        });
+      const errorBody = await resendResponse.text();
+      console.error('Resend API Error:', errorBody);
+      emailError = errorBody || 'Unknown Resend error';
+      // Invitation saved — don't fail, return the link so sender can share manually
     }
 
-    return new Response(JSON.stringify({ success: true, invitation_id: invitation.id }), {
+    return new Response(JSON.stringify({
+      success: true,
+      invitation_id: invitation.id,
+      email_sent: emailSent,
+      accept_url: acceptUrl,
+      ...(emailError ? { email_warning: `Email not delivered: ${emailError}. Share this link manually: ${acceptUrl}` } : {}),
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });

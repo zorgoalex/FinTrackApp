@@ -100,6 +100,7 @@ export default function WorkspaceSettingsPage() {
   const [inviteRole, setInviteRole] = useState('member');
   const [isInviting, setIsInviting] = useState(false);
   const [inviteError, setInviteError] = useState('');
+  const [inviteLink, setInviteLink] = useState(''); // ссылка если email не доставлен
 
   // Обработка отмены приглашения
   const handleCancelInvitation = async (invitationId, email) => {
@@ -123,10 +124,17 @@ export default function WorkspaceSettingsPage() {
     setInviteError('');
 
     try {
-      await inviteUser(inviteEmail.trim(), inviteRole);
+      const result = await inviteUser(inviteEmail.trim(), inviteRole);
       setInviteEmail('');
       setInviteRole('member');
-      alert('Приглашение отправлено!');
+      setInviteLink('');
+      if (result?.email_warning) {
+        // Email не доставлен (sandbox / неверифицированный домен) — показываем ссылку
+        setInviteError(`⚠️ Email не отправлен (Resend sandbox). Поделитесь ссылкой вручную:`);
+        setInviteLink(result.accept_url || '');
+      } else {
+        alert('Приглашение отправлено!');
+      }
     } catch (err) {
       setInviteError(err.message || 'Ошибка при отправке приглашения');
     } finally {
@@ -469,7 +477,26 @@ export default function WorkspaceSettingsPage() {
                   </div>
                   
                   {inviteError && (
-                    <p className="text-sm text-red-600">{inviteError}</p>
+                    <div className="text-sm text-orange-600 space-y-1">
+                      <p>{inviteError}</p>
+                      {inviteLink && (
+                        <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded p-2 mt-1">
+                          <input
+                            readOnly
+                            value={inviteLink}
+                            className="flex-1 text-xs bg-transparent outline-none text-gray-700 truncate"
+                            onClick={(e) => e.target.select()}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => { navigator.clipboard.writeText(inviteLink); alert('Ссылка скопирована!'); }}
+                            className="text-xs px-2 py-1 bg-orange-100 hover:bg-orange-200 rounded text-orange-700 whitespace-nowrap"
+                          >
+                            Копировать
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   )}
                   
                   <button
