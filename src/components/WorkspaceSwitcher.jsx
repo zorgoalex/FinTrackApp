@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Building2, Plus, Users, Crown, Shield, Eye, User } from 'lucide-react';
+import { ChevronDown, Building2, Plus, Users, Crown, Cog, Eye, User } from 'lucide-react';
 import { useWorkspace } from '../contexts/WorkspaceContext';
+import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
 const roleIcons = {
   owner: Crown,
-  admin: Shield,
+  admin: Cog,
   member: User,
   viewer: Eye
 };
@@ -29,6 +30,7 @@ export default function WorkspaceSwitcher() {
   const [searchTerm, setSearchTerm] = useState('');
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
+  const { user } = useAuth();
   
   const { 
     currentWorkspace, 
@@ -66,6 +68,16 @@ export default function WorkspaceSwitcher() {
     navigate('/workspaces/create');
   };
 
+  const getWorkspaceRole = (workspace) => {
+    const rawRole = workspace?.userRole || workspace?.role;
+    if (rawRole) return String(rawRole).toLowerCase();
+
+    if (workspace?.owner_id && workspace.owner_id === user?.id) return 'owner';
+    if (workspace?.is_personal) return 'owner';
+
+    return 'member';
+  };
+
   if (loading && !currentWorkspace) {
     return (
       <div className="flex items-center space-x-2 px-3 py-2 bg-gray-100 rounded-md animate-pulse">
@@ -87,7 +99,8 @@ export default function WorkspaceSwitcher() {
     );
   }
 
-  const RoleIcon = roleIcons[currentWorkspace.userRole] || User;
+  const currentWorkspaceRole = getWorkspaceRole(currentWorkspace);
+  const RoleIcon = roleIcons[currentWorkspaceRole] || User;
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -101,9 +114,9 @@ export default function WorkspaceSwitcher() {
           <div className="text-sm font-medium text-gray-900 truncate">
             {currentWorkspace.name}
           </div>
-          <div className={`text-xs ${roleColors[currentWorkspace.userRole]} flex items-center`}>
+          <div className={`text-xs ${roleColors[currentWorkspaceRole]} flex items-center`}>
             <RoleIcon size={12} className="mr-1" />
-            {roleLabels[currentWorkspace.userRole]}
+            {roleLabels[currentWorkspaceRole] || roleLabels.member}
           </div>
         </div>
         <ChevronDown 
@@ -133,7 +146,8 @@ export default function WorkspaceSwitcher() {
           <div className="max-h-64 overflow-y-auto">
             {filteredWorkspaces.length > 0 ? (
               filteredWorkspaces.map((workspace) => {
-                const WorkspaceRoleIcon = roleIcons[workspace.userRole] || User;
+                const workspaceRole = getWorkspaceRole(workspace);
+                const WorkspaceRoleIcon = roleIcons[workspaceRole] || User;
                 const isActive = workspace.id === currentWorkspace.id;
                 
                 return (
@@ -157,9 +171,9 @@ export default function WorkspaceSwitcher() {
                           <span className="ml-2 text-xs text-gray-500">(Личное)</span>
                         )}
                       </div>
-                      <div className={`text-xs flex items-center ${roleColors[workspace.userRole]}`}>
+                      <div className={`text-xs flex items-center ${roleColors[workspaceRole] || roleColors.member}`}>
                         <WorkspaceRoleIcon size={10} className="mr-1" />
-                        {roleLabels[workspace.userRole]}
+                        {roleLabels[workspaceRole] || roleLabels.member}
                       </div>
                     </div>
                     {isActive && (
