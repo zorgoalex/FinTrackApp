@@ -52,6 +52,7 @@ export default function WorkspaceSettingsPage() {
     deleteWorkspace,
     leaveWorkspace,
     cancelInvitation,
+    renameWorkspace,
     canInviteUsers: canInviteUsersFromWorkspace,
     canManageRoles: canManageRolesFromWorkspace,
     canDeleteWorkspace: canDeleteWorkspaceFromWorkspace
@@ -68,6 +69,33 @@ export default function WorkspaceSettingsPage() {
   const shouldShowInvitesTab = canInviteUsersFromWorkspace;
 
   const [activeTab, setActiveTab] = useState('general');
+  const [workspaceName, setWorkspaceName] = useState('');
+  const [renameLoading, setRenameLoading] = useState(false);
+  const [renameError, setRenameError] = useState('');
+  const [renameSuccess, setRenameSuccess] = useState(false);
+
+  // Синхронизировать локальное название с загруженным workspace
+  useEffect(() => {
+    if (currentWorkspace?.name) setWorkspaceName(currentWorkspace.name);
+  }, [currentWorkspace?.name]);
+
+  const handleRename = async (e) => {
+    e.preventDefault();
+    if (workspaceName.trim() === currentWorkspace?.name) return;
+    setRenameLoading(true);
+    setRenameError('');
+    setRenameSuccess(false);
+    try {
+      await renameWorkspace(workspaceName);
+      setRenameSuccess(true);
+      setTimeout(() => setRenameSuccess(false), 2500);
+    } catch (err) {
+      setRenameError(err.message || 'Ошибка переименования');
+    } finally {
+      setRenameLoading(false);
+    }
+  };
+
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('member');
   const [isInviting, setIsInviting] = useState(false);
@@ -260,12 +288,33 @@ export default function WorkspaceSettingsPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Название
                   </label>
-                  <input
-                    type="text"
-                    value={currentWorkspace.name}
-                    disabled
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-600"
-                  />
+                  {userRole?.toLowerCase() === 'owner' ? (
+                    <form onSubmit={handleRename} className="flex gap-2">
+                      <input
+                        type="text"
+                        value={workspaceName}
+                        onChange={(e) => { setWorkspaceName(e.target.value); setRenameSuccess(false); setRenameError(''); }}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        maxLength={80}
+                      />
+                      <button
+                        type="submit"
+                        disabled={renameLoading || workspaceName.trim() === currentWorkspace?.name || !workspaceName.trim()}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {renameLoading ? '...' : 'Сохранить'}
+                      </button>
+                    </form>
+                  ) : (
+                    <input
+                      type="text"
+                      value={currentWorkspace.name}
+                      disabled
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-600"
+                    />
+                  )}
+                  {renameError   && <p className="text-sm text-red-600 mt-1">{renameError}</p>}
+                  {renameSuccess && <p className="text-sm text-green-600 mt-1">✓ Название обновлено</p>}
                 </div>
                 
                 <div>

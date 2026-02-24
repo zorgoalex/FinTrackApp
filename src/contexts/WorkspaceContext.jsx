@@ -441,6 +441,25 @@ export function WorkspaceProvider({ children }) {
     }
   };
 
+  const renameWorkspace = async (newName) => {
+    if (!workspaceId || userRole?.toLowerCase() !== 'owner') {
+      throw new Error('Только владелец может переименовывать пространство');
+    }
+    const trimmed = newName?.trim();
+    if (!trimmed) throw new Error('Название не может быть пустым');
+
+    const { error } = await supabase
+      .from('workspaces')
+      .update({ name: trimmed })
+      .eq('id', workspaceId);
+
+    if (error) throw error;
+
+    // Обновить локальное состояние и список всех workspace
+    setCurrentWorkspace((prev) => ({ ...prev, name: trimmed }));
+    await loadAllWorkspaces();
+  };
+
   // Проверки прав
   const canInviteUsers = ['owner', 'admin'].includes(userRole?.toLowerCase());
   const canManageRoles = userRole?.toLowerCase() === 'owner';
@@ -473,6 +492,7 @@ export function WorkspaceProvider({ children }) {
     refreshWorkspace: loadWorkspace,
     refreshAllWorkspaces: loadAllWorkspaces,
     switchWorkspace,
+    renameWorkspace,
     inviteUser,
     removeUser,
     changeUserRole,
