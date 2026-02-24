@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Plus } from 'lucide-react';
 import { parseAmount, normalizeAmountInput, formatAmountInput } from '../utils/formatters';
 import useCategories from '../hooks/useCategories';
@@ -20,6 +20,12 @@ function todayDateString() {
 }
 
 export default function AddOperationModal({ type: initialType, workspaceId, onClose, onSave }) {
+  // Close on Escape
+  useEffect(() => {
+    const handler = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [onClose]);
   const { categories, addCategory } = useCategories(workspaceId);
   const { tags } = useTags(workspaceId);
 
