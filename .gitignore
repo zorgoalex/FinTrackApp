@@ -248,3 +248,4 @@ AI_helpers/*.md
 AI_helpers/*.prd
 AI_helpers/**/*.md
 AI_helpers/**/*.prd
+test_browser.js
