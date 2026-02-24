@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function SignupPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { signUp, loading, error } = useAuth();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -18,7 +19,10 @@ export default function SignupPage() {
       return;
     }
     const ok = await signUp(name, email, password);
-    if (ok) navigate("/workspaces");
+    if (ok) {
+      const from = location.state?.from;
+      navigate(from ? from.pathname + (from.search || "") : "/workspaces", { replace: true });
+    }
   };
 
   return (
