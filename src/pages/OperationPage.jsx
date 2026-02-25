@@ -405,7 +405,7 @@ export function OperationPage() {
                       const parts = [];
                       if (operation.description) {
                         parts.push(
-                          <span key="desc" className="text-gray-600">
+                          <span key="desc" className="text-purple-600">
                             {operation.description}
                           </span>
                         );
