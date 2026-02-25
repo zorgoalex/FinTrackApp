@@ -33,23 +33,30 @@ export default function TagInput({ allTags = [], selected = [], onChange, placeh
     onChange(selected.filter((_, i) => i !== index));
   };
 
+  const commitInput = () => {
+    const val = inputValue.trim();
+    if (!val) return;
+    const match = allTags.find((t) => t.name.toLowerCase() === val.toLowerCase());
+    if (match) {
+      addTag(match);
+    } else {
+      addTag({ id: null, name: val, color: '#6B7280' });
+    }
+  };
+
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      const val = inputValue.trim();
-      if (!val) return;
-
-      // Check if typed text matches a suggestion
-      const match = allTags.find((t) => t.name.toLowerCase() === val.toLowerCase());
-      if (match) {
-        addTag(match);
-      } else {
-        // New tag — id: null signals it needs to be created
-        addTag({ id: null, name: val, color: '#6B7280' });
-      }
+      commitInput();
     } else if (e.key === 'Backspace' && !inputValue && selected.length > 0) {
       removeTag(selected.length - 1);
     }
+  };
+
+  const handleBlur = () => {
+    // Auto-commit any typed text when input loses focus
+    commitInput();
+    setShowSuggestions(false);
   };
 
   return (
@@ -84,6 +91,7 @@ export default function TagInput({ allTags = [], selected = [], onChange, placeh
           setShowSuggestions(true);
         }}
         onFocus={() => setShowSuggestions(true)}
+        onBlur={handleBlur}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         className="input-field text-sm"
@@ -97,6 +105,7 @@ export default function TagInput({ allTags = [], selected = [], onChange, placeh
             <button
               key={tag.id}
               type="button"
+              onMouseDown={(e) => e.preventDefault()} // prevent blur before click
               onClick={() => addTag(tag)}
               className="w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 transition-colors"
             >
