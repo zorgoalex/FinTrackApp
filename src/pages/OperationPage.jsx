@@ -10,7 +10,7 @@ import useTags from '../hooks/useTags';
 import AddOperationModal from '../components/AddOperationModal';
 import EditOperationModal from '../components/EditOperationModal';
 import QuickButtonsSettings from '../components/QuickButtonsSettings';
-import { Pencil, Trash2, ChevronDown, X } from 'lucide-react';
+import { Pencil, Trash2, ChevronDown, X, Plus } from 'lucide-react';
 import { formatSignedAmount } from '../utils/formatters';
 
 const OPERATION_TYPES = {
@@ -289,9 +289,9 @@ export function OperationPage() {
           {permissions.hasManagementRights && quickButtons.length < 5 && (
             <button
               onClick={() => setShowQuickSettings(true)}
-              className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+              className="p-2 rounded-lg text-gray-400 hover:text-gray-300 transition-colors"
             >
-              ⚙️ Настроить кнопки
+              <Plus size={16} />
             </button>
           )}
         </div>
