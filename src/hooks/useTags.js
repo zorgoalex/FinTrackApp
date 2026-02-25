@@ -90,11 +90,63 @@ export function useTags(workspaceId) {
     return data;
   }, [workspaceId, tags]);
 
+  const updateTag = useCallback(async (id, { name, color }) => {
+    if (!workspaceId) return null;
+    try {
+      const updates = {};
+      if (name !== undefined) updates.name = name.trim();
+      if (color !== undefined) updates.color = color;
+
+      const { data, error: updateErr } = await supabase
+        .from('tags')
+        .update(updates)
+        .eq('id', id)
+        .eq('workspace_id', workspaceId)
+        .select('id, workspace_id, name, color')
+        .single();
+
+      if (updateErr) throw updateErr;
+      await loadTags();
+      return data;
+    } catch (e) {
+      console.error('useTags: update error', e);
+      setError(e.message || 'Ошибка обновления тега');
+      return null;
+    }
+  }, [workspaceId, loadTags]);
+
+  const deleteTag = useCallback(async (id) => {
+    if (!workspaceId) return false;
+    try {
+      // Сначала удаляем связи из operation_tags
+      const { error: unlinkErr } = await supabase
+        .from('operation_tags')
+        .delete()
+        .eq('tag_id', id);
+
+      if (unlinkErr) throw unlinkErr;
+
+      const { error: deleteErr } = await supabase
+        .from('tags')
+        .delete()
+        .eq('id', id)
+        .eq('workspace_id', workspaceId);
+
+      if (deleteErr) throw deleteErr;
+      await loadTags();
+      return true;
+    } catch (e) {
+      console.error('useTags: delete error', e);
+      setError(e.message || 'Ошибка удаления тега');
+      return false;
+    }
+  }, [workspaceId, loadTags]);
+
   useEffect(() => {
     loadTags();
   }, [loadTags]);
 
-  return { tags, loading, error, addTag, findOrCreateTag, refresh: loadTags };
+  return { tags, loading, error, addTag, updateTag, deleteTag, findOrCreateTag, refresh: loadTags };
 }
 
 export default useTags;

@@ -50,11 +50,56 @@ export function useCategories(workspaceId) {
     }
   }, [workspaceId, loadCategories]);
 
+  const updateCategory = useCallback(async (id, { name, type, color }) => {
+    if (!workspaceId) return null;
+    try {
+      const updates = {};
+      if (name !== undefined) updates.name = name.trim();
+      if (type !== undefined) updates.type = type;
+      if (color !== undefined) updates.color = color;
+
+      const { data, error: updateErr } = await supabase
+        .from('categories')
+        .update(updates)
+        .eq('id', id)
+        .eq('workspace_id', workspaceId)
+        .select('id, workspace_id, name, type, color')
+        .single();
+
+      if (updateErr) throw updateErr;
+      await loadCategories();
+      return data;
+    } catch (e) {
+      console.error('useCategories: update error', e);
+      setError(e.message || 'Ошибка обновления категории');
+      return null;
+    }
+  }, [workspaceId, loadCategories]);
+
+  const deleteCategory = useCallback(async (id) => {
+    if (!workspaceId) return false;
+    try {
+      const { error: deleteErr } = await supabase
+        .from('categories')
+        .delete()
+        .eq('id', id)
+        .eq('workspace_id', workspaceId);
+
+      if (deleteErr) throw deleteErr;
+      await loadCategories();
+      return true;
+    } catch (e) {
+      console.error('useCategories: delete error', e);
+      setError(e.message || 'Ошибка удаления категории');
+      return false;
+    }
+  }, [workspaceId, loadCategories]);
+
   useEffect(() => {
     loadCategories();
   }, [loadCategories]);
 
-  return { categories, loading, error, addCategory, refresh: loadCategories };
+  return { categories, loading, error, addCategory, updateCategory, deleteCategory, refresh: loadCategories };
 }
 
 export default useCategories;

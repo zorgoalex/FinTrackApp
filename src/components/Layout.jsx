@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Outlet, Link } from 'react-router-dom'
-import { Menu, X, Home, Users, Settings, BarChart3, Calendar, CreditCard, LogOut, Building2 } from 'lucide-react'
+import { Menu, X, Home, Users, Settings, BarChart3, Calendar, CreditCard, LogOut, Building2, BookOpen } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useWorkspace } from '../contexts/WorkspaceContext'
 import { usePermissions } from '../hooks/usePermissions'
@@ -20,7 +20,7 @@ export default function Layout() {
     { icon: CreditCard, label: 'Операции', path: workspaceId ? `/operations?workspaceId=${workspaceId}` : '/operations' },
     { icon: Calendar, label: 'Запланированные', path: workspaceId ? `/scheduled?workspaceId=${workspaceId}` : '/scheduled' },
     { icon: BarChart3, label: 'Аналитика', path: workspaceId ? `/analytics?workspaceId=${workspaceId}` : '/analytics' },
-    { icon: Users, label: 'Справочники', path: workspaceId ? `/directories?workspaceId=${workspaceId}` : '/directories' },
+    { icon: BookOpen, label: 'Справочники', path: workspaceId ? `/workspace/${workspaceId}/dictionaries` : '/dictionaries' },
     ...(canViewWorkspaceSettings ? [{ 
       icon: Settings, 
       label: 'Настройки пространства', 

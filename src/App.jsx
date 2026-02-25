@@ -6,6 +6,7 @@ import WorkspacePage from './pages/WorkspacePage';
 import WorkspaceSettingsPage from './pages/WorkspaceSettingsPage';
 import { OperationPage } from './pages/OperationPage';
 import AnalyticsPage from './pages/AnalyticsPage';
+import DictionariesPage from './pages/DictionariesPage';
 import LoginPage from './pages/LoginPage';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -53,6 +54,10 @@ const router = createBrowserRouter([
       {
         path: 'settings',
         element: <WorkspaceSettingsPage />
+      },
+      {
+        path: 'dictionaries',
+        element: <DictionariesPage />
       }
     ]
   },
