@@ -66,7 +66,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
   const filteredCategories = form.type === 'salary'
-    ? []
+    ? categories.filter((c) => c.type === 'expense')
     : categories.filter((c) => c.type === form.type);
 
   const handleAddCategory = async () => {
@@ -141,8 +141,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
           </div>
 
           {/* Категория */}
-          {form.type !== 'salary' && (
-            <div>
+          <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Категория</label>
               <div className="flex gap-2">
                 <select
@@ -192,7 +191,6 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
                 </div>
               )}
             </div>
-          )}
 
           {/* Сумма */}
           <div>
