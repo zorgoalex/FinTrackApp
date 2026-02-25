@@ -9,7 +9,7 @@ import useCategories from '../hooks/useCategories';
 import useTags from '../hooks/useTags';
 import AddOperationModal from '../components/AddOperationModal';
 import EditOperationModal from '../components/EditOperationModal';
-import { Pencil } from 'lucide-react';
+import { Pencil, ChevronDown, X } from 'lucide-react';
 import { formatSignedAmount } from '../utils/formatters';
 
 const OPERATION_TYPES = {
@@ -69,6 +69,8 @@ export function OperationPage() {
   const [filterType, setFilterType] = useState(null);
   const [filterCategory, setFilterCategory] = useState('');
   const [filterTags, setFilterTags] = useState([]);
+  const [showTagDropdown, setShowTagDropdown] = useState(false);
+  const tagDropdownRef = useRef(null);
   const [sortField, setSortField] = useState('date');
   const [sortDir, setSortDir] = useState('desc');
 
@@ -201,6 +203,18 @@ export function OperationPage() {
       lastTapRef.current = now;
     }
   }, [permissions, user]);
+
+  // Close tag dropdown on outside click
+  useEffect(() => {
+    if (!showTagDropdown) return;
+    const handler = (e) => {
+      if (tagDropdownRef.current && !tagDropdownRef.current.contains(e.target)) {
+        setShowTagDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showTagDropdown]);
 
   const goBack = () => {
     if (workspaceId) {
@@ -341,27 +355,64 @@ export function OperationPage() {
         </select>
       </div>
 
-      {/* Tag filter */}
+      {/* Tag filter — dropdown multi-select */}
       {tags.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-3" data-testid="tag-filter">
-          {tags.map((tag) => {
-            const active = filterTags.includes(tag.id);
-            return (
-              <button
-                key={tag.id}
-                onClick={() => setFilterTags((prev) =>
-                  active ? prev.filter((id) => id !== tag.id) : [...prev, tag.id]
-                )}
-                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                  active
-                    ? 'bg-indigo-600 text-white border-indigo-600'
-                    : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400'
-                }`}
+        <div className="relative mb-3" ref={tagDropdownRef} data-testid="tag-filter">
+          <button
+            type="button"
+            onClick={() => setShowTagDropdown((v) => !v)}
+            className={`inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border transition-colors ${
+              filterTags.length > 0
+                ? 'bg-indigo-50 border-indigo-400 text-indigo-700'
+                : 'bg-white border-gray-300 text-gray-600 hover:border-indigo-400'
+            }`}
+          >
+            <span>Теги</span>
+            {filterTags.length > 0 && (
+              <span className="bg-indigo-600 text-white text-xs font-medium rounded-full w-4 h-4 flex items-center justify-center leading-none">
+                {filterTags.length}
+              </span>
+            )}
+            <ChevronDown size={14} className={`transition-transform ${showTagDropdown ? 'rotate-180' : ''}`} />
+            {filterTags.length > 0 && (
+              <span
+                role="button"
+                tabIndex={0}
+                className="ml-0.5 text-indigo-400 hover:text-indigo-700"
+                onClick={(e) => { e.stopPropagation(); setFilterTags([]); }}
+                onKeyDown={(e) => e.key === 'Enter' && (e.stopPropagation(), setFilterTags([]))}
               >
-                #{tag.name} {active && '×'}
-              </button>
-            );
-          })}
+                <X size={13} />
+              </span>
+            )}
+          </button>
+
+          {showTagDropdown && (
+            <div className="absolute z-20 top-full mt-1 left-0 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px] max-h-60 overflow-y-auto">
+              {tags.map((tag) => {
+                const active = filterTags.includes(tag.id);
+                return (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    onClick={() => setFilterTags((prev) =>
+                      active ? prev.filter((id) => id !== tag.id) : [...prev, tag.id]
+                    )}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-indigo-50 transition-colors"
+                  >
+                    <span className={`w-3.5 h-3.5 rounded border flex-shrink-0 flex items-center justify-center ${
+                      active ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300'
+                    }`}>
+                      {active && <span className="text-white text-[9px] font-bold leading-none">✓</span>}
+                    </span>
+                    <span className={active ? 'text-indigo-700 font-medium' : 'text-gray-700'}>
+                      #{tag.name}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
