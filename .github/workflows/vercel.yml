@@ -8,5 +8,20 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Vercel deploy hook
-        run: curl -s -X POST "${{ secrets.VERCEL_DEPLOY_HOOK }}"
+      - name: Trigger Vercel production deployment
+        run: |
+          SHA="${{ github.sha }}"
+          RESPONSE=$(curl -s -X POST \
+            "https://api.vercel.com/v13/deployments?teamId=${{ secrets.VERCEL_TEAM_ID }}" \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\":\"fintrackapp\",\"gitSource\":{\"type\":\"github\",\"ref\":\"main\",\"repoId\":1030922283,\"sha\":\"$SHA\"},\"target\":\"production\"}")
+          echo "Response: $RESPONSE"
+          STATE=$(echo "$RESPONSE" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); console.log(d.readyState||d.error?.code||'unknown')")
+          echo "Deploy state: $STATE"
+          if [[ "$STATE" == "INITIALIZING" || "$STATE" == "BUILDING" || "$STATE" == "READY" ]]; then
+            echo "✅ Deployment triggered successfully"
+          else
+            echo "❌ Deployment may have failed"
+            exit 1
+          fi
