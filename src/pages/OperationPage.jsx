@@ -9,7 +9,8 @@ import useCategories from '../hooks/useCategories';
 import useTags from '../hooks/useTags';
 import AddOperationModal from '../components/AddOperationModal';
 import EditOperationModal from '../components/EditOperationModal';
-import { Pencil, Trash2, ChevronDown, X } from 'lucide-react';
+import QuickButtonsSettings from '../components/QuickButtonsSettings';
+import { Pencil, Trash2, ChevronDown, X, Plus } from 'lucide-react';
 import { formatSignedAmount } from '../utils/formatters';
 
 const OPERATION_TYPES = {
@@ -44,7 +45,7 @@ export function OperationPage() {
   const params = useParams();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
-  const { workspaceId: workspaceIdFromContext } = useWorkspace();
+  const { workspaceId: workspaceIdFromContext, currentWorkspace, updateQuickButtons } = useWorkspace();
   const permissions = usePermissions();
 
   const workspaceId = params.workspaceId || searchParams.get('workspaceId') || workspaceIdFromContext;
@@ -64,6 +65,8 @@ export function OperationPage() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState('income');
+  const [modalCategory, setModalCategory] = useState('');
+  const [showQuickSettings, setShowQuickSettings] = useState(false);
   const [editingOperation, setEditingOperation] = useState(null);
   const [authorEmails, setAuthorEmails] = useState({});
   const [filterType, setFilterType] = useState(null);
@@ -149,11 +152,14 @@ export function OperationPage() {
     setIsModalOpen(false);
   };
 
-  const openAddModal = (type) => {
+  const openAddModal = (type, category) => {
     if (!permissions.canCreateOperations) return;
     setModalType(type);
+    setModalCategory(category || '');
     setIsModalOpen(true);
   };
+
+  const quickButtons = currentWorkspace?.quick_buttons || [];
 
   const handleModalSave = async (payload) => {
     const result = await addOperation(payload);
@@ -253,31 +259,51 @@ export function OperationPage() {
       </header>
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => openAddModal('income')}
             disabled={!permissions.canCreateOperations || loading}
-            className="flex-1 min-w-0 px-2 py-2 rounded-lg bg-green-50 text-green-700 border border-green-200 disabled:opacity-50 font-medium truncate"
+            className="px-3 py-2 rounded-lg bg-green-50 text-green-700 border border-green-200 disabled:opacity-50 font-medium text-sm truncate"
           >
-            <span className="hidden xs:inline">+&nbsp;Доход</span>
-            <span className="xs:hidden">+</span>
+            ＋ Доход
           </button>
           <button
             onClick={() => openAddModal('expense')}
             disabled={!permissions.canCreateOperations || loading}
-            className="flex-1 min-w-0 px-2 py-2 rounded-lg bg-red-50 text-red-700 border border-red-200 disabled:opacity-50 font-medium truncate"
+            className="px-3 py-2 rounded-lg bg-red-50 text-red-700 border border-red-200 disabled:opacity-50 font-medium text-sm truncate"
           >
-            <span className="hidden xs:inline">−&nbsp;Расход</span>
-            <span className="xs:hidden">−</span>
+            ＋ Расход
           </button>
           <button
             onClick={() => openAddModal('salary')}
             disabled={!permissions.canCreateOperations || loading}
-            className="flex-1 min-w-0 px-2 py-2 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 disabled:opacity-50 font-medium truncate"
+            className="px-3 py-2 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 disabled:opacity-50 font-medium text-sm truncate"
           >
-            <span className="hidden xs:inline">💰&nbsp;Зарплата</span>
-            <span className="xs:hidden">💰</span>
+            💰 Зарплата
           </button>
+
+          {/* Custom quick buttons */}
+          {quickButtons.map((btn, i) => (
+            <button
+              key={i}
+              onClick={() => openAddModal(btn.type, btn.category)}
+              disabled={!permissions.canCreateOperations || loading}
+              className="px-3 py-2 rounded-lg bg-gray-50 text-gray-700 border border-gray-200 disabled:opacity-50 font-medium text-sm truncate hover:bg-gray-100"
+            >
+              ＋ {btn.label}
+            </button>
+          ))}
+
+          {/* Add custom button (owner/admin only) */}
+          {permissions.hasManagementRights && (
+            <button
+              onClick={() => setShowQuickSettings(true)}
+              className="px-2 py-2 rounded-lg border-2 border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-500 transition-colors"
+              title="Настроить быстрые кнопки"
+            >
+              <Plus size={16} />
+            </button>
+          )}
         </div>
         {!permissions.canCreateOperations && (
           <p className="text-xs text-gray-500 mt-2">У вас нет прав на добавление операций.</p>
@@ -607,9 +633,19 @@ export function OperationPage() {
       {isModalOpen && (
         <AddOperationModal
           type={modalType}
+          defaultCategory={modalCategory}
           workspaceId={workspaceId}
           onClose={closeModal}
           onSave={handleModalSave}
+        />
+      )}
+
+      {showQuickSettings && (
+        <QuickButtonsSettings
+          workspaceId={workspaceId}
+          buttons={quickButtons}
+          onSave={updateQuickButtons}
+          onClose={() => setShowQuickSettings(false)}
         />
       )}
 

@@ -19,7 +19,7 @@ function todayDateString() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-export default function AddOperationModal({ type: initialType, workspaceId, onClose, onSave }) {
+export default function AddOperationModal({ type: initialType, defaultCategory, workspaceId, onClose, onSave }) {
   // Close on Escape
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose(); };
@@ -29,14 +29,27 @@ export default function AddOperationModal({ type: initialType, workspaceId, onCl
   const { categories, addCategory } = useCategories(workspaceId);
   const { tags } = useTags(workspaceId);
 
-  const [form, setForm] = useState({
-    type:          initialType || 'income',
-    amount:        '',
-    description:   '',
-    operationDate: todayDateString(),
-    categoryId:    '',
-    selectedTags:  [],
+  const [form, setForm] = useState(() => {
+    const type = initialType || 'income';
+    return {
+      type,
+      amount:        '',
+      description:   '',
+      operationDate: todayDateString(),
+      categoryId:    '',
+      selectedTags:  [],
+    };
   });
+
+  // Pre-fill category when categories load and defaultCategory is provided
+  useEffect(() => {
+    if (defaultCategory && categories.length > 0 && !form.categoryId) {
+      const match = categories.find(
+        (c) => c.name === defaultCategory && c.type === form.type
+      );
+      if (match) setForm((prev) => ({ ...prev, categoryId: match.id }));
+    }
+  }, [defaultCategory, categories, form.type, form.categoryId]);
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
   const [amountFocused, setAmountFocused] = useState(false);

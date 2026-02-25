@@ -462,6 +462,21 @@ export function WorkspaceProvider({ children }) {
     }
   };
 
+  const updateQuickButtons = async (buttons) => {
+    if (!workspaceId || !['owner', 'admin'].includes(userRole?.toLowerCase())) {
+      throw new Error('Недостаточно прав для настройки быстрых кнопок');
+    }
+
+    const { error } = await supabase
+      .from('workspaces')
+      .update({ quick_buttons: buttons })
+      .eq('id', workspaceId);
+
+    if (error) throw error;
+
+    setCurrentWorkspace((prev) => ({ ...prev, quick_buttons: buttons }));
+  };
+
   const renameWorkspace = async (newName) => {
     if (!workspaceId || userRole?.toLowerCase() !== 'owner') {
       throw new Error('Только владелец может переименовывать пространство');
@@ -519,7 +534,8 @@ export function WorkspaceProvider({ children }) {
     changeUserRole,
     deleteWorkspace,
     leaveWorkspace,
-    cancelInvitation
+    cancelInvitation,
+    updateQuickButtons
   };
 
   return (
