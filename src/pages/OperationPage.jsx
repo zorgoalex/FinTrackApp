@@ -418,7 +418,23 @@ export function OperationPage() {
                       if (operation.tags && operation.tags.length > 0) {
                         parts.push(
                           <span key="tags" className="text-green-600 italic">
-                            {operation.tags.map((t) => `#${t.name}`).join(' ')}
+                            {operation.tags.map((t, idx) => (
+                              <span key={t.id}>
+                                {idx > 0 && ' '}
+                                <button
+                                  type="button"
+                                  className="hover:underline cursor-pointer"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setFilterTags((prev) =>
+                                      prev.includes(t.id) ? prev : [...prev, t.id]
+                                    );
+                                  }}
+                                >
+                                  #{t.name}
+                                </button>
+                              </span>
+                            ))}
                           </span>
                         );
                       }
