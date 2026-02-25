@@ -1,6 +1,7 @@
 /**
- * Deploy dist/ to Vercel via REST API.
- * Reads VERCEL_TOKEN, VERCEL_TEAM_ID, VERCEL_PROJECT_ID from env.
+ * Deploy project to Vercel via REST API.
+ * Uploads source files and lets Vercel build.
+ * Reads VERCEL_TOKEN, VERCEL_TEAM_ID, VERCEL_PROJECT_NAME from env.
  */
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join, relative } from 'path';
@@ -12,11 +13,13 @@ const PROJECT_NAME = process.env.VERCEL_PROJECT_NAME || 'fintrackapp';
 
 if (!TOKEN) { console.error('VERCEL_TOKEN is required'); process.exit(1); }
 
-const DIST_DIR = join(process.cwd(), 'dist');
+const PROJECT_DIR = process.cwd();
+const IGNORE = ['node_modules', '.git', 'dist', '.vercel', 'specdata', 'scripts'];
 
 function getAllFiles(dir, base = dir) {
   const results = [];
   for (const entry of readdirSync(dir)) {
+    if (IGNORE.includes(entry)) continue;
     const full = join(dir, entry);
     const stat = statSync(full);
     if (stat.isDirectory()) results.push(...getAllFiles(full, base));
@@ -40,8 +43,8 @@ async function uploadFile(content, sha) {
   }
 }
 
-console.log('📦 Uploading dist/ files to Vercel...');
-const files = getAllFiles(DIST_DIR);
+console.log('📦 Uploading project files to Vercel...');
+const files = getAllFiles(PROJECT_DIR);
 const fileRefs = [];
 
 for (const { full, rel } of files) {
@@ -62,11 +65,10 @@ const res = await fetch(`https://api.vercel.com/v13/deployments${teamParam}`, {
     files: fileRefs,
     target: 'production',
     projectSettings: {
-      framework: null,
-      buildCommand: '',
-      outputDirectory: '',
-      installCommand: '',
-      devCommand: '',
+      framework: 'vite',
+      buildCommand: 'npm run build',
+      outputDirectory: 'dist',
+      installCommand: 'npm install',
     },
   }),
 });
@@ -79,19 +81,16 @@ if (data.error) {
 
 console.log('🚀 Deployment created:', data.id);
 console.log('🔗 URL:', data.url);
-console.log('📊 State:', data.readyState);
 
 // Poll until ready
-if (data.readyState !== 'READY') {
-  console.log('⏳ Waiting for deployment...');
-  for (let i = 0; i < 20; i++) {
-    await new Promise(r => setTimeout(r, 10000));
-    const check = await fetch(`https://api.vercel.com/v13/deployments/${data.id}${teamParam}`, {
-      headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-    const status = await check.json();
-    console.log(`   ${status.readyState}`);
-    if (status.readyState === 'READY') { console.log('✅ Deployed!'); break; }
-    if (status.readyState === 'ERROR') { console.error('❌ Deploy failed'); process.exit(1); }
-  }
+const maxWait = 30;
+for (let i = 0; i < maxWait; i++) {
+  await new Promise(r => setTimeout(r, 10000));
+  const check = await fetch(`https://api.vercel.com/v13/deployments/${data.id}${teamParam}`, {
+    headers: { 'Authorization': `Bearer ${TOKEN}` }
+  });
+  const status = await check.json();
+  console.log(`[${i+1}/${maxWait}] ${status.readyState}`);
+  if (status.readyState === 'READY') { console.log('✅ Deployed! https://' + status.url); break; }
+  if (status.readyState === 'ERROR') { console.error('❌ Build failed'); process.exit(1); }
 }
