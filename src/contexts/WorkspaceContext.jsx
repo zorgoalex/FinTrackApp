@@ -107,14 +107,18 @@ export function WorkspaceProvider({ children }) {
         }, {});
       }
       
-      const workspaces = data?.map(item => ({
-        ...item.workspaces,
-        owner_id: ownersByWorkspaceId[item.workspace_id] || null,
-        ownerName: ownersByUserId[ownersByWorkspaceId[item.workspace_id]] || null,
-        userRole: item.role,
-        joinedAt: item.joined_at,
-        lastAccessedAt: item.last_accessed_at
-      })) || [];
+      // Filter out soft-deleted workspaces (they won't be in ownersByWorkspaceId
+      // because that query has .is('deleted_at', null))
+      const workspaces = (data || [])
+        .filter(item => ownersByWorkspaceId.hasOwnProperty(item.workspace_id))
+        .map(item => ({
+          ...item.workspaces,
+          owner_id: ownersByWorkspaceId[item.workspace_id] || null,
+          ownerName: ownersByUserId[ownersByWorkspaceId[item.workspace_id]] || null,
+          userRole: item.role,
+          joinedAt: item.joined_at,
+          lastAccessedAt: item.last_accessed_at
+        }));
       
       console.log('WorkspaceContext: All workspaces loaded', workspaces);
       setAllWorkspaces(workspaces);
