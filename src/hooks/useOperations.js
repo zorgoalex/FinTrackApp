@@ -140,10 +140,16 @@ export function useOperations(workspaceId) {
           .select('operation_id, tag_id')
           .in('operation_id', opIds);
 
-        console.log('[DEBUG] operation_tags query:', { count: tagLinks?.length, error: tagLinksErr?.message });
-
         if (tagLinksErr) {
-          console.error('[DEBUG] operation_tags RLS/query error:', tagLinksErr);
+          console.error('useOperations: operation_tags query failed:', tagLinksErr.message, tagLinksErr);
+        }
+
+        if (!tagLinksErr && tagLinks && tagLinks.length === 0 && opIds.length > 0) {
+          console.warn(
+            'useOperations: operation_tags returned 0 rows for', opIds.length, 'operations.',
+            'This may indicate RLS on operation_tags is blocking SELECT.',
+            'Check that operation_tags has a SELECT policy allowing workspace members to read.'
+          );
         }
 
         if (tagLinks && tagLinks.length > 0) {
@@ -153,10 +159,8 @@ export function useOperations(workspaceId) {
             .select('id, name, color')
             .in('id', tagIds);
 
-          console.log('[DEBUG] tags by ids query:', { count: tagData?.length, error: tagDataErr?.message });
-
           if (tagDataErr) {
-            console.error('[DEBUG] tags query error:', tagDataErr);
+            console.error('useOperations: tags query failed:', tagDataErr.message, tagDataErr);
           }
 
           const tagMap = {};
@@ -174,10 +178,6 @@ export function useOperations(workspaceId) {
         ...mapOperationWithDisplayName(operation, authUser),
         tags: tagsByOpId[operation.id] || []
       }));
-
-      const opsWithTags = mappedOperations.filter((o) => o.tags.length > 0);
-      console.log('[DEBUG] operations loaded:', mappedOperations.length, 'with tags:', opsWithTags.length,
-        opsWithTags.slice(0, 3).map((o) => ({ id: o.id.slice(0, 8), tags: o.tags.map((t) => t.name) })));
 
       setOperations(mappedOperations);
     } catch (loadException) {
@@ -246,20 +246,25 @@ export function useOperations(workspaceId) {
         for (const tagName of tagNames) {
           const trimmed = tagName.trim();
           if (!trimmed) continue;
-          const { data: tagRow } = await supabase
+          const { data: tagRow, error: tagErr } = await supabase
             .from('tags')
             .upsert(
-              { workspace_id: workspaceId, name: trimmed },
+              { workspace_id: workspaceId, name: trimmed, color: '#6B7280' },
               { onConflict: 'workspace_id,name' }
             )
             .select('id')
             .single();
-          if (tagRow?.id) tagIds.push(tagRow.id);
+          if (tagErr) {
+            console.error('useOperations: tag upsert error', tagErr, { workspaceId, name: trimmed });
+          } else if (tagRow?.id) {
+            tagIds.push(tagRow.id);
+          }
         }
         if (tagIds.length > 0) {
-          await supabase
+          const { error: linkErr } = await supabase
             .from('operation_tags')
             .insert(tagIds.map((tagId) => ({ operation_id: insertedData.id, tag_id: tagId })));
+          if (linkErr) console.error('useOperations: operation_tags insert error', linkErr);
         }
       }
 
@@ -309,10 +314,11 @@ export function useOperations(workspaceId) {
       // Update tags if provided
       if (data.tagNames !== undefined) {
         // Remove existing tag links
-        await supabase
+        const { error: delErr } = await supabase
           .from('operation_tags')
           .delete()
           .eq('operation_id', id);
+        if (delErr) console.error('useOperations: operation_tags delete error', delErr);
 
         // Create new tag links
         if (data.tagNames.length > 0) {
@@ -320,20 +326,25 @@ export function useOperations(workspaceId) {
           for (const tagName of data.tagNames) {
             const trimmed = tagName.trim();
             if (!trimmed) continue;
-            const { data: tagRow } = await supabase
+            const { data: tagRow, error: tagErr } = await supabase
               .from('tags')
               .upsert(
-                { workspace_id: workspaceId, name: trimmed },
+                { workspace_id: workspaceId, name: trimmed, color: '#6B7280' },
                 { onConflict: 'workspace_id,name' }
               )
               .select('id')
               .single();
-            if (tagRow?.id) tagIds.push(tagRow.id);
+            if (tagErr) {
+              console.error('useOperations: tag upsert error (update)', tagErr, { workspaceId, name: trimmed });
+            } else if (tagRow?.id) {
+              tagIds.push(tagRow.id);
+            }
           }
           if (tagIds.length > 0) {
-            await supabase
+            const { error: linkErr } = await supabase
               .from('operation_tags')
               .insert(tagIds.map((tagId) => ({ operation_id: id, tag_id: tagId })));
+            if (linkErr) console.error('useOperations: operation_tags insert error (update)', linkErr);
           }
         }
       }

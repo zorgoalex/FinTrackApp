@@ -61,7 +61,6 @@ export function OperationPage() {
   const { categories } = useCategories(workspaceId);
   const { tags } = useTags(workspaceId);
 
-  console.log('[DEBUG] OperationPage workspaceId:', workspaceId, 'tags:', tags.length, 'operations:', operations.length);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState('income');
@@ -415,7 +414,7 @@ export function OperationPage() {
                         ? categories.find((c) => c.id === operation.category_id)?.name
                         : null;
                       if (catName) {
-                        parts.push(<span key="cat" className="text-amber-700">{catName}</span>);
+                        parts.push(<span key="cat" className="text-orange-500 font-medium">{catName}</span>);
                       }
                       if (operation.tags && operation.tags.length > 0) {
                         parts.push(
