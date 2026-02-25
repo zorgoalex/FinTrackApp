@@ -403,7 +403,7 @@ export function OperationPage() {
                     {(() => {
                       const parts = [];
                       parts.push(
-                        <span key="desc" className="text-gray-700">
+                        <span key="desc" className="text-gray-600">
                           {operation.description || 'Без описания'}
                         </span>
                       );
@@ -411,17 +411,17 @@ export function OperationPage() {
                         ? categories.find((c) => c.id === operation.category_id)?.name
                         : null;
                       if (catName) {
-                        parts.push(<span key="cat">{catName}</span>);
+                        parts.push(<span key="cat" className="text-blue-600">📁 {catName}</span>);
                       }
-                      if (operation.tags?.length > 0) {
+                      if (operation.tags && operation.tags.length > 0) {
                         parts.push(
-                          <span key="tags">
+                          <span key="tags" className="text-green-600 italic">
                             {operation.tags.map((t) => `#${t.name}`).join(' ')}
                           </span>
                         );
                       }
                       parts.push(
-                        <span key="author">{getAuthorText(operation)}</span>
+                        <span key="author" className="text-gray-400 text-xs">{getAuthorText(operation)}</span>
                       );
                       return parts.reduce((acc, part, i) => {
                         if (i > 0) acc.push(<span key={`sep-${i}`} className="text-gray-300">·</span>);
