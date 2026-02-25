@@ -10,13 +10,12 @@ import useTags from '../hooks/useTags';
 import AddOperationModal from '../components/AddOperationModal';
 import EditOperationModal from '../components/EditOperationModal';
 import QuickButtonsSettings from '../components/QuickButtonsSettings';
-import { Pencil, Trash2, ChevronDown, X, Plus } from 'lucide-react';
+import { Pencil, Trash2, ChevronDown, X } from 'lucide-react';
 import { formatSignedAmount } from '../utils/formatters';
 
 const OPERATION_TYPES = {
   income: { label: 'Доход',    sign: '+', color: 'text-green-600' },
   expense: { label: 'Расход',  sign: '−', color: 'text-red-600' },
-  salary: { label: 'Зарплата', sign: '−', color: 'text-blue-600' }
 };
 
 function formatOperationDate(value) {
@@ -274,14 +273,6 @@ export function OperationPage() {
           >
             ＋ Расход
           </button>
-          <button
-            onClick={() => openAddModal('salary')}
-            disabled={!permissions.canCreateOperations || loading}
-            className="px-3 py-2 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 disabled:opacity-50 font-medium text-sm truncate"
-          >
-            💰 Зарплата
-          </button>
-
           {/* Custom quick buttons */}
           {quickButtons.map((btn, i) => (
             <button
@@ -294,14 +285,13 @@ export function OperationPage() {
             </button>
           ))}
 
-          {/* Add custom button (owner/admin only) */}
-          {permissions.hasManagementRights && (
+          {/* Add custom button (owner/admin only, max 5 custom buttons) */}
+          {permissions.hasManagementRights && quickButtons.length < 5 && (
             <button
               onClick={() => setShowQuickSettings(true)}
-              className="px-2 py-2 rounded-lg border-2 border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-500 transition-colors"
-              title="Настроить быстрые кнопки"
+              className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
             >
-              <Plus size={16} />
+              ⚙️ Настроить кнопки
             </button>
           )}
         </div>
@@ -322,7 +312,6 @@ export function OperationPage() {
           { key: null,      label: 'Все' },
           { key: 'income',  label: '+ Доход' },
           { key: 'expense', label: '− Расход' },
-          { key: 'salary',  label: '💰 Зарплата' },
         ].map(({ key, label }) => (
           <button
             key={String(key)}
