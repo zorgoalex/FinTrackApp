@@ -402,16 +402,18 @@ export function OperationPage() {
                   <div className="flex flex-wrap gap-x-2 gap-y-0.5 items-center text-sm text-gray-500">
                     {(() => {
                       const parts = [];
-                      parts.push(
-                        <span key="desc" className="text-gray-600">
-                          {operation.description || 'Без описания'}
-                        </span>
-                      );
+                      if (operation.description) {
+                        parts.push(
+                          <span key="desc" className="text-gray-600">
+                            {operation.description}
+                          </span>
+                        );
+                      }
                       const catName = operation.category_id && categories.length > 0
                         ? categories.find((c) => c.id === operation.category_id)?.name
                         : null;
                       if (catName) {
-                        parts.push(<span key="cat" className="text-blue-600">📁 {catName}</span>);
+                        parts.push(<span key="cat" className="text-blue-600">{catName}</span>);
                       }
                       if (operation.tags && operation.tags.length > 0) {
                         parts.push(
