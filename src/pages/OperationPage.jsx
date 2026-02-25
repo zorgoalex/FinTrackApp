@@ -61,6 +61,8 @@ export function OperationPage() {
   const { categories } = useCategories(workspaceId);
   const { tags } = useTags(workspaceId);
 
+  console.log('[DEBUG] OperationPage workspaceId:', workspaceId, 'tags:', tags.length, 'operations:', operations.length);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState('income');
   const [editingOperation, setEditingOperation] = useState(null);

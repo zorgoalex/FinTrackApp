@@ -135,17 +135,29 @@ export function useOperations(workspaceId) {
       const opIds = (data || []).map((o) => o.id);
       let tagsByOpId = {};
       if (opIds.length > 0) {
-        const { data: tagLinks } = await supabase
+        const { data: tagLinks, error: tagLinksErr } = await supabase
           .from('operation_tags')
           .select('operation_id, tag_id')
           .in('operation_id', opIds);
 
+        console.log('[DEBUG] operation_tags query:', { count: tagLinks?.length, error: tagLinksErr?.message });
+
+        if (tagLinksErr) {
+          console.error('[DEBUG] operation_tags RLS/query error:', tagLinksErr);
+        }
+
         if (tagLinks && tagLinks.length > 0) {
           const tagIds = [...new Set(tagLinks.map((l) => l.tag_id))];
-          const { data: tagData } = await supabase
+          const { data: tagData, error: tagDataErr } = await supabase
             .from('tags')
             .select('id, name, color')
             .in('id', tagIds);
+
+          console.log('[DEBUG] tags by ids query:', { count: tagData?.length, error: tagDataErr?.message });
+
+          if (tagDataErr) {
+            console.error('[DEBUG] tags query error:', tagDataErr);
+          }
 
           const tagMap = {};
           (tagData || []).forEach((t) => { tagMap[t.id] = t; });
@@ -162,6 +174,10 @@ export function useOperations(workspaceId) {
         ...mapOperationWithDisplayName(operation, authUser),
         tags: tagsByOpId[operation.id] || []
       }));
+
+      const opsWithTags = mappedOperations.filter((o) => o.tags.length > 0);
+      console.log('[DEBUG] operations loaded:', mappedOperations.length, 'with tags:', opsWithTags.length,
+        opsWithTags.slice(0, 3).map((o) => ({ id: o.id.slice(0, 8), tags: o.tags.map((t) => t.name) })));
 
       setOperations(mappedOperations);
     } catch (loadException) {

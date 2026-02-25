@@ -21,6 +21,8 @@ export function useTags(workspaceId) {
         .order('name', { ascending: true });
 
       if (loadErr) throw loadErr;
+      console.log('[DEBUG] useTags loaded:', data?.length, 'tags for workspace:', workspaceId,
+        (data || []).slice(0, 5).map((t) => t.name));
       setTags(data || []);
     } catch (e) {
       console.error('useTags: load error', e);
