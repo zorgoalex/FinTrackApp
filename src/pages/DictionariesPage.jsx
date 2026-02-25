@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Pencil, Trash2, Plus, X, Check } from 'lucide-react';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { usePermissions } from '../hooks/usePermissions';
@@ -9,6 +9,22 @@ const TABS = [
   { key: 'categories', label: 'Категории' },
   { key: 'tags', label: 'Теги' },
 ];
+
+function DeleteAlert({ message, onClose }) {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 5000);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  return (
+    <div className="bg-red-900/50 border border-red-500 text-red-300 rounded p-3 text-sm flex items-center justify-between">
+      <span>{message}</span>
+      <button onClick={onClose} className="ml-2 text-red-400 hover:text-red-200">
+        <X size={16} />
+      </button>
+    </div>
+  );
+}
 
 export default function DictionariesPage() {
   const { workspaceId } = useWorkspace();
@@ -52,6 +68,9 @@ function CategoriesTab({ workspaceId, canEdit }) {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ name: '', type: 'expense', color: '#6B7280' });
   const [saving, setSaving] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
+
+  const clearDeleteError = useCallback(() => setDeleteError(null), []);
 
   const resetForm = () => {
     setForm({ name: '', type: 'expense', color: '#6B7280' });
@@ -78,8 +97,11 @@ function CategoriesTab({ workspaceId, canEdit }) {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Удалить категорию? Операции с этой категорией не удаляются, только привязка.')) return;
-    await deleteCategory(id);
+    if (!window.confirm('Удалить категорию?')) return;
+    const result = await deleteCategory(id);
+    if (result?.error) {
+      setDeleteError(result.error);
+    }
   };
 
   if (loading) return <p className="text-sm text-gray-500">Загрузка...</p>;
@@ -87,6 +109,7 @@ function CategoriesTab({ workspaceId, canEdit }) {
 
   return (
     <div className="space-y-2">
+      {deleteError && <DeleteAlert message={deleteError} onClose={clearDeleteError} />}
       {categories.map((cat) =>
         editingId === cat.id ? (
           <InlineCategoryForm
@@ -200,6 +223,9 @@ function TagsTab({ workspaceId, canEdit }) {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ name: '', color: '#6B7280' });
   const [saving, setSaving] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
+
+  const clearDeleteError = useCallback(() => setDeleteError(null), []);
 
   const resetForm = () => {
     setForm({ name: '', color: '#6B7280' });
@@ -226,8 +252,11 @@ function TagsTab({ workspaceId, canEdit }) {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Удалить тег? Он будет удалён из всех операций.')) return;
-    await deleteTag(id);
+    if (!window.confirm('Удалить тег?')) return;
+    const result = await deleteTag(id);
+    if (result?.error) {
+      setDeleteError(result.error);
+    }
   };
 
   if (loading) return <p className="text-sm text-gray-500">Загрузка...</p>;
@@ -235,6 +264,7 @@ function TagsTab({ workspaceId, canEdit }) {
 
   return (
     <div className="space-y-2">
+      {deleteError && <DeleteAlert message={deleteError} onClose={clearDeleteError} />}
       {tags.map((tag) =>
         editingId === tag.id ? (
           <InlineTagForm

@@ -116,15 +116,16 @@ export function useTags(workspaceId) {
   }, [workspaceId, loadTags]);
 
   const deleteTag = useCallback(async (id) => {
-    if (!workspaceId) return false;
+    if (!workspaceId) return { error: 'Нет рабочего пространства' };
     try {
-      // Сначала удаляем связи из operation_tags
-      const { error: unlinkErr } = await supabase
+      const { count } = await supabase
         .from('operation_tags')
-        .delete()
+        .select('operation_id', { count: 'exact', head: true })
         .eq('tag_id', id);
 
-      if (unlinkErr) throw unlinkErr;
+      if (count > 0) {
+        return { error: `Нельзя удалить: тег используется в ${count} операции(ях)` };
+      }
 
       const { error: deleteErr } = await supabase
         .from('tags')
@@ -134,11 +135,12 @@ export function useTags(workspaceId) {
 
       if (deleteErr) throw deleteErr;
       await loadTags();
-      return true;
+      return { success: true };
     } catch (e) {
       console.error('useTags: delete error', e);
-      setError(e.message || 'Ошибка удаления тега');
-      return false;
+      const msg = e.message || 'Ошибка удаления тега';
+      setError(msg);
+      return { error: msg };
     }
   }, [workspaceId, loadTags]);
 

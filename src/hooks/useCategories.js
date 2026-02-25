@@ -77,8 +77,18 @@ export function useCategories(workspaceId) {
   }, [workspaceId, loadCategories]);
 
   const deleteCategory = useCallback(async (id) => {
-    if (!workspaceId) return false;
+    if (!workspaceId) return { error: 'Нет рабочего пространства' };
     try {
+      const { count } = await supabase
+        .from('operations')
+        .select('id', { count: 'exact', head: true })
+        .eq('category_id', id)
+        .eq('workspace_id', workspaceId);
+
+      if (count > 0) {
+        return { error: `Нельзя удалить: категория используется в ${count} операции(ях)` };
+      }
+
       const { error: deleteErr } = await supabase
         .from('categories')
         .delete()
@@ -87,11 +97,12 @@ export function useCategories(workspaceId) {
 
       if (deleteErr) throw deleteErr;
       await loadCategories();
-      return true;
+      return { success: true };
     } catch (e) {
       console.error('useCategories: delete error', e);
-      setError(e.message || 'Ошибка удаления категории');
-      return false;
+      const msg = e.message || 'Ошибка удаления категории';
+      setError(msg);
+      return { error: msg };
     }
   }, [workspaceId, loadCategories]);
 
