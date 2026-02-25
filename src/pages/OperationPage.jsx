@@ -416,29 +416,6 @@ export function OperationPage() {
                       if (catName) {
                         parts.push(<span key="cat" className="text-orange-500 font-medium">{catName}</span>);
                       }
-                      if (operation.tags && operation.tags.length > 0) {
-                        parts.push(
-                          <span key="tags" className="text-green-600 italic">
-                            {operation.tags.map((t, idx) => (
-                              <span key={t.id}>
-                                {idx > 0 && ' '}
-                                <button
-                                  type="button"
-                                  className="hover:underline cursor-pointer"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setFilterTags((prev) =>
-                                      prev.includes(t.id) ? prev : [...prev, t.id]
-                                    );
-                                  }}
-                                >
-                                  #{t.name}
-                                </button>
-                              </span>
-                            ))}
-                          </span>
-                        );
-                      }
                       parts.push(
                         <span key="author" className="text-gray-400 text-xs">{getAuthorText(operation)}</span>
                       );
@@ -449,6 +426,25 @@ export function OperationPage() {
                       }, []);
                     })()}
                   </div>
+                  {operation.tags && operation.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-x-1.5 gap-y-0.5 mt-0.5">
+                      {operation.tags.map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          className="text-[0.7rem] italic text-green-400 hover:text-green-600 hover:underline cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFilterTags((prev) =>
+                              prev.includes(t.id) ? prev : [...prev, t.id]
+                            );
+                          }}
+                        >
+                          #{t.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex flex-col gap-1.5 shrink-0">

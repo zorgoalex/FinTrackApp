@@ -1,9 +1,30 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 
-export default function TagInput({ allTags = [], selected = [], onChange, placeholder = 'Добавить тег...' }) {
+const TagInput = forwardRef(function TagInput(
+  { allTags = [], selected = [], onChange, placeholder = 'Добавить тег...' },
+  ref
+) {
   const [inputValue, setInputValue] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const wrapperRef = useRef(null);
+
+  // Keep refs in sync so imperative getAllTags() always reads latest values
+  const inputValueRef = useRef(inputValue);
+  const selectedRef = useRef(selected);
+  useEffect(() => { inputValueRef.current = inputValue; }, [inputValue]);
+  useEffect(() => { selectedRef.current = selected; }, [selected]);
+
+  // Expose getAllTags() so parent can synchronously read committed+pending tags on submit
+  useImperativeHandle(ref, () => ({
+    getAllTags: () => {
+      const val = inputValueRef.current.trim();
+      if (!val) return selectedRef.current;
+      const names = new Set(selectedRef.current.map((t) => t.name.toLowerCase()));
+      if (names.has(val.toLowerCase())) return selectedRef.current;
+      const match = allTags.find((t) => t.name.toLowerCase() === val.toLowerCase());
+      return [...selectedRef.current, match || { id: null, name: val, color: '#6B7280' }];
+    }
+  }));
 
   const selectedNames = new Set(selected.map((t) => t.name.toLowerCase()));
 
@@ -37,11 +58,7 @@ export default function TagInput({ allTags = [], selected = [], onChange, placeh
     const val = inputValue.trim();
     if (!val) return;
     const match = allTags.find((t) => t.name.toLowerCase() === val.toLowerCase());
-    if (match) {
-      addTag(match);
-    } else {
-      addTag({ id: null, name: val, color: '#6B7280' });
-    }
+    addTag(match || { id: null, name: val, color: '#6B7280' });
   };
 
   const handleKeyDown = (e) => {
@@ -54,7 +71,6 @@ export default function TagInput({ allTags = [], selected = [], onChange, placeh
   };
 
   const handleBlur = () => {
-    // Auto-commit any typed text when input loses focus
     commitInput();
     setShowSuggestions(false);
   };
@@ -105,7 +121,7 @@ export default function TagInput({ allTags = [], selected = [], onChange, placeh
             <button
               key={tag.id}
               type="button"
-              onMouseDown={(e) => e.preventDefault()} // prevent blur before click
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => addTag(tag)}
               className="w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 transition-colors"
             >
@@ -116,4 +132,6 @@ export default function TagInput({ allTags = [], selected = [], onChange, placeh
       )}
     </div>
   );
-}
+});
+
+export default TagInput;

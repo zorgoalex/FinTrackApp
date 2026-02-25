@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, Plus } from 'lucide-react';
 import { parseAmount, normalizeAmountInput, formatAmountInput } from '../utils/formatters';
 import useCategories from '../hooks/useCategories';
@@ -34,6 +34,7 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
 
   const [showNewCat, setShowNewCat] = useState(false);
   const [newCatName, setNewCatName] = useState('');
+  const tagInputRef = useRef(null);
 
   const typeInfo = OPERATION_TYPES[operation.type] || OPERATION_TYPES.income;
 
@@ -70,7 +71,7 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
         description:    form.description,
         operation_date: form.operationDate,
         category_id:    form.categoryId || null,
-        tagNames:       form.selectedTags.map((t) => t.name),
+        tagNames:       (tagInputRef.current?.getAllTags() ?? form.selectedTags).map((t) => t.name),
       });
       onClose();
     } catch (err) {
@@ -179,6 +180,7 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Теги</label>
             <TagInput
+              ref={tagInputRef}
               allTags={tags}
               selected={form.selectedTags}
               onChange={(newTags) => setForm((prev) => ({ ...prev, selectedTags: newTags }))}
