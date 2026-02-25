@@ -415,7 +415,7 @@ export function OperationPage() {
                         ? categories.find((c) => c.id === operation.category_id)?.name
                         : null;
                       if (catName) {
-                        parts.push(<span key="cat" className="text-blue-600">{catName}</span>);
+                        parts.push(<span key="cat" className="text-amber-700">{catName}</span>);
                       }
                       if (operation.tags && operation.tags.length > 0) {
                         parts.push(
