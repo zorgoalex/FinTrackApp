@@ -388,39 +388,47 @@ export function OperationPage() {
                 onTouchEnd={() => handleDoubleTap(operation)}
               >
                 <div className="min-w-0">
-                  <div className="text-sm text-gray-500 mb-1">
-                    {formatOperationDate(operation.operation_date || operation.created_at)}
-                  </div>
-                  <div className={`text-sm font-medium ${typeInfo.color}`}>
-                    {typeInfo.label}
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-sm text-gray-500">
+                      {formatOperationDate(operation.operation_date || operation.created_at)}
+                    </span>
+                    <span className={`text-sm font-medium ${typeInfo.color}`}>
+                      {typeInfo.label}
+                    </span>
                   </div>
                   <div className="text-lg font-semibold text-gray-900">
                     {formatSignedAmount(operation.type, operation.amount)}
                   </div>
-                  <div className="text-sm text-gray-700 mt-1 break-words">
-                    {operation.description || 'Без описания'}
-                  </div>
-                  {/* Category */}
-                  {operation.category_id && categories.length > 0 && (
-                    <span className="text-xs text-gray-500 mt-0.5 block">
-                      {categories.find((c) => c.id === operation.category_id)?.name}
-                    </span>
-                  )}
-                  {/* Tags */}
-                  {operation.tags?.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {operation.tags.slice(0, 2).map((tag) => (
-                        <span key={tag.id} className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                          #{tag.name}
+                  <div className="flex flex-wrap gap-x-2 gap-y-0.5 items-center text-sm text-gray-500">
+                    {(() => {
+                      const parts = [];
+                      parts.push(
+                        <span key="desc" className="text-gray-700">
+                          {operation.description || 'Без описания'}
                         </span>
-                      ))}
-                      {operation.tags.length > 3 && (
-                        <span className="text-xs text-gray-400">+{operation.tags.length - 2} ещё</span>
-                      )}
-                    </div>
-                  )}
-                  <div className="text-xs text-gray-500 mt-1">
-                    {getAuthorText(operation)}
+                      );
+                      const catName = operation.category_id && categories.length > 0
+                        ? categories.find((c) => c.id === operation.category_id)?.name
+                        : null;
+                      if (catName) {
+                        parts.push(<span key="cat">{catName}</span>);
+                      }
+                      if (operation.tags?.length > 0) {
+                        parts.push(
+                          <span key="tags">
+                            {operation.tags.map((t) => `#${t.name}`).join(' ')}
+                          </span>
+                        );
+                      }
+                      parts.push(
+                        <span key="author">{getAuthorText(operation)}</span>
+                      );
+                      return parts.reduce((acc, part, i) => {
+                        if (i > 0) acc.push(<span key={`sep-${i}`} className="text-gray-300">·</span>);
+                        acc.push(part);
+                        return acc;
+                      }, []);
+                    })()}
                   </div>
                 </div>
 
