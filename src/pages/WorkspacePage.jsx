@@ -2,7 +2,10 @@ import { useMemo, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import useOperations from '../hooks/useOperations';
+import { usePermissions } from '../hooks/usePermissions';
 import AddOperationModal from '../components/AddOperationModal';
+import QuickButtonsSettings from '../components/QuickButtonsSettings';
+import { Plus } from 'lucide-react';
 import { formatUnsignedAmount, formatSignedAmount as formatBalance } from '../utils/formatters';
 
 function formatSignedAmount(value) {
@@ -12,7 +15,7 @@ function formatSignedAmount(value) {
 export default function WorkspacePage() {
   const navigate = useNavigate();
   const params = useParams();
-  const { currentWorkspace, workspaceId: workspaceIdFromContext, loading, error } = useWorkspace();
+  const { currentWorkspace, workspaceId: workspaceIdFromContext, loading, error, updateQuickButtons } = useWorkspace();
   const workspaceId = params.workspaceId || workspaceIdFromContext;
 
   const {
@@ -24,6 +27,10 @@ export default function WorkspacePage() {
   } = useOperations(workspaceId);
 
   const [modalType, setModalType] = useState(null); // null = closed, 'income'|'expense'|'salary'
+  const [modalCategory, setModalCategory] = useState(null);
+  const [showQuickSettings, setShowQuickSettings] = useState(false);
+  const { hasManagementRights, canCreateOperations } = usePermissions();
+  const quickButtons = currentWorkspace?.quick_buttons || [];
 
   // Режим итоговых блоков: 'compact' | 'expanded'
   const [summaryMode, setSummaryMode] = useState(
@@ -69,8 +76,9 @@ export default function WorkspacePage() {
     navigate('/workspaces');
   };
 
-  const openOperationForm = (type) => {
+  const openOperationForm = (type, category = null) => {
     setModalType(type || 'income');
+    setModalCategory(category);
   };
 
   const openOperations = () => {
@@ -256,30 +264,39 @@ export default function WorkspacePage() {
             </div>
           )}
 
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-            <h3 className="text-sm font-medium text-gray-900 mb-3">Быстрые действия</h3>
-            <div className="grid grid-cols-3 gap-2">
-              <button onClick={() => openOperationForm('income')} className="flex items-center justify-center gap-1.5 px-2 py-1.5 bg-green-50 hover:bg-green-100 rounded-lg transition-colors">
-                <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center shrink-0">
-                  <span className="text-white text-xs leading-none">+</span>
-                </div>
-                <span className="text-xs font-medium text-green-700 truncate">Доход</span>
+          <div className="flex flex-wrap gap-2 mb-4">
+            <button
+              onClick={() => openOperationForm('income')}
+              disabled={!canCreateOperations}
+              className="px-3 py-2 rounded-lg bg-green-50 text-green-700 border border-green-200 disabled:opacity-50 font-medium text-sm"
+            >
+              ＋ Доход
+            </button>
+            <button
+              onClick={() => openOperationForm('expense')}
+              disabled={!canCreateOperations}
+              className="px-3 py-2 rounded-lg bg-red-50 text-red-700 border border-red-200 disabled:opacity-50 font-medium text-sm"
+            >
+              ＋ Расход
+            </button>
+            {quickButtons.map((btn, i) => (
+              <button
+                key={i}
+                onClick={() => openOperationForm(btn.type, btn.category)}
+                disabled={!canCreateOperations}
+                className="px-3 py-2 rounded-lg bg-gray-50 text-gray-700 border border-gray-200 disabled:opacity-50 font-medium text-sm hover:bg-gray-100"
+              >
+                ＋ {btn.label}
               </button>
-
-              <button onClick={() => openOperationForm('expense')} className="flex items-center justify-center gap-1.5 px-2 py-1.5 bg-red-50 hover:bg-red-100 rounded-lg transition-colors">
-                <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center shrink-0">
-                  <span className="text-white text-xs leading-none">−</span>
-                </div>
-                <span className="text-xs font-medium text-red-700 truncate">Расход</span>
+            ))}
+            {hasManagementRights && quickButtons.length < 5 && (
+              <button
+                onClick={() => setShowQuickSettings(true)}
+                className="p-2 rounded-lg text-gray-400 hover:text-gray-300 transition-colors"
+              >
+                <Plus size={16} />
               </button>
-
-              <button onClick={() => openOperationForm('salary')} className="flex items-center justify-center gap-1.5 px-2 py-1.5 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
-                <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center shrink-0">
-                  <span className="text-xs leading-none">💰</span>
-                </div>
-                <span className="text-xs font-medium text-blue-700 truncate">Зарплата</span>
-              </button>
-            </div>
+            )}
           </div>
 
           <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
@@ -332,9 +349,19 @@ export default function WorkspacePage() {
       {modalType && (
         <AddOperationModal
           type={modalType}
+          defaultCategory={modalCategory}
           workspaceId={workspaceId}
           onClose={() => setModalType(null)}
           onSave={addOperation}
+        />
+      )}
+
+      {showQuickSettings && (
+        <QuickButtonsSettings
+          workspaceId={workspaceId}
+          buttons={quickButtons}
+          onSave={(buttons) => { updateQuickButtons(buttons); setShowQuickSettings(false); }}
+          onClose={() => setShowQuickSettings(false)}
         />
       )}
 
