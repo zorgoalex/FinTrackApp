@@ -246,19 +246,29 @@ export function useOperations(workspaceId) {
         for (const tagName of tagNames) {
           const trimmed = tagName.trim();
           if (!trimmed) continue;
-          const { data: tagRow, error: tagErr } = await supabase
+          // Use SELECT-then-INSERT to avoid upsert requiring UPDATE policy
+          let tagId = null;
+          const { data: existing } = await supabase
             .from('tags')
-            .upsert(
-              { workspace_id: workspaceId, name: trimmed, color: '#6B7280' },
-              { onConflict: 'workspace_id,name' }
-            )
             .select('id')
-            .single();
-          if (tagErr) {
-            console.error('useOperations: tag upsert error', tagErr, { workspaceId, name: trimmed });
-          } else if (tagRow?.id) {
-            tagIds.push(tagRow.id);
+            .eq('workspace_id', workspaceId)
+            .eq('name', trimmed)
+            .maybeSingle();
+          if (existing?.id) {
+            tagId = existing.id;
+          } else {
+            const { data: inserted, error: insertErr } = await supabase
+              .from('tags')
+              .insert({ workspace_id: workspaceId, name: trimmed, color: '#6B7280' })
+              .select('id')
+              .single();
+            if (insertErr) {
+              console.error('useOperations: tag insert error', insertErr, { workspaceId, name: trimmed });
+            } else {
+              tagId = inserted?.id;
+            }
           }
+          if (tagId) tagIds.push(tagId);
         }
         if (tagIds.length > 0) {
           const { error: linkErr } = await supabase
@@ -320,25 +330,34 @@ export function useOperations(workspaceId) {
           .eq('operation_id', id);
         if (delErr) console.error('useOperations: operation_tags delete error', delErr);
 
-        // Create new tag links
+        // Create new tag links (SELECT-then-INSERT to avoid upsert UPDATE policy requirement)
         if (data.tagNames.length > 0) {
           const tagIds = [];
           for (const tagName of data.tagNames) {
             const trimmed = tagName.trim();
             if (!trimmed) continue;
-            const { data: tagRow, error: tagErr } = await supabase
+            let tagId = null;
+            const { data: existing } = await supabase
               .from('tags')
-              .upsert(
-                { workspace_id: workspaceId, name: trimmed, color: '#6B7280' },
-                { onConflict: 'workspace_id,name' }
-              )
               .select('id')
-              .single();
-            if (tagErr) {
-              console.error('useOperations: tag upsert error (update)', tagErr, { workspaceId, name: trimmed });
-            } else if (tagRow?.id) {
-              tagIds.push(tagRow.id);
+              .eq('workspace_id', workspaceId)
+              .eq('name', trimmed)
+              .maybeSingle();
+            if (existing?.id) {
+              tagId = existing.id;
+            } else {
+              const { data: inserted, error: insertErr } = await supabase
+                .from('tags')
+                .insert({ workspace_id: workspaceId, name: trimmed, color: '#6B7280' })
+                .select('id')
+                .single();
+              if (insertErr) {
+                console.error('useOperations: tag insert error (update)', insertErr, { workspaceId, name: trimmed });
+              } else {
+                tagId = inserted?.id;
+              }
             }
+            if (tagId) tagIds.push(tagId);
           }
           if (tagIds.length > 0) {
             const { error: linkErr } = await supabase
