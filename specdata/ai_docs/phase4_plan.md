@@ -1,166 +1,223 @@
-# План реализации Phase 4: Категории + Кастомный дашборд
+# План реализации Фазы 4: Категории и Теги
 
-## 1. SQL Миграция (supabase/migrations/20260224_phase4_categories.sql)
+Этот документ описывает детальный план реализации для Фазы 4, основанный на [исследовательском документе](./phase4_research.md).
+
+## 1. Решения по открытым вопросам
+
+1.  **Привязка категории к типу операции**: **Да.** Список доступных категорий в выпадающем меню будет автоматически фильтроваться в зависимости от выбранного типа операции («Доход» или «Расход»).
+2.  **Рефакторинг модального окна на `OperationPage`**: **Да.** Страница `OperationPage` будет отрефакторена для использования общего компонента `AddOperationModal` вместо встроенной формы. Это устранит дублирование кода и обеспечит консистентность UI.
+3.  **Логика фильтрации по тегам**: **"ИЛИ" (OR).** При выборе нескольких тегов в фильтре будут показаны операции, у которых есть *хотя бы один* из выбранных тегов.
+4.  **UI фильтра по категориям**: **Выпадающий список (Dropdown).** Этот элемент лучше масштабируется для потенциально длинного списка категорий, создаваемых пользователем.
+5.  **Цвета тегов**: **Опционально, с цветом по умолчанию.** При создании нового тега ему будет присваиваться цвет из предопределенной палитры. Пользовательский интерфейс для выбора цвета в Фазе 4 создаваться не будет.
+6.  **Отображение тегов в списке операций**: **Отображать как чипы.** Если у операции более 3 тегов, будут показаны первые 2, а затем индикатор "+N еще" (например, "+2 еще").
+7.  **Отображение на главной панели (Dashboard)**: **Нет.** Чтобы сохранить чистоту и минимализм интерфейса, теги и категории не будут отображаться в списке последних операций на главной странице.
+8.  **Управление категориями и тегами**: **Только встроенное создание.** В Фазе 4 не будет отдельной страницы для управления. Категории и теги будут создаваться "на лету" через модальное окно добавления операции.
+9.  **Тестирование**: Основное внимание будет уделено юнит- и интеграционным тестам для новых хуков и компонентов.
+
+## 2. Затрагиваемые файлы
+
+### Новые файлы:
+- `supabase/migrations/YYYYMMDD_phase4_tags_and_categories.sql`
+- `src/hooks/useCategories.js`
+- `src/hooks/useTags.js`
+- `src/components/TagInput.jsx`
+- `src/components/TagInput.test.jsx` (или аналогичный)
+
+### Файлы для модификации:
+- `src/hooks/useOperations.js`
+- `src/components/AddOperationModal.jsx`
+- `src/pages/OperationPage.jsx`
+- `src/pages/WorkspacePage.jsx`
+
+---
+
+## 3. SQL миграция
+
+Будет создан один файл миграции `supabase/migrations/YYYYMMDD_phase4_tags_and_categories.sql`.
 
 ```sql
--- 1. Создание таблицы categories
+-- Таблица для категорий
 CREATE TABLE public.categories (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+    user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
     name text NOT NULL,
-    type text NOT NULL CHECK (type IN ('income', 'expense', 'salary')),
-    is_default boolean NOT NULL DEFAULT false,
-    color text,
-    is_pinned_on_dashboard boolean NOT NULL DEFAULT false,
-    created_at timestamptz NOT NULL DEFAULT now(),
-    updated_at timestamptz NOT NULL DEFAULT now()
+    type text NOT NULL CHECK (type IN ('income', 'expense')), -- 'salary' не имеет категорий
+    color text, -- опционально
+    created_at timestamz NOT NULL DEFAULT now(),
+    updated_at timestamz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_categories_workspace_id ON public.categories (workspace_id);
+-- Индексы для категорий
+CREATE INDEX idx_categories_workspace_id ON public.categories(workspace_id);
+CREATE UNIQUE INDEX idx_categories_workspace_id_name_type ON public.categories(workspace_id, name, type);
 
--- 2. Триггер updated_at
-CREATE TRIGGER update_categories_updated_at
-    BEFORE UPDATE ON public.categories
-    FOR EACH ROW
-    EXECUTE FUNCTION public.update_updated_at_column();
+-- Таблица для тегов
+CREATE TABLE public.tags (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+    user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+    name text NOT NULL,
+    color text, -- опционально
+    created_at timestamz NOT NULL DEFAULT now(),
+    updated_at timestamz NOT NULL DEFAULT now()
+);
 
--- 3. RLS для categories
-ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
+-- Индексы для тегов
+CREATE INDEX idx_tags_workspace_id ON public.tags(workspace_id);
+CREATE UNIQUE INDEX idx_tags_workspace_id_name ON public.tags(workspace_id, name);
 
-CREATE POLICY "categories_select_policy"
-    ON public.categories FOR SELECT
-    USING (
-        EXISTS (
-            SELECT 1 FROM public.workspace_members wm
-            WHERE wm.workspace_id = categories.workspace_id
-              AND wm.user_id = auth.uid()
-              AND wm.is_active = true
-        )
-    );
+-- Связующая таблица для операций и тегов (многие-ко-многим)
+CREATE TABLE public.operation_tags (
+    operation_id uuid NOT NULL REFERENCES public.operations(id) ON DELETE CASCADE,
+    tag_id uuid NOT NULL REFERENCES public.tags(id) ON DELETE CASCADE,
+    PRIMARY KEY (operation_id, tag_id)
+);
 
-CREATE POLICY "categories_insert_policy"
-    ON public.categories FOR INSERT
-    WITH CHECK (
-        user_has_role(auth.uid(), workspace_id, ARRAY['Owner'::text, 'Admin'::text])
-    );
-
-CREATE POLICY "categories_update_policy"
-    ON public.categories FOR UPDATE
-    USING (
-        user_has_role(auth.uid(), workspace_id, ARRAY['Owner'::text, 'Admin'::text])
-    )
-    WITH CHECK (
-        user_has_role(auth.uid(), workspace_id, ARRAY['Owner'::text, 'Admin'::text])
-    );
-
-CREATE POLICY "categories_delete_policy"
-    ON public.categories FOR DELETE
-    USING (
-        user_has_role(auth.uid(), workspace_id, ARRAY['Owner'::text, 'Admin'::text])
-    );
-
--- 4. Добавление category_id в operations
+-- Добавление внешнего ключа для категории в таблицу операций
 ALTER TABLE public.operations
-    ADD COLUMN category_id uuid REFERENCES public.categories(id) ON DELETE SET NULL;
+ADD COLUMN category_id uuid REFERENCES public.categories(id) ON DELETE SET NULL;
 
 CREATE INDEX idx_operations_category_id ON public.operations(category_id);
 
--- 5. Функция для создания дефолтных категорий при создании workspace
-CREATE OR REPLACE FUNCTION public.create_default_categories_for_workspace()
-RETURNS trigger AS $$
-BEGIN
-    INSERT INTO public.categories (workspace_id, name, type, is_default, color, is_pinned_on_dashboard)
-    VALUES
-        (NEW.id, 'Зарплата', 'salary', true, '#3b82f6', true),
-        (NEW.id, 'Продукты', 'expense', true, '#f97316', true),
-        (NEW.id, 'Транспорт', 'expense', true, '#eab308', false),
-        (NEW.id, 'Аренда', 'expense', true, '#ef4444', false),
-        (NEW.id, 'Прочее', 'expense', true, '#6b7280', false),
-        (NEW.id, 'Основной доход', 'income', true, '#22c55e', false);
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+-- Политики безопасности (RLS)
 
--- 6. Триггер вызова функции
-CREATE TRIGGER on_workspace_created_categories
-    AFTER INSERT ON public.workspaces
-    FOR EACH ROW
-    EXECUTE FUNCTION public.create_default_categories_for_workspace();
+ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tags ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.operation_tags ENABLE ROW LEVEL SECURITY;
 
--- 7. (Опционально) Заполнить старые данные (миграция для уже созданных workspaces)
--- DO $$
--- DECLARE
---    ws RECORD;
--- BEGIN
---    FOR ws IN SELECT id FROM public.workspaces LOOP
---        INSERT INTO public.categories (workspace_id, name, type, is_default, color, is_pinned_on_dashboard)
---        VALUES
---            (ws.id, 'Зарплата', 'salary', true, '#3b82f6', true),
---            (ws.id, 'Продукты', 'expense', true, '#f97316', true),
---            (ws.id, 'Транспорт', 'expense', true, '#eab308', false),
---            (ws.id, 'Аренда', 'expense', true, '#ef4444', false),
---            (ws.id, 'Прочее', 'expense', true, '#6b7280', false),
---            (ws.id, 'Основной доход', 'income', true, '#22c55e', false);
---    END LOOP;
--- END $$;
+CREATE POLICY "Allow members to view categories" ON public.categories
+FOR SELECT USING (is_member_of_workspace(workspace_id));
+
+CREATE POLICY "Allow members to insert categories" ON public.categories
+FOR INSERT WITH CHECK (is_member_of_workspace(workspace_id));
+
+CREATE POLICY "Allow admins to update/delete categories" ON public.categories
+FOR ALL USING (is_admin_of_workspace(workspace_id));
+
+CREATE POLICY "Allow members to view tags" ON public.tags
+FOR SELECT USING (is_member_of_workspace(workspace_id));
+
+CREATE POLICY "Allow members to insert tags" ON public.tags
+FOR INSERT WITH CHECK (is_member_of_workspace(workspace_id));
+
+CREATE POLICY "Allow admins to update/delete tags" ON public.tags
+FOR ALL USING (is_admin_of_workspace(workspace_id));
+
+CREATE POLICY "Allow members to view links" ON public.operation_tags
+FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.operations
+    WHERE id = operation_id AND is_member_of_workspace(workspace_id)
+  )
+);
+
+CREATE POLICY "Allow members to link tags" ON public.operation_tags
+FOR INSERT WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM public.operations
+    WHERE id = operation_id AND is_member_of_workspace(workspace_id)
+  )
+);
+
+CREATE POLICY "Allow members to unlink tags" ON public.operation_tags
+FOR DELETE USING (
+  EXISTS (
+    SELECT 1 FROM public.operations
+    WHERE id = operation_id AND is_member_of_workspace(workspace_id)
+  )
+);
 ```
 
-## 2. Список компонентов/хуков для создания/изменения
+---
 
-### Новые
-- **`src/hooks/useCategories.js`**: Хук для загрузки, создания, изменения и удаления категорий, а также для закрепления их на дашборде. Управление кешем и состоянием.
-- **Вкладка "Категории"**: Можно реализовать как новый таб в `src/pages/WorkspaceSettingsPage.jsx` или как отдельную страницу `src/pages/CategoriesSettingsPage.jsx`. Интерфейс управления категориями (CRUD) и выбора "Дашборд пинов".
+## 4. Пошаговый план реализации
 
-### Изменяемые
-- **`src/pages/WorkspacePage.jsx` (Дашборд)**:
-  - В блоке "Быстрые действия" вместо фиксированных кнопок загружать список закрепленных категорий текущего воркспейса (фильтр по `is_pinned_on_dashboard`).
-  - Отрисовывать их кнопки на основе цвета и названия категории.
-  - При клике передавать `category_id` и `type` в `AddOperationModal`.
-- **`src/components/AddOperationModal.jsx`**:
-  - Добавить загрузку категорий через `useCategories`.
-  - Добавить `<select>` для выбора категории в форму.
-  - Если передан конкретный `type` (например, открыта модалка расхода) — фильтровать категории в дропдауне по этому типу.
-- **`src/pages/OperationPage.jsx`**:
-  - В списке операций выводить название категории (вместо общих "Доход/Расход") и окрашивать значок в цвет категории.
-  - Обновить форму добавления, чтобы можно было передать `category_id`.
-  - Возможно, расширить текущий фильтр "По типу" фильтром "По категории".
-- **`src/hooks/useOperations.js`**:
-  - В `addOperation` принимать опциональный/обязательный `category_id` и сохранять в БД.
-  - В SQL-запросе к таблице `operations` добавить JOIN с `categories` или делать отдельный запрос на фронте для сопоставления. Пример: `.select('..., categories(id, name, color)')`.
+### **Этап 1: Миграция базы данных**
 
-## 3. Детальный план реализации по шагам
+1.  **Задача**: Создать новый файл миграции.
+    - **Файл**: `supabase/migrations/<timestamp>_phase4_tags_and_categories.sql`
+    - **Что делать**: Скопировать и вставить SQL-код из раздела 3 в этот файл.
+    - **Результат**: Новые таблицы и политики готовы к использованию после применения миграции.
 
-**Шаг 1: БД и миграции**
-1. Создать новую миграцию в `supabase/migrations/` (взяв за основу SQL из пункта 1).
-2. Выполнить миграцию (`supabase db push` или через дашборд).
-3. Убедиться, что скрипт на миграцию старых данных отработал, если в базе уже есть workspaces.
+### **Этап 2: Создание и обновление хуков**
 
-**Шаг 2: Создание логики категорий (useCategories)**
-1. Реализовать `useCategories(workspaceId)` для инкапсуляции обращений к таблице `categories`.
-2. Поддержать методы: `loadCategories`, `addCategory`, `updateCategory` (включая лимит пинов на 2 категории), `deleteCategory`.
+2.  **Задача**: Создать хук `useCategories`.
+    - **Файл**: `src/hooks/useCategories.js` (новый)
+    - **Что делать**: Реализовать хук, который загружает все категории для данного `workspaceId`. Он должен возвращать `categories`, `loading`, `error` и функцию `addCategory`.
+    - **Результат**: Хук для получения и создания категорий в рамках рабочего пространства.
 
-**Шаг 3: Настройки категорий (UI)**
-1. В `WorkspaceSettingsPage.jsx` добавить вкладку "Категории".
-2. Вывести список категорий с группировкой по типам.
-3. Реализовать форму добавления с color picker'ом.
-4. Добавить чекбокс/иконку звездочки для пина на главную (валидация на клиенте: не больше 2 штук с `is_pinned_on_dashboard = true`).
+3.  **Задача**: Создать хук `useTags`.
+    - **Файл**: `src/hooks/useTags.js` (новый)
+    - **Что делать**: Реализовать хук для загрузки тегов. Он должен включать функцию `findOrCreateTag(name)`, которая находит тег по имени или создает новый, если он не существует.
+    - **Результат**: Хук для получения и создания тегов.
 
-**Шаг 4: Обновление модалки операции**
-1. Открыть `AddOperationModal.jsx` и добавить dropdown категорий.
-2. При смене типа операции (Доход/Расход) в форме — менять доступный список категорий в дропдауне.
-3. Прокидывать `category_id` в вызов хука `useOperations -> addOperation`.
+4.  **Задача**: Обновить хук `useOperations`.
+    - **Файл**: `src/hooks/useOperations.js`
+    - **Что делать**:
+        - В `loadOperations` добавить `category_id` и `categories(name, color)` в `.select()`. Также реализовать загрузку тегов для каждой операции (через `operation_tags` и `tags`).
+        - В `addOperation` добавить обработку `category_id` и `tags`. Логика должна:
+            1. Создать/найти ID для всех тегов.
+            2. Вставить операцию с `category_id`.
+            3. Вставить записи в `operation_tags`.
+    - **Результат**: Хук `useOperations` управляет полным циклом создания операции, включая категории и теги.
 
-**Шаг 5: Обновление Дашборда (WorkspacePage)**
-1. Заменить хардкодные кнопки в блоке "Быстрые действия".
-2. Отрисовать до 2-х кнопок закрепленных категорий (например, "Зарплата" и "Аренда"). Добавить стандартную третью кнопку (или оставить как есть) для открытия модалки "Добавить любую операцию".
+### **Этап 3: Компонент `TagInput`**
 
-**Шаг 6: Обновление списка операций**
-1. В `useOperations.js` расширить `.select('...')`, чтобы вытащить данные связанной категории (`category_id` -> название и цвет).
-2. Отрендерить эти данные в компоненте списка в `OperationPage.jsx`.
+5.  **Задача**: Создать компонент `TagInput`.
+    - **Файл**: `src/components/TagInput.jsx` (новый)
+    - **Что делать**: Разработать компонент, который позволяет вводить текст, показывает список подходящих тегов (автодополнение) и отображает выбранные теги в виде чипов. Должна быть возможность создавать новый тег, если его нет в списке.
+    - **Результат**: Переиспользуемый компонент для выбора и создания тегов.
 
-## 4. Потенциальные сложности
+6.  **Задача**: Написать тесты для `TagInput`.
+    - **Файл**: `src/components/TagInput.test.jsx` (новый)
+    - **Что делать**: Написать базовые юнит-тесты для проверки рендеринга, выбора и добавления тегов.
+    - **Результат**: Проверенная работоспособность компонента `TagInput`.
 
-1. **Миграция старых данных:** У существующих записей в `operations` поле `category_id` будет `null`. Интерфейс должен корректно переваривать `null` (показывать тип операции, как сейчас) либо потребуется миграционный скрипт, проставляющий категорию всем старым операциям в зависимости от их типа.
-2. **Ограничение на 2 закрепленные категории:** Лучше всего проверять это на фронтенде в момент вызова `updateCategory`. Более строгий вариант (в БД) потребовал бы триггеров на проверку количества строк с `is_pinned_on_dashboard = true`, что может быть избыточным.
-3. **Обновление кэша (React State):** При удалении категории, которая использовалась в операциях, срабатывает `ON DELETE SET NULL`. В UI (OperationPage) после удаления категории нужно или перефетчить список операций, или правильно обработать локальный state, чтобы операция не "сломалась".
-4. **Форма добавления (связь Тип -> Категория):** Если пользователь сначала выбирает категорию, поле `type` в форме должно обновляться автоматически. Если он выбирает тип — список категорий в селекте должен отфильтроваться. Нужно аккуратно синхронизировать эти два поля.
+### **Этап 4: Обновление `AddOperationModal`**
+
+7.  **Задача**: Модифицировать `AddOperationModal`.
+    - **Файл**: `src/components/AddOperationModal.jsx`
+    - **Что делать**:
+        - Добавить пропс `workspaceId`.
+        - Внутри компонента использовать хуки `useCategories` и `useTags`.
+        - Добавить выпадающий список для категорий. Список должен фильтроваться по `form.type`.
+        - Интегрировать компонент `TagInput`.
+        - Обновить `onSave`, чтобы он передавал `category_id` и массив тегов.
+    - **Результат**: `AddOperationModal` полностью готов к созданию операций с категориями и тегами.
+
+### **Этап 5: Обновление `OperationPage`**
+
+8.  **Задача**: Рефакторинг `OperationPage` для использования `AddOperationModal`.
+    - **Файл**: `src/pages/OperationPage.jsx`
+    - **Что делать**: Удалить встроенную форму модального окна и заменить её вызовом `<AddOperationModal>`. Передать ему `workspaceId` и другие необходимые пропсы.
+    - **Результат**: Устранено дублирование кода, страница использует общий компонент.
+
+9.  **Задача**: Добавить UI для фильтров.
+    - **Файл**: `src/pages/OperationPage.jsx`
+    - **Что делать**: Добавить выпадающий список для фильтрации по категории и компонент, похожий на `TagInput`, для фильтрации по тегам.
+    - **Результат**: Пользователь может выбирать категорию и теги для фильтрации списка операций.
+
+10. **Задача**: Реализовать логику фильтрации.
+    - **Файл**: `src/pages/OperationPage.jsx`
+    - **Что делать**: Обновить `useMemo` для `visibleOperations`, добавив фильтрацию по `filterCategory` и `filterTags` (с логикой "ИЛИ" для тегов).
+    - **Результат**: Список операций динамически обновляется при изменении фильтров.
+
+11. **Задача**: Отобразить категории и теги в списке операций.
+    - **Файл**: `src/pages/OperationPage.jsx`
+    - **Что делать**:
+        - В строке операции отобразить название категории.
+        - Отобразить теги в виде чипов, реализуя логику "первые 2 + N еще" при количестве тегов > 3.
+    - **Результат**: Пользователь видит полную информацию по каждой операции.
+
+### **Этап 6: Обновление `WorkspacePage` и тесты**
+
+12. **Задача**: Обновить вызов `AddOperationModal` на `WorkspacePage`.
+    - **Файл**: `src/pages/WorkspacePage.jsx`
+    - **Что делать**: При вызове `AddOperationModal` передать в него `workspaceId`.
+    - **Результат**: Модальное окно, вызываемое с главной страницы, также поддерживает категории и теги.
+
+13. **Задача**: Написать тесты для новых хуков.
+    - **Файл**: `src/hooks/useCategories.test.js`, `src/hooks/useTags.test.js`
+    - **Что делать**: Написать юнит-тесты, мокая вызовы Supabase, для проверки логики загрузки и создания сущностей.
+    - **Результат**: Хуки `useCategories` и `useTags` покрыты тестами.

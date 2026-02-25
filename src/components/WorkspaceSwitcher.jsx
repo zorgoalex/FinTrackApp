@@ -32,11 +32,12 @@ export default function WorkspaceSwitcher() {
   const navigate = useNavigate();
   const { user } = useAuth();
   
-  const { 
-    currentWorkspace, 
-    allWorkspaces, 
+  const {
+    currentWorkspace,
+    allWorkspaces,
     switchWorkspace,
-    loading 
+    loading,
+    workspaceId
   } = useWorkspace();
 
   // Закрытие при клике вне компонента
@@ -83,16 +84,19 @@ export default function WorkspaceSwitcher() {
     return workspace.ownerName || workspace.ownerEmail || workspace.owner_id || '';
   };
 
-  if (loading && !currentWorkspace) {
-    return (
-      <div className="flex items-center space-x-2 px-3 py-2 bg-gray-100 rounded-md animate-pulse">
-        <Building2 size={16} className="text-gray-400" />
-        <span className="text-sm text-gray-500">Загрузка...</span>
-      </div>
-    );
-  }
-
   if (!currentWorkspace) {
+    // If we have a workspaceId (from URL) or loading, the workspace is being loaded — show spinner
+    // This prevents the "Выбрать пространство" button from flashing during workspace transitions,
+    // which on mobile could catch a phantom touch event and redirect to /workspaces.
+    if (loading || workspaceId) {
+      return (
+        <div className="flex items-center space-x-2 px-3 py-2 bg-gray-100 rounded-md animate-pulse">
+          <Building2 size={16} className="text-gray-400" />
+          <span className="text-sm text-gray-500">Загрузка...</span>
+        </div>
+      );
+    }
+
     return (
       <button
         onClick={() => navigate('/workspaces')}
@@ -132,7 +136,11 @@ export default function WorkspaceSwitcher() {
 
       {/* Выпадающий список */}
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50">
+        <div
+          className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50"
+          onClick={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
+        >
           {/* Поиск */}
           {(allWorkspaces || []).length > 3 && (
             <div className="p-3 border-b border-gray-100">

@@ -259,6 +259,80 @@ export function useOperations(workspaceId) {
     }
   }, [loadOperations, workspaceId]);
 
+  const updateOperation = useCallback(async (id, data) => {
+    if (!workspaceId) {
+      setError('Рабочее пространство не выбрано');
+      return false;
+    }
+
+    if (!id) {
+      setError('Не указан id операции');
+      return false;
+    }
+
+    const payload = {};
+    if (data.amount !== undefined) payload.amount = Number(data.amount) || 0;
+    if (data.description !== undefined) payload.description = data.description;
+    if (data.operation_date !== undefined) payload.operation_date = data.operation_date;
+    if (data.category_id !== undefined) payload.category_id = data.category_id || null;
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const { error: updateError } = await supabase
+        .from('operations')
+        .update(payload)
+        .eq('id', id)
+        .eq('workspace_id', workspaceId);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      // Update tags if provided
+      if (data.tagNames !== undefined) {
+        // Remove existing tag links
+        await supabase
+          .from('operation_tags')
+          .delete()
+          .eq('operation_id', id);
+
+        // Create new tag links
+        if (data.tagNames.length > 0) {
+          const tagIds = [];
+          for (const tagName of data.tagNames) {
+            const trimmed = tagName.trim();
+            if (!trimmed) continue;
+            const { data: tagRow } = await supabase
+              .from('tags')
+              .upsert(
+                { workspace_id: workspaceId, name: trimmed },
+                { onConflict: 'workspace_id,name' }
+              )
+              .select('id')
+              .single();
+            if (tagRow?.id) tagIds.push(tagRow.id);
+          }
+          if (tagIds.length > 0) {
+            await supabase
+              .from('operation_tags')
+              .insert(tagIds.map((tagId) => ({ operation_id: id, tag_id: tagId })));
+          }
+        }
+      }
+
+      await loadOperations();
+      return true;
+    } catch (updateException) {
+      console.error('useOperations: update error', updateException);
+      setError(updateException.message || 'Ошибка обновления операции');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }, [loadOperations, workspaceId]);
+
   const deleteOperation = useCallback(async (id) => {
     if (!workspaceId) {
       setError('Рабочее пространство не выбрано');
@@ -308,6 +382,7 @@ export function useOperations(workspaceId) {
     loading,
     error,
     addOperation,
+    updateOperation,
     deleteOperation,
     refresh,
     summary

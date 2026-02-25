@@ -36,6 +36,17 @@ export function WorkspaceProvider({ children }) {
     }
   }, [workspaceId, user]);
 
+  // Fallback: sync userRole from allWorkspaces if loadWorkspace didn't set it
+  useEffect(() => {
+    if (!userRole && workspaceId && allWorkspaces.length > 0) {
+      const ws = allWorkspaces.find(w => w.id === workspaceId);
+      if (ws?.userRole) {
+        console.log('WorkspaceContext: Setting userRole from allWorkspaces fallback', ws.userRole);
+        setUserRole(ws.userRole);
+      }
+    }
+  }, [userRole, workspaceId, allWorkspaces]);
+
   const loadAllWorkspaces = async () => {
     if (!user) return;
     
@@ -147,6 +158,8 @@ export function WorkspaceProvider({ children }) {
       if (workspaceError) {
         console.error('WorkspaceContext: Workspace load error', workspaceError);
         setError('Рабочее пространство не найдено');
+        // Still set userRole — member query succeeded, we know the role
+        setUserRole(memberData?.role || 'viewer');
         return;
       }
       

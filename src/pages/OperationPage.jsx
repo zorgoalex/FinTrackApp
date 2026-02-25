@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '../contexts/AuthContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -8,6 +8,8 @@ import useOperations from '../hooks/useOperations';
 import useCategories from '../hooks/useCategories';
 import useTags from '../hooks/useTags';
 import AddOperationModal from '../components/AddOperationModal';
+import EditOperationModal from '../components/EditOperationModal';
+import { Pencil } from 'lucide-react';
 import { formatSignedAmount } from '../utils/formatters';
 
 const OPERATION_TYPES = {
@@ -52,6 +54,7 @@ export function OperationPage() {
     loading,
     error,
     addOperation,
+    updateOperation,
     deleteOperation
   } = useOperations(workspaceId);
 
@@ -60,6 +63,7 @@ export function OperationPage() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState('income');
+  const [editingOperation, setEditingOperation] = useState(null);
   const [authorEmails, setAuthorEmails] = useState({});
   const [filterType, setFilterType] = useState(null);
   const [filterCategory, setFilterCategory] = useState('');
@@ -147,6 +151,12 @@ export function OperationPage() {
     if (result) closeModal();
   };
 
+  const canEditRecord = (operation) => {
+    if (!operation) return false;
+    if (permissions.isOwner || permissions.isAdmin || permissions.canEditAllOperations) return true;
+    return permissions.canEditOwnOperations && operation.user_id === user?.id;
+  };
+
   const canDeleteRecord = (operation) => {
     if (!operation) return false;
     if (permissions.isOwner || permissions.isAdmin || permissions.canDeleteOperations) return true;
@@ -162,6 +172,11 @@ export function OperationPage() {
     await deleteOperation(operationId);
   };
 
+  const handleEditSave = async (operationId, data) => {
+    const result = await updateOperation(operationId, data);
+    if (!result) throw new Error('Ошибка обновления операции');
+  };
+
   const getAuthorText = (operation) => {
     if (!operation?.user_id) {
       return 'Удалённый пользователь';
@@ -172,6 +187,19 @@ export function OperationPage() {
       || operation.displayName
       || 'Пользователь';
   };
+
+  // Double-tap support for mobile (onDoubleClick doesn't work on touch devices)
+  const lastTapRef = useRef(0);
+  const handleDoubleTap = useCallback((operation) => {
+    if (!canEditRecord(operation)) return;
+    const now = Date.now();
+    if (now - lastTapRef.current < 300) {
+      lastTapRef.current = 0;
+      setEditingOperation(operation);
+    } else {
+      lastTapRef.current = now;
+    }
+  }, [permissions, user]);
 
   const goBack = () => {
     if (workspaceId) {
@@ -353,7 +381,12 @@ export function OperationPage() {
             const typeInfo = OPERATION_TYPES[operation.type] || OPERATION_TYPES.expense;
 
             return (
-              <div key={operation.id} className="p-4 flex items-start justify-between gap-4">
+              <div
+                key={operation.id}
+                className={`p-4 flex items-start justify-between gap-4${canEditRecord(operation) ? ' cursor-pointer' : ''}`}
+                onDoubleClick={() => canEditRecord(operation) && setEditingOperation(operation)}
+                onTouchEnd={() => handleDoubleTap(operation)}
+              >
                 <div className="min-w-0">
                   <div className="text-sm text-gray-500 mb-1">
                     {formatOperationDate(operation.operation_date || operation.created_at)}
@@ -391,15 +424,27 @@ export function OperationPage() {
                   </div>
                 </div>
 
-                {canDeleteRecord(operation) && (
-                  <button
-                    onClick={() => handleDelete(operation.id)}
-                    disabled={loading}
-                    className="text-xs px-3 py-1.5 rounded-md border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
-                  >
-                    Удалить
-                  </button>
-                )}
+                <div className="flex flex-col gap-1.5 shrink-0">
+                  {canEditRecord(operation) && (
+                    <button
+                      onClick={() => setEditingOperation(operation)}
+                      disabled={loading}
+                      className="text-xs px-2.5 py-1.5 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-indigo-600 hover:border-indigo-200 disabled:opacity-50"
+                      title="Редактировать"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                  )}
+                  {canDeleteRecord(operation) && (
+                    <button
+                      onClick={() => handleDelete(operation.id)}
+                      disabled={loading}
+                      className="text-xs px-2.5 py-1.5 rounded-md border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
+                    >
+                      Удалить
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })
@@ -412,6 +457,15 @@ export function OperationPage() {
           workspaceId={workspaceId}
           onClose={closeModal}
           onSave={handleModalSave}
+        />
+      )}
+
+      {editingOperation && (
+        <EditOperationModal
+          operation={editingOperation}
+          workspaceId={workspaceId}
+          onClose={() => setEditingOperation(null)}
+          onSave={handleEditSave}
         />
       )}
     </div>
