@@ -111,9 +111,10 @@ export default function QuickButtonsSettings({ workspaceId, buttons, onSave, onC
           )}
 
           {/* Add / Edit form */}
+          {(list.length < 5 || editIndex !== null) && (
           <div className="space-y-2 border-t pt-4">
             <p className="text-sm font-medium text-gray-700">
-              {editIndex !== null ? 'Редактировать кнопку' : 'Добавить кнопку'}
+              {editIndex !== null ? 'Редактировать кнопку' : `Добавить кнопку (${list.length}/5)`}
             </p>
 
             <div className="flex gap-2">
@@ -181,6 +182,11 @@ export default function QuickButtonsSettings({ workspaceId, buttons, onSave, onC
               )}
             </div>
           </div>
+          )}
+
+          {list.length >= 5 && editIndex === null && (
+            <p className="text-sm text-gray-500 border-t pt-4">Достигнут лимит — максимум 5 кнопок.</p>
+          )}
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 
