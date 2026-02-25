@@ -9,7 +9,7 @@ import useCategories from '../hooks/useCategories';
 import useTags from '../hooks/useTags';
 import AddOperationModal from '../components/AddOperationModal';
 import EditOperationModal from '../components/EditOperationModal';
-import { Pencil, ChevronDown, X } from 'lucide-react';
+import { Pencil, Trash2, ChevronDown, X } from 'lucide-react';
 import { formatSignedAmount } from '../utils/formatters';
 
 const OPERATION_TYPES = {
@@ -73,6 +73,12 @@ export function OperationPage() {
   const tagDropdownRef = useRef(null);
   const [sortField, setSortField] = useState('date');
   const [sortDir, setSortDir] = useState('desc');
+  const [viewMode, setViewMode] = useState(() => localStorage.getItem('operationsViewMode') || 'detailed');
+
+  const handleViewMode = (mode) => {
+    setViewMode(mode);
+    localStorage.setItem('operationsViewMode', mode);
+  };
 
   const toggleSort = (field) => {
     if (sortField === field) {
@@ -335,6 +341,29 @@ export function OperationPage() {
             {visibleOperations.length} из {monthlyOperations.length}
           </span>
         )}
+
+        <span className="text-gray-300 select-none">|</span>
+
+        <button
+          onClick={() => handleViewMode('detailed')}
+          className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+            viewMode === 'detailed'
+              ? 'bg-blue-600 text-white border-blue-600'
+              : 'bg-white text-gray-400 border-gray-300 hover:border-blue-400 hover:text-blue-600'
+          }`}
+        >
+          Подробный
+        </button>
+        <button
+          onClick={() => handleViewMode('compact')}
+          className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+            viewMode === 'compact'
+              ? 'bg-blue-600 text-white border-blue-600'
+              : 'bg-white text-gray-400 border-gray-300 hover:border-blue-400 hover:text-blue-600'
+          }`}
+        >
+          Компактный
+        </button>
       </div>
 
       {/* Category filter — show always so user knows it exists */}
@@ -431,6 +460,51 @@ export function OperationPage() {
         ) : (
           visibleOperations.map((operation) => {
             const typeInfo = OPERATION_TYPES[operation.type] || OPERATION_TYPES.expense;
+
+            if (viewMode === 'compact') {
+              return (
+                <div
+                  key={operation.id}
+                  className={`px-4 py-2 flex items-center justify-between gap-3${canEditRecord(operation) ? ' cursor-pointer' : ''}`}
+                  onDoubleClick={() => canEditRecord(operation) && setEditingOperation(operation)}
+                  onTouchEnd={() => handleDoubleTap(operation)}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-sm text-gray-500 shrink-0">
+                      {formatOperationDate(operation.operation_date || operation.created_at)}
+                    </span>
+                    <span className={`text-sm font-medium shrink-0 ${typeInfo.color}`}>
+                      {typeInfo.label}
+                    </span>
+                    <span className="text-lg font-semibold text-gray-900 truncate">
+                      {formatSignedAmount(operation.type, operation.amount)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {canEditRecord(operation) && (
+                      <button
+                        onClick={() => setEditingOperation(operation)}
+                        disabled={loading}
+                        className="text-xs px-2 py-1.5 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-indigo-600 hover:border-indigo-200 disabled:opacity-50"
+                        title="Редактировать"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                    )}
+                    {canDeleteRecord(operation) && (
+                      <button
+                        onClick={() => handleDelete(operation.id)}
+                        disabled={loading}
+                        className="text-xs px-2 py-1.5 rounded-md border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
+                        title="Удалить"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            }
 
             return (
               <div
