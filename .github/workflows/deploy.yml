@@ -1,10 +1,35 @@
 name: Deploy to Vercel
+
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "Hello World"
+      - name: Trigger Vercel production deployment
+        run: |
+          DEPLOY=$(curl -s -X POST "https://api.vercel.com/v13/deployments?teamId=${{ secrets.VERCEL_TEAM_ID }}" \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "name": "fintrackapp",
+              "gitSource": {
+                "type": "github",
+                "ref": "main",
+                "repoId": 1030922283
+              },
+              "target": "production"
+            }')
+          echo "$DEPLOY" | python3 -c "
+          import json, sys
+          d = json.load(sys.stdin)
+          print('Deployment ID:', d.get('id', 'N/A'))
+          print('URL:', d.get('url', 'N/A'))
+          print('State:', d.get('state', d.get('readyState', 'N/A')))
+          if 'error' in d:
+              print('ERROR:', d['error'])
+              exit(1)
+          "
