@@ -1,27 +1,21 @@
 name: Deploy to Vercel
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   workflow_dispatch:
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger Vercel production deployment
+      - name: Deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_TEAM_ID: ${{ secrets.VERCEL_TEAM_ID }}
+          COMMIT_SHA: ${{ github.sha }}
         run: |
-          SHA="${{ github.sha }}"
-          RESPONSE=$(curl -s -X POST \
-            "https://api.vercel.com/v13/deployments?teamId=${{ secrets.VERCEL_TEAM_ID }}" \
-            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+          curl -sf -X POST \
+            "https://api.vercel.com/v13/deployments?teamId=${VERCEL_TEAM_ID}" \
+            -H "Authorization: Bearer ${VERCEL_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d "{\"name\":\"fintrackapp\",\"gitSource\":{\"type\":\"github\",\"ref\":\"main\",\"repoId\":1030922283,\"sha\":\"$SHA\"},\"target\":\"production\"}")
-          echo "Response: $RESPONSE"
-          STATE=$(echo "$RESPONSE" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); console.log(d.readyState||d.error?.code||'unknown')")
-          echo "Deploy state: $STATE"
-          if [[ "$STATE" == "INITIALIZING" || "$STATE" == "BUILDING" || "$STATE" == "READY" ]]; then
-            echo "✅ Deployment triggered successfully"
-          else
-            echo "❌ Deployment may have failed"
-            exit 1
-          fi
+            -d '{"name":"fintrackapp","gitSource":{"type":"github","ref":"main","repoId":1030922283,"sha":"'"${COMMIT_SHA}"'"},"target":"production"}'
