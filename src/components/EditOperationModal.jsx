@@ -42,7 +42,7 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
   const filteredCategories = operation.type === 'salary'
-    ? []
+    ? categories.filter((c) => c.type === 'income')
     : categories.filter((c) => c.type === operation.type);
 
   const handleAddCategory = async () => {
@@ -97,8 +97,7 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           {/* Категория */}
-          {operation.type !== 'salary' && (
-            <div>
+          <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Категория</label>
               <div className="flex gap-2">
                 <select
@@ -142,7 +141,6 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
                 </div>
               )}
             </div>
-          )}
 
           {/* Сумма */}
           <div>
