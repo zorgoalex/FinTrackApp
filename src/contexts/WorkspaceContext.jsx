@@ -24,8 +24,11 @@ export function WorkspaceProvider({ children }) {
   const [workspaceMembers, setWorkspaceMembers] = useState([]);
   const [pendingInvitations, setPendingInvitations] = useState([]);
 
+  // Use user?.id (not full user object) to avoid re-firing on every render
+  // when React creates a new user object reference with the same data
+  const userId = user?.id ?? null;
   useEffect(() => {
-    if (user) {
+    if (userId) {
       loadAllWorkspaces();
       if (workspaceId) {
         loadWorkspace();
@@ -34,7 +37,8 @@ export function WorkspaceProvider({ children }) {
         setUserRole(null);
       }
     }
-  }, [workspaceId, user]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId, userId]);
 
   // Fallback: sync userRole from allWorkspaces if loadWorkspace didn't set it
   useEffect(() => {
