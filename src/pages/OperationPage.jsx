@@ -342,28 +342,6 @@ export function OperationPage() {
           </span>
         )}
 
-        <span className="text-gray-300 select-none">|</span>
-
-        <button
-          onClick={() => handleViewMode('detailed')}
-          className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
-            viewMode === 'detailed'
-              ? 'bg-blue-600 text-white border-blue-600'
-              : 'bg-white text-gray-400 border-gray-300 hover:border-blue-400 hover:text-blue-600'
-          }`}
-        >
-          Подробный
-        </button>
-        <button
-          onClick={() => handleViewMode('compact')}
-          className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
-            viewMode === 'compact'
-              ? 'bg-blue-600 text-white border-blue-600'
-              : 'bg-white text-gray-400 border-gray-300 hover:border-blue-400 hover:text-blue-600'
-          }`}
-        >
-          Компактный
-        </button>
       </div>
 
       {/* Category filter — show always so user knows it exists */}
@@ -384,66 +362,93 @@ export function OperationPage() {
         </select>
       </div>
 
-      {/* Tag filter — dropdown multi-select */}
-      {tags.length > 0 && (
-        <div className="relative mb-3" ref={tagDropdownRef} data-testid="tag-filter">
+      {/* Tag filter + View mode toggle row */}
+      <div className="flex items-start justify-between mb-3">
+        {/* Tag filter — dropdown multi-select */}
+        {tags.length > 0 ? (
+          <div className="relative" ref={tagDropdownRef} data-testid="tag-filter">
+            <button
+              type="button"
+              onClick={() => setShowTagDropdown((v) => !v)}
+              className={`inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border transition-colors ${
+                filterTags.length > 0
+                  ? 'bg-indigo-50 border-indigo-400 text-indigo-700'
+                  : 'bg-white border-gray-300 text-gray-600 hover:border-indigo-400'
+              }`}
+            >
+              <span>Теги</span>
+              {filterTags.length > 0 && (
+                <span className="bg-indigo-600 text-white text-xs font-medium rounded-full w-4 h-4 flex items-center justify-center leading-none">
+                  {filterTags.length}
+                </span>
+              )}
+              <ChevronDown size={14} className={`transition-transform ${showTagDropdown ? 'rotate-180' : ''}`} />
+              {filterTags.length > 0 && (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  className="ml-0.5 text-indigo-400 hover:text-indigo-700"
+                  onClick={(e) => { e.stopPropagation(); setFilterTags([]); }}
+                  onKeyDown={(e) => e.key === 'Enter' && (e.stopPropagation(), setFilterTags([]))}
+                >
+                  <X size={13} />
+                </span>
+              )}
+            </button>
+
+            {showTagDropdown && (
+              <div className="absolute z-20 top-full mt-1 left-0 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px] max-h-60 overflow-y-auto">
+                {tags.map((tag) => {
+                  const active = filterTags.includes(tag.id);
+                  return (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      onClick={() => setFilterTags((prev) =>
+                        active ? prev.filter((id) => id !== tag.id) : [...prev, tag.id]
+                      )}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-indigo-50 transition-colors"
+                    >
+                      <span className={`w-3.5 h-3.5 rounded border flex-shrink-0 flex items-center justify-center ${
+                        active ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300'
+                      }`}>
+                        {active && <span className="text-white text-[9px] font-bold leading-none">✓</span>}
+                      </span>
+                      <span className={active ? 'text-indigo-700 font-medium' : 'text-gray-700'}>
+                        #{tag.name}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : <div />}
+
+        {/* View mode toggle — compact radio buttons */}
+        <div className="flex items-center gap-1 shrink-0">
           <button
-            type="button"
-            onClick={() => setShowTagDropdown((v) => !v)}
-            className={`inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border transition-colors ${
-              filterTags.length > 0
-                ? 'bg-indigo-50 border-indigo-400 text-indigo-700'
-                : 'bg-white border-gray-300 text-gray-600 hover:border-indigo-400'
+            onClick={() => handleViewMode('detailed')}
+            className={`py-1 px-2 rounded text-xs transition-colors ${
+              viewMode === 'detailed'
+                ? 'bg-blue-600 text-white'
+                : 'text-gray-400 hover:text-gray-500'
             }`}
           >
-            <span>Теги</span>
-            {filterTags.length > 0 && (
-              <span className="bg-indigo-600 text-white text-xs font-medium rounded-full w-4 h-4 flex items-center justify-center leading-none">
-                {filterTags.length}
-              </span>
-            )}
-            <ChevronDown size={14} className={`transition-transform ${showTagDropdown ? 'rotate-180' : ''}`} />
-            {filterTags.length > 0 && (
-              <span
-                role="button"
-                tabIndex={0}
-                className="ml-0.5 text-indigo-400 hover:text-indigo-700"
-                onClick={(e) => { e.stopPropagation(); setFilterTags([]); }}
-                onKeyDown={(e) => e.key === 'Enter' && (e.stopPropagation(), setFilterTags([]))}
-              >
-                <X size={13} />
-              </span>
-            )}
+            Подробный
           </button>
-
-          {showTagDropdown && (
-            <div className="absolute z-20 top-full mt-1 left-0 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px] max-h-60 overflow-y-auto">
-              {tags.map((tag) => {
-                const active = filterTags.includes(tag.id);
-                return (
-                  <button
-                    key={tag.id}
-                    type="button"
-                    onClick={() => setFilterTags((prev) =>
-                      active ? prev.filter((id) => id !== tag.id) : [...prev, tag.id]
-                    )}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-indigo-50 transition-colors"
-                  >
-                    <span className={`w-3.5 h-3.5 rounded border flex-shrink-0 flex items-center justify-center ${
-                      active ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300'
-                    }`}>
-                      {active && <span className="text-white text-[9px] font-bold leading-none">✓</span>}
-                    </span>
-                    <span className={active ? 'text-indigo-700 font-medium' : 'text-gray-700'}>
-                      #{tag.name}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          <button
+            onClick={() => handleViewMode('compact')}
+            className={`py-1 px-2 rounded text-xs transition-colors ${
+              viewMode === 'compact'
+                ? 'bg-blue-600 text-white'
+                : 'text-gray-400 hover:text-gray-500'
+            }`}
+          >
+            Компактный
+          </button>
         </div>
-      )}
+      </div>
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 divide-y divide-gray-100">
         {loading && monthlyOperations.length === 0 ? (
