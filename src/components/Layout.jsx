@@ -11,8 +11,7 @@ export default function Layout() {
   const { user, logout } = useAuth()
   const { currentWorkspace, loading: workspaceLoading, workspaceId } = useWorkspace()
   const { canViewWorkspaceSettings } = usePermissions()
-  
-  console.log('Layout render:', { currentWorkspace });
+
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen)
 
