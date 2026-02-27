@@ -12,7 +12,7 @@ import EditOperationModal from '../components/EditOperationModal';
 import QuickButtonsSettings from '../components/QuickButtonsSettings';
 import MonthPicker from '../components/MonthPicker';
 import { Pencil, Trash2, ChevronDown, X, Plus } from 'lucide-react';
-import { formatSignedAmount } from '../utils/formatters';
+import { formatSignedAmount, formatUnsignedAmount, formatGroupDate } from '../utils/formatters';
 import { getMonthRange } from '../utils/dateRange';
 
 const OPERATION_TYPES = {
@@ -120,6 +120,24 @@ export function OperationPage() {
       return sortDir === 'asc' ? valA - valB : valB - valA;
     });
   }, [operations, filterType, filterCategory, filterTags, sortField, sortDir]);
+
+  const groupedOperations = useMemo(() => {
+    const groups = new Map();
+    visibleOperations.forEach(op => {
+      const dateKey = op.operation_date || 'no-date';
+      if (!groups.has(dateKey)) {
+        groups.set(dateKey, []);
+      }
+      groups.get(dateKey).push(op);
+    });
+    return Array.from(groups.entries()).map(([dateKey, ops]) => ({
+      dateKey,
+      label: formatGroupDate(dateKey === 'no-date' ? null : dateKey),
+      operations: ops,
+      dayIncome: ops.filter(o => o.type === 'income').reduce((s, o) => s + Number(o.amount || 0), 0),
+      dayExpense: ops.filter(o => o.type === 'expense' || o.type === 'salary').reduce((s, o) => s + Number(o.amount || 0), 0),
+    }));
+  }, [visibleOperations]);
 
   useEffect(() => {
     const loadEmails = async () => {
@@ -480,144 +498,158 @@ export function OperationPage() {
               : 'В этом месяце операций нет.'}
           </div>
         ) : (
-          visibleOperations.map((operation) => {
-            const typeInfo = OPERATION_TYPES[operation.type] || OPERATION_TYPES.expense;
-
-            if (viewMode === 'compact') {
-              return (
-                <div
-                  key={operation.id}
-                  className={`px-4 py-2 flex items-center justify-between gap-3${canEditRecord(operation) ? ' cursor-pointer' : ''}`}
-                  onDoubleClick={() => canEditRecord(operation) && setEditingOperation(operation)}
-                  onTouchEnd={() => handleDoubleTap(operation)}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="text-sm text-gray-500 shrink-0">
-                      {formatOperationDate(operation.operation_date || operation.created_at)}
-                    </span>
-                    <span className={`text-sm font-medium shrink-0 ${typeInfo.color}`}>
-                      {typeInfo.label}
-                    </span>
-                    <span className="text-lg font-semibold text-gray-900 truncate">
-                      {formatSignedAmount(operation.type, operation.amount)}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {canEditRecord(operation) && (
-                      <button
-                        onClick={() => setEditingOperation(operation)}
-                        disabled={loading}
-                        className="text-xs px-2 py-1.5 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-indigo-600 hover:border-indigo-200 disabled:opacity-50"
-                        title="Редактировать"
-                      >
-                        <Pencil size={14} />
-                      </button>
-                    )}
-                    {canDeleteRecord(operation) && (
-                      <button
-                        onClick={() => handleDelete(operation.id)}
-                        disabled={loading}
-                        className="text-xs px-2 py-1.5 rounded-md border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
-                        title="Удалить"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            }
-
-            return (
-              <div
-                key={operation.id}
-                className={`p-4 flex items-start justify-between gap-4${canEditRecord(operation) ? ' cursor-pointer' : ''}`}
-                onDoubleClick={() => canEditRecord(operation) && setEditingOperation(operation)}
-                onTouchEnd={() => handleDoubleTap(operation)}
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-sm text-gray-500">
-                      {formatOperationDate(operation.operation_date || operation.created_at)}
-                    </span>
-                    <span className={`text-sm font-medium ${typeInfo.color}`}>
-                      {typeInfo.label}
-                    </span>
-                  </div>
-                  <div className="text-lg font-semibold text-gray-900">
-                    {formatSignedAmount(operation.type, operation.amount)}
-                  </div>
-                  <div className="flex flex-wrap gap-x-2 gap-y-0.5 items-center text-sm text-gray-500">
-                    {(() => {
-                      const parts = [];
-                      if (operation.description) {
-                        parts.push(
-                          <span key="desc" className="text-purple-600">
-                            {operation.description}
-                          </span>
-                        );
-                      }
-                      const catName = operation.category_id && categories.length > 0
-                        ? categories.find((c) => c.id === operation.category_id)?.name
-                        : null;
-                      if (catName) {
-                        parts.push(<span key="cat" className="text-orange-500 font-medium">{catName}</span>);
-                      }
-                      parts.push(
-                        <span key="author" className="text-gray-400 text-xs">{getAuthorText(operation)}</span>
-                      );
-                      return parts.reduce((acc, part, i) => {
-                        if (i > 0) acc.push(<span key={`sep-${i}`} className="text-gray-300">·</span>);
-                        acc.push(part);
-                        return acc;
-                      }, []);
-                    })()}
-                  </div>
-                  {operation.tags && operation.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-x-1.5 gap-y-0.5 mt-0.5">
-                      {operation.tags.map((t) => (
-                        <button
-                          key={t.id}
-                          type="button"
-                          className="text-[0.7rem] italic text-green-400 hover:text-green-600 hover:underline cursor-pointer"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setFilterTags((prev) =>
-                              prev.includes(t.id) ? prev : [...prev, t.id]
-                            );
-                          }}
-                        >
-                          #{t.name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex flex-col gap-1.5 shrink-0">
-                  {canEditRecord(operation) && (
-                    <button
-                      onClick={() => setEditingOperation(operation)}
-                      disabled={loading}
-                      className="text-xs px-2.5 py-1.5 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-indigo-600 hover:border-indigo-200 disabled:opacity-50"
-                      title="Редактировать"
-                    >
-                      <Pencil size={14} />
-                    </button>
-                  )}
-                  {canDeleteRecord(operation) && (
-                    <button
-                      onClick={() => handleDelete(operation.id)}
-                      disabled={loading}
-                      className="text-xs px-2.5 py-1.5 rounded-md border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
-                    >
-                      Удалить
-                    </button>
-                  )}
-                </div>
+          groupedOperations.map(group => (
+            <div key={group.dateKey}>
+              {/* Date header */}
+              <div className="sticky top-0 bg-gray-50 px-4 py-2 flex items-center justify-between border-b border-gray-200" data-testid="date-group-header">
+                <span className="text-sm font-medium text-gray-700">{group.label}</span>
+                <span className="text-xs text-gray-400">
+                  {group.dayIncome > 0 && <span className="text-green-600">+{formatUnsignedAmount(group.dayIncome)}</span>}
+                  {group.dayIncome > 0 && group.dayExpense > 0 && ' / '}
+                  {group.dayExpense > 0 && <span className="text-red-600">−{formatUnsignedAmount(group.dayExpense)}</span>}
+                </span>
               </div>
-            );
-          })
+              {/* Operations in this group */}
+              {group.operations.map(operation => {
+                const typeInfo = OPERATION_TYPES[operation.type] || OPERATION_TYPES.expense;
+
+                if (viewMode === 'compact') {
+                  return (
+                    <div
+                      key={operation.id}
+                      className={`px-4 py-2 flex items-center justify-between gap-3${canEditRecord(operation) ? ' cursor-pointer' : ''}`}
+                      onDoubleClick={() => canEditRecord(operation) && setEditingOperation(operation)}
+                      onTouchEnd={() => handleDoubleTap(operation)}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="text-sm text-gray-500 shrink-0">
+                          {formatOperationDate(operation.operation_date || operation.created_at)}
+                        </span>
+                        <span className={`text-sm font-medium shrink-0 ${typeInfo.color}`}>
+                          {typeInfo.label}
+                        </span>
+                        <span className="text-lg font-semibold text-gray-900 truncate">
+                          {formatSignedAmount(operation.type, operation.amount)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {canEditRecord(operation) && (
+                          <button
+                            onClick={() => setEditingOperation(operation)}
+                            disabled={loading}
+                            className="text-xs px-2 py-1.5 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-indigo-600 hover:border-indigo-200 disabled:opacity-50"
+                            title="Редактировать"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                        )}
+                        {canDeleteRecord(operation) && (
+                          <button
+                            onClick={() => handleDelete(operation.id)}
+                            disabled={loading}
+                            className="text-xs px-2 py-1.5 rounded-md border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
+                            title="Удалить"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    key={operation.id}
+                    className={`p-4 flex items-start justify-between gap-4${canEditRecord(operation) ? ' cursor-pointer' : ''}`}
+                    onDoubleClick={() => canEditRecord(operation) && setEditingOperation(operation)}
+                    onTouchEnd={() => handleDoubleTap(operation)}
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-sm text-gray-500">
+                          {formatOperationDate(operation.operation_date || operation.created_at)}
+                        </span>
+                        <span className={`text-sm font-medium ${typeInfo.color}`}>
+                          {typeInfo.label}
+                        </span>
+                      </div>
+                      <div className="text-lg font-semibold text-gray-900">
+                        {formatSignedAmount(operation.type, operation.amount)}
+                      </div>
+                      <div className="flex flex-wrap gap-x-2 gap-y-0.5 items-center text-sm text-gray-500">
+                        {(() => {
+                          const parts = [];
+                          if (operation.description) {
+                            parts.push(
+                              <span key="desc" className="text-purple-600">
+                                {operation.description}
+                              </span>
+                            );
+                          }
+                          const catName = operation.category_id && categories.length > 0
+                            ? categories.find((c) => c.id === operation.category_id)?.name
+                            : null;
+                          if (catName) {
+                            parts.push(<span key="cat" className="text-orange-500 font-medium">{catName}</span>);
+                          }
+                          parts.push(
+                            <span key="author" className="text-gray-400 text-xs">{getAuthorText(operation)}</span>
+                          );
+                          return parts.reduce((acc, part, i) => {
+                            if (i > 0) acc.push(<span key={`sep-${i}`} className="text-gray-300">·</span>);
+                            acc.push(part);
+                            return acc;
+                          }, []);
+                        })()}
+                      </div>
+                      {operation.tags && operation.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-x-1.5 gap-y-0.5 mt-0.5">
+                          {operation.tags.map((t) => (
+                            <button
+                              key={t.id}
+                              type="button"
+                              className="text-[0.7rem] italic text-green-400 hover:text-green-600 hover:underline cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setFilterTags((prev) =>
+                                  prev.includes(t.id) ? prev : [...prev, t.id]
+                                );
+                              }}
+                            >
+                              #{t.name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col gap-1.5 shrink-0">
+                      {canEditRecord(operation) && (
+                        <button
+                          onClick={() => setEditingOperation(operation)}
+                          disabled={loading}
+                          className="text-xs px-2.5 py-1.5 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-indigo-600 hover:border-indigo-200 disabled:opacity-50"
+                          title="Редактировать"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                      )}
+                      {canDeleteRecord(operation) && (
+                        <button
+                          onClick={() => handleDelete(operation.id)}
+                          disabled={loading}
+                          className="text-xs px-2.5 py-1.5 rounded-md border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
+                        >
+                          Удалить
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))
         )}
       </div>
 

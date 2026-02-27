@@ -1,3 +1,6 @@
+import { isToday, isYesterday, format } from 'date-fns';
+import { ru } from 'date-fns/locale';
+
 /**
  * Общие утилиты форматирования чисел для FinTrackApp.
  * Русский формат: пробел — разделитель разрядов, запятая — дробная часть.
@@ -40,6 +43,19 @@ export function parseAmount(str) {
   // убираем пробелы (разделители разрядов), меняем запятую на точку
   const clean = String(str).replace(/\s/g, '').replace(',', '.');
   return parseFloat(clean);
+}
+
+/**
+ * Formats a date string for use as a group header.
+ * Returns "Сегодня", "Вчера", or a formatted date like "25 февраля 2026"
+ */
+export function formatGroupDate(dateStr) {
+  if (!dateStr) return 'Без даты';
+  const date = new Date(dateStr + 'T00:00:00'); // force local TZ
+  if (Number.isNaN(date.getTime())) return 'Без даты';
+  if (isToday(date)) return 'Сегодня';
+  if (isYesterday(date)) return 'Вчера';
+  return format(date, 'd MMMM yyyy', { locale: ru });
 }
 
 /**
