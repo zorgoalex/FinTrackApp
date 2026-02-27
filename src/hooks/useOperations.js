@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../contexts/AuthContext';
 
 const EMPTY_PERIOD_SUMMARY = {
@@ -104,12 +104,10 @@ export function useOperations(workspaceId, options = {}) {
   const [operations, setOperations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [summary, setSummary] = useState(EMPTY_SUMMARY);
 
   const loadOperations = useCallback(async () => {
     if (!workspaceId) {
       setOperations([]);
-      setSummary(EMPTY_SUMMARY);
       setError(null);
       setLoading(false);
       return;
@@ -119,19 +117,20 @@ export function useOperations(workspaceId, options = {}) {
       setLoading(true);
       setError(null);
 
-      const authUser = await getAuthUser();
-
-      let query = supabase
-        .from('operations')
-        .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id')
-        .eq('workspace_id', workspaceId);
-
-      if (dateFrom) query = query.gte('operation_date', dateFrom);
-      if (dateTo) query = query.lte('operation_date', dateTo);
-
-      const { data, error: loadError } = await query
-        .order('operation_date', { ascending: false })
-        .order('created_at', { ascending: false });
+      const [authUser, { data, error: loadError }] = await Promise.all([
+        getAuthUser(),
+        (async () => {
+          let query = supabase
+            .from('operations')
+            .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id')
+            .eq('workspace_id', workspaceId);
+          if (dateFrom) query = query.gte('operation_date', dateFrom);
+          if (dateTo) query = query.lte('operation_date', dateTo);
+          return query
+            .order('operation_date', { ascending: false })
+            .order('created_at', { ascending: false });
+        })()
+      ]);
 
       if (loadError) {
         throw loadError;
@@ -189,7 +188,6 @@ export function useOperations(workspaceId, options = {}) {
     } catch (loadException) {
       console.error('useOperations: load error', loadException);
       setOperations([]);
-      setSummary(EMPTY_SUMMARY);
       setError(loadException.message || 'Ошибка загрузки операций');
     } finally {
       setLoading(false);
@@ -248,34 +246,27 @@ export function useOperations(workspaceId, options = {}) {
 
       // Create tags and link them
       if (tagNames.length > 0 && insertedData?.id) {
-        const tagIds = [];
-        for (const tagName of tagNames) {
+        const tagIds = (await Promise.all(tagNames.map(async (tagName) => {
           const trimmed = tagName.trim();
-          if (!trimmed) continue;
-          // Use SELECT-then-INSERT to avoid upsert requiring UPDATE policy
-          let tagId = null;
+          if (!trimmed) return null;
           const { data: existing } = await supabase
             .from('tags')
             .select('id')
             .eq('workspace_id', workspaceId)
             .eq('name', trimmed)
             .maybeSingle();
-          if (existing?.id) {
-            tagId = existing.id;
-          } else {
-            const { data: inserted, error: insertErr } = await supabase
-              .from('tags')
-              .insert({ workspace_id: workspaceId, name: trimmed, color: '#6B7280' })
-              .select('id')
-              .single();
-            if (insertErr) {
-              console.error('useOperations: tag insert error', insertErr, { workspaceId, name: trimmed });
-            } else {
-              tagId = inserted?.id;
-            }
+          if (existing?.id) return existing.id;
+          const { data: inserted, error: insertErr } = await supabase
+            .from('tags')
+            .insert({ workspace_id: workspaceId, name: trimmed, color: '#6B7280' })
+            .select('id')
+            .single();
+          if (insertErr) {
+            console.error('useOperations: tag insert error', insertErr);
+            return null;
           }
-          if (tagId) tagIds.push(tagId);
-        }
+          return inserted?.id;
+        }))).filter(Boolean);
         if (tagIds.length > 0) {
           const { error: linkErr } = await supabase
             .from('operation_tags')
@@ -338,33 +329,27 @@ export function useOperations(workspaceId, options = {}) {
 
         // Create new tag links (SELECT-then-INSERT to avoid upsert UPDATE policy requirement)
         if (data.tagNames.length > 0) {
-          const tagIds = [];
-          for (const tagName of data.tagNames) {
+          const tagIds = (await Promise.all(data.tagNames.map(async (tagName) => {
             const trimmed = tagName.trim();
-            if (!trimmed) continue;
-            let tagId = null;
+            if (!trimmed) return null;
             const { data: existing } = await supabase
               .from('tags')
               .select('id')
               .eq('workspace_id', workspaceId)
               .eq('name', trimmed)
               .maybeSingle();
-            if (existing?.id) {
-              tagId = existing.id;
-            } else {
-              const { data: inserted, error: insertErr } = await supabase
-                .from('tags')
-                .insert({ workspace_id: workspaceId, name: trimmed, color: '#6B7280' })
-                .select('id')
-                .single();
-              if (insertErr) {
-                console.error('useOperations: tag insert error (update)', insertErr, { workspaceId, name: trimmed });
-              } else {
-                tagId = inserted?.id;
-              }
+            if (existing?.id) return existing.id;
+            const { data: inserted, error: insertErr } = await supabase
+              .from('tags')
+              .insert({ workspace_id: workspaceId, name: trimmed, color: '#6B7280' })
+              .select('id')
+              .single();
+            if (insertErr) {
+              console.error('useOperations: tag insert error (update)', insertErr);
+              return null;
             }
-            if (tagId) tagIds.push(tagId);
-          }
+            return inserted?.id;
+          }))).filter(Boolean);
           if (tagIds.length > 0) {
             const { error: linkErr } = await supabase
               .from('operation_tags')
@@ -425,9 +410,7 @@ export function useOperations(workspaceId, options = {}) {
     loadOperations();
   }, [loadOperations]);
 
-  useEffect(() => {
-    setSummary(calculateSummary(operations));
-  }, [operations]);
+  const summary = useMemo(() => calculateSummary(operations), [operations]);
 
   return {
     operations,

@@ -180,14 +180,17 @@ export function WorkspaceProvider({ children }) {
       setCurrentWorkspace(workspace);
       setUserRole(memberData?.role || 'viewer');
       
-      // Обновить время последнего доступа
-      await updateLastAccessed();
-      
+      // Fire-and-forget: don't wait for lastAccessed update
+      updateLastAccessed().catch(e => console.error('updateLastAccessed error', e));
+
       // Загрузить участников и приглашения если есть права
       const role = memberData?.role?.toLowerCase();
       if (['owner', 'admin'].includes(role)) {
-        await loadWorkspaceMembers();
-        await loadPendingInvitations();
+        // Load members and invitations in parallel
+        await Promise.all([
+          loadWorkspaceMembers(),
+          loadPendingInvitations()
+        ]);
       }
       
     } catch (err) {

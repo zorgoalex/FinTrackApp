@@ -1,18 +1,29 @@
-import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
-import ComingSoonPage from './pages/ComingSoonPage';
-import WorkspaceSelectPage from './pages/WorkspaceSelectPage';
-import WorkspaceCreatePage from './pages/WorkspaceCreatePage';
-import WorkspacePage from './pages/WorkspacePage';
-import WorkspaceSettingsPage from './pages/WorkspaceSettingsPage';
-import { OperationPage } from './pages/OperationPage';
-import AnalyticsPage from './pages/AnalyticsPage';
-import DictionariesPage from './pages/DictionariesPage';
-import LoginPage from './pages/LoginPage';
+import { Suspense, lazy } from 'react';
+import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
-import SignupPage from './pages/SignupPage';
-import InvitationAcceptPage from './pages/InvitationAcceptPage';
 import { WorkspaceProvider } from './contexts/WorkspaceContext';
+
+// Lazy-loaded pages
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const SignupPage = lazy(() => import('./pages/SignupPage'));
+const ComingSoonPage = lazy(() => import('./pages/ComingSoonPage'));
+const WorkspaceSelectPage = lazy(() => import('./pages/WorkspaceSelectPage'));
+const WorkspaceCreatePage = lazy(() => import('./pages/WorkspaceCreatePage'));
+const WorkspacePage = lazy(() => import('./pages/WorkspacePage'));
+const WorkspaceSettingsPage = lazy(() => import('./pages/WorkspaceSettingsPage'));
+const OperationPage = lazy(() => import('./pages/OperationPage').then(m => ({ default: m.OperationPage })));
+const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'));
+const DictionariesPage = lazy(() => import('./pages/DictionariesPage'));
+const InvitationAcceptPage = lazy(() => import('./pages/InvitationAcceptPage'));
+
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+    </div>
+  );
+}
 
 const protectedLayoutWithWorkspace = (
   <ProtectedRoute>
@@ -94,7 +105,9 @@ const router = createBrowserRouter([
 function App() {
   return (
     <div className="min-h-screen bg-gray-50">
-      <RouterProvider router={router} />
+      <Suspense fallback={<LoadingFallback />}>
+        <RouterProvider router={router} />
+      </Suspense>
     </div>
   )
 }
