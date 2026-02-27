@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from './AuthContext';
 import { useAuth } from './AuthContext';
@@ -507,26 +507,26 @@ export function WorkspaceProvider({ children }) {
   const canViewOperations = ['owner', 'admin', 'member', 'viewer'].includes(userRole?.toLowerCase());
 
 
-  const value = {
+  const value = useMemo(() => ({
     // Основное состояние
     currentWorkspace,
     loading,
     error,
     workspaceId,
-    
+
     // Мультипользователь состояние
     allWorkspaces,
     userRole,
     workspaceMembers,
     pendingInvitations,
-    
+
     // Проверки прав
     canInviteUsers,
     canManageRoles,
     canDeleteWorkspace,
     canEditOperations,
     canViewOperations,
-    
+
     // Функции
     refreshWorkspace: loadWorkspace,
     refreshAllWorkspaces: loadAllWorkspaces,
@@ -539,7 +539,32 @@ export function WorkspaceProvider({ children }) {
     leaveWorkspace,
     cancelInvitation,
     updateQuickButtons
-  };
+  }), [
+    currentWorkspace,
+    loading,
+    error,
+    workspaceId,
+    allWorkspaces,
+    userRole,
+    workspaceMembers,
+    pendingInvitations,
+    canInviteUsers,
+    canManageRoles,
+    canDeleteWorkspace,
+    canEditOperations,
+    canViewOperations,
+    loadWorkspace,
+    loadAllWorkspaces,
+    switchWorkspace,
+    renameWorkspace,
+    inviteUser,
+    removeUser,
+    changeUserRole,
+    deleteWorkspace,
+    leaveWorkspace,
+    cancelInvitation,
+    updateQuickButtons
+  ]);
 
   return (
     <WorkspaceContext.Provider value={value}>

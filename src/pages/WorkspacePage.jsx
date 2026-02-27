@@ -5,7 +5,7 @@ import useOperations from '../hooks/useOperations';
 import { usePermissions } from '../hooks/usePermissions';
 import AddOperationModal from '../components/AddOperationModal';
 import QuickButtonsSettings from '../components/QuickButtonsSettings';
-import { Plus } from 'lucide-react';
+import { Plus, BarChart3, TrendingUp, FileText, Pin, Minimize2, Maximize2 } from 'lucide-react';
 import { formatUnsignedAmount, formatSignedAmount as formatBalance } from '../utils/formatters';
 import useCategories from '../hooks/useCategories';
 
@@ -173,12 +173,12 @@ export default function WorkspacePage() {
             <div className="relative">
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  { label: '📊 Сегодня', total: summary?.today?.total || 0,  color: todayTotalColor },
-                  { label: '📈 Месяц',   total: summary?.month?.total || 0, color: monthTotalColor },
-                ].map(({ label, total, color }) => (
+                  { icon: <BarChart3 size={16} className="text-gray-500" />, label: 'Сегодня', total: summary?.today?.total || 0,  color: todayTotalColor },
+                  { icon: <TrendingUp size={16} className="text-gray-500" />, label: 'Месяц',   total: summary?.month?.total || 0, color: monthTotalColor },
+                ].map(({ icon, label, total, color }) => (
                   <div key={label} className="bg-white rounded-lg shadow-sm px-3 py-2.5 border border-gray-200">
-                    <div className="text-xs text-gray-500 mb-1">{label}</div>
-                    <div className={`text-lg font-bold leading-tight ${color}`}>
+                    <div className="flex items-center gap-1 text-xs text-gray-500 mb-1">{icon}{label}</div>
+                    <div className={`text-lg font-bold leading-tight tabular-nums ${color}`}>
                       {formatSignedAmount(total)}
                     </div>
                   </div>
@@ -189,20 +189,20 @@ export default function WorkspacePage() {
                 <button
                   onClick={togglePin}
                   title={summaryPinned ? 'Открепить вид' : 'Закрепить вид'}
-                  className={`text-xs px-2 py-1 rounded border transition-colors ${
+                  className={`flex items-center gap-1 text-xs px-2 py-1 rounded border transition-colors ${
                     summaryPinned
                       ? 'bg-amber-100 border-amber-300 text-amber-700'
                       : 'bg-white border-gray-300 text-gray-500 hover:border-gray-400'
                   }`}
                 >
-                  {summaryPinned ? '📌 Закреплено' : '📌'}
+                  <Pin size={14} />{summaryPinned ? ' Закреплено' : ''}
                 </button>
                 <button
                   onClick={toggleSummaryMode}
                   title="Развернуть"
-                  className="text-xs px-2 py-1 rounded border bg-white border-gray-300 text-gray-500 hover:border-gray-400 transition-colors"
+                  className="flex items-center gap-1 text-xs px-2 py-1 rounded border bg-white border-gray-300 text-gray-500 hover:border-gray-400 transition-colors"
                 >
-                  ⊞ Подробно
+                  <Maximize2 size={14} /> Подробно
                 </button>
               </div>
             </div>
@@ -211,7 +211,7 @@ export default function WorkspacePage() {
             <div className="space-y-3">
               {[
                 {
-                  key: 'today', label: '📊 За сегодня',
+                  key: 'today', label: <><BarChart3 size={16} className="text-gray-500" /> За сегодня</>,
                   total: summary?.today?.total || 0,
                   color: todayTotalColor,
                   income: summary?.today?.income || 0,
@@ -220,7 +220,7 @@ export default function WorkspacePage() {
                   open: todayOpen, toggle: () => setTodayOpen((v) => !v),
                 },
                 {
-                  key: 'month', label: '📈 За месяц',
+                  key: 'month', label: <><TrendingUp size={16} className="text-gray-500" /> За месяц</>,
                   total: summary?.month?.total || 0,
                   color: monthTotalColor,
                   income: summary?.month?.income || 0,
@@ -235,8 +235,8 @@ export default function WorkspacePage() {
                     className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
                   >
                     <div className="flex items-center gap-3">
-                      <span className="text-sm font-medium text-gray-600">{label}</span>
-                      <span className={`text-xl font-bold ${color}`}>
+                      <span className="flex items-center gap-1 text-sm font-medium text-gray-600">{label}</span>
+                      <span className={`text-xl font-bold tabular-nums ${color}`}>
                         {formatSignedAmount(total)}
                       </span>
                     </div>
@@ -279,20 +279,20 @@ export default function WorkspacePage() {
                 <button
                   onClick={togglePin}
                   title={summaryPinned ? 'Открепить вид' : 'Закрепить вид'}
-                  className={`text-xs px-2 py-1 rounded border transition-colors ${
+                  className={`flex items-center gap-1 text-xs px-2 py-1 rounded border transition-colors ${
                     summaryPinned
                       ? 'bg-amber-100 border-amber-300 text-amber-700'
                       : 'bg-white border-gray-300 text-gray-500 hover:border-gray-400'
                   }`}
                 >
-                  {summaryPinned ? '📌 Закреплено' : '📌'}
+                  <Pin size={14} />{summaryPinned ? ' Закреплено' : ''}
                 </button>
                 <button
                   onClick={toggleSummaryMode}
                   title="Свернуть"
-                  className="text-xs px-2 py-1 rounded border bg-white border-gray-300 text-gray-500 hover:border-gray-400 transition-colors"
+                  className="flex items-center gap-1 text-xs px-2 py-1 rounded border bg-white border-gray-300 text-gray-500 hover:border-gray-400 transition-colors"
                 >
-                  ⊟ Компактно
+                  <Minimize2 size={14} /> Компактно
                 </button>
               </div>
             </div>
@@ -308,14 +308,14 @@ export default function WorkspacePage() {
             <button
               onClick={() => openOperationForm('income')}
               disabled={!canCreateOperations}
-              className="px-3 py-2 rounded-lg bg-green-50 text-green-700 border border-green-200 disabled:opacity-50 font-medium text-sm"
+              className="px-3 py-2 rounded-lg bg-green-50 text-green-700 border border-green-200 disabled:opacity-50 font-medium text-sm btn-press"
             >
               ＋ Доход
             </button>
             <button
               onClick={() => openOperationForm('expense')}
               disabled={!canCreateOperations}
-              className="px-3 py-2 rounded-lg bg-red-50 text-red-700 border border-red-200 disabled:opacity-50 font-medium text-sm"
+              className="px-3 py-2 rounded-lg bg-red-50 text-red-700 border border-red-200 disabled:opacity-50 font-medium text-sm btn-press"
             >
               ＋ Расход
             </button>
@@ -371,7 +371,7 @@ export default function WorkspacePage() {
               </div>
             ) : (
               <div className="text-center py-8 text-gray-500">
-                <div className="text-4xl mb-2">📝</div>
+                <div className="mb-2"><FileText size={40} className="text-gray-300 mx-auto" /></div>
                 <p className="text-sm">Операций пока нет</p>
                 <p className="text-xs">Добавьте первую запись</p>
               </div>
@@ -381,7 +381,7 @@ export default function WorkspacePage() {
       </div>
 
       <div className="fixed bottom-6 right-6">
-        <button onClick={() => openOperationForm('income')} className="w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center">
+        <button onClick={() => openOperationForm('income')} className="w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center btn-press">
           <span className="text-2xl">+</span>
         </button>
       </div>

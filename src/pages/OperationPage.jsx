@@ -65,6 +65,11 @@ export function OperationPage() {
   const { categories } = useCategories(workspaceId);
   const { tags } = useTags(workspaceId);
 
+  const categoryMap = useMemo(() => {
+    const map = new Map();
+    categories.forEach(c => map.set(c.id, c));
+    return map;
+  }, [categories]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState('income');
@@ -253,7 +258,7 @@ export function OperationPage() {
 
   if (!workspaceId) {
     return (
-      <div className="max-w-3xl mx-auto p-4">
+      <div className="max-w-2xl mx-auto p-4">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 text-center">
           <p className="text-gray-700">Выберите рабочее пространство, чтобы смотреть операции.</p>
           <button onClick={() => navigate('/workspaces')} className="btn-primary mt-4">
@@ -265,7 +270,7 @@ export function OperationPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto p-4 pb-24">
+    <div className="max-w-2xl mx-auto p-4 pb-24">
       <header className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <MonthPicker
           year={selectedMonth.year}
@@ -282,14 +287,14 @@ export function OperationPage() {
           <button
             onClick={() => openAddModal('income')}
             disabled={!permissions.canCreateOperations || loading}
-            className="px-3 py-2 rounded-lg bg-green-50 text-green-700 border border-green-200 disabled:opacity-50 font-medium text-sm truncate"
+            className="px-3 py-2 rounded-lg bg-green-50 text-green-700 border border-green-200 disabled:opacity-50 font-medium text-sm truncate btn-press"
           >
             ＋ Доход
           </button>
           <button
             onClick={() => openAddModal('expense')}
             disabled={!permissions.canCreateOperations || loading}
-            className="px-3 py-2 rounded-lg bg-red-50 text-red-700 border border-red-200 disabled:opacity-50 font-medium text-sm truncate"
+            className="px-3 py-2 rounded-lg bg-red-50 text-red-700 border border-red-200 disabled:opacity-50 font-medium text-sm truncate btn-press"
           >
             ＋ Расход
           </button>
@@ -528,7 +533,7 @@ export function OperationPage() {
                         <span className={`text-sm font-medium shrink-0 ${typeInfo.color}`}>
                           {typeInfo.label}
                         </span>
-                        <span className="text-lg font-semibold text-gray-900 truncate">
+                        <span className="text-lg font-semibold tabular-nums text-gray-900 truncate">
                           {formatSignedAmount(operation.type, operation.amount)}
                         </span>
                       </div>
@@ -574,7 +579,7 @@ export function OperationPage() {
                           {typeInfo.label}
                         </span>
                       </div>
-                      <div className="text-lg font-semibold text-gray-900">
+                      <div className="text-lg font-semibold tabular-nums text-gray-900">
                         {formatSignedAmount(operation.type, operation.amount)}
                       </div>
                       <div className="flex flex-wrap gap-x-2 gap-y-0.5 items-center text-sm text-gray-500">
@@ -587,8 +592,8 @@ export function OperationPage() {
                               </span>
                             );
                           }
-                          const catName = operation.category_id && categories.length > 0
-                            ? categories.find((c) => c.id === operation.category_id)?.name
+                          const catName = operation.category_id
+                            ? categoryMap.get(operation.category_id)?.name
                             : null;
                           if (catName) {
                             parts.push(<span key="cat" className="text-orange-500 font-medium">{catName}</span>);

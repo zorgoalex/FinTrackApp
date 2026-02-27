@@ -381,8 +381,11 @@ export function useOperations(workspaceId, options = {}) {
       return false;
     }
 
+    // Optimistic: remove from list immediately
+    const previousOperations = operations;
+    setOperations(prev => prev.filter(op => op.id !== id));
+
     try {
-      setLoading(true);
       setError(null);
 
       const { error: deleteError } = await supabase
@@ -395,16 +398,15 @@ export function useOperations(workspaceId, options = {}) {
         throw deleteError;
       }
 
-      await loadOperations();
       return true;
     } catch (deleteException) {
       console.error('useOperations: delete error', deleteException);
+      // Rollback on error
+      setOperations(previousOperations);
       setError(deleteException.message || 'Ошибка удаления операции');
       return false;
-    } finally {
-      setLoading(false);
     }
-  }, [loadOperations, workspaceId]);
+  }, [workspaceId, operations]);
 
   useEffect(() => {
     loadOperations();

@@ -10,7 +10,7 @@ export default {
         xs: '400px',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['"Golos Text"', 'Inter', 'system-ui', 'sans-serif'],
       },
       colors: {
         primary: {

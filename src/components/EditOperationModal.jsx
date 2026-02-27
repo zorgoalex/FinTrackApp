@@ -83,8 +83,8 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-backdrop-in">
+      <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md max-h-[90vh] overflow-y-auto animate-modal-in">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b">
           <h2 className={`text-base font-semibold ${typeInfo.color}`}>

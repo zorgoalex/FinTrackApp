@@ -1,10 +1,37 @@
+:root {
+  /* Brand */
+  --color-brand: #4338CA;        /* indigo-700 */
+  --color-brand-light: #6366F1;  /* indigo-500 */
+  --color-brand-bg: #EEF2FF;     /* indigo-50 */
+
+  /* Semantic */
+  --color-income: #16A34A;       /* green-600 */
+  --color-income-bg: #F0FDF4;    /* green-50 */
+  --color-expense: #DC2626;      /* red-600 */
+  --color-expense-bg: #FEF2F2;   /* red-50 */
+  --color-salary: #2563EB;       /* blue-600 */
+  --color-salary-bg: #EFF6FF;    /* blue-50 */
+
+  /* Surface */
+  --color-surface: #FFFFFF;
+  --color-surface-secondary: #F8FAFC; /* slate-50 */
+  --color-border: #E2E8F0;       /* slate-200 */
+  --color-text: #0F172A;         /* slate-900 */
+  --color-text-secondary: #64748B; /* slate-500 */
+}
+
+.tabular-nums {
+  font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   body {
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'Golos Text', 'Inter', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -43,4 +70,37 @@
     padding-left: 1rem;
     padding-right: 1rem;
   }
+}
+
+/* Modal animations */
+@keyframes modal-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-modal-in {
+  animation: modal-in 150ms ease-out;
+}
+.animate-backdrop-in {
+  animation: backdrop-in 150ms ease-out;
+}
+
+/* Button press effect */
+.btn-press {
+  transition: transform 100ms ease;
+}
+.btn-press:active {
+  transform: scale(0.97);
+}
+
+/* Toast animation */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(1rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-toast-in {
+  animation: toast-in 200ms ease-out;
 }
