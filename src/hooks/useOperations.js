@@ -99,7 +99,8 @@ async function getAuthUser() {
   return data?.user || null;
 }
 
-export function useOperations(workspaceId) {
+export function useOperations(workspaceId, options = {}) {
+  const { dateFrom, dateTo } = options;
   const [operations, setOperations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -120,10 +121,15 @@ export function useOperations(workspaceId) {
 
       const authUser = await getAuthUser();
 
-      const { data, error: loadError } = await supabase
+      let query = supabase
         .from('operations')
         .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id')
-        .eq('workspace_id', workspaceId)
+        .eq('workspace_id', workspaceId);
+
+      if (dateFrom) query = query.gte('operation_date', dateFrom);
+      if (dateTo) query = query.lte('operation_date', dateTo);
+
+      const { data, error: loadError } = await query
         .order('operation_date', { ascending: false })
         .order('created_at', { ascending: false });
 
@@ -188,7 +194,7 @@ export function useOperations(workspaceId) {
     } finally {
       setLoading(false);
     }
-  }, [workspaceId]);
+  }, [workspaceId, dateFrom, dateTo]);
 
   const refresh = useCallback(async () => {
     await loadOperations();

@@ -10,8 +10,10 @@ import useTags from '../hooks/useTags';
 import AddOperationModal from '../components/AddOperationModal';
 import EditOperationModal from '../components/EditOperationModal';
 import QuickButtonsSettings from '../components/QuickButtonsSettings';
+import MonthPicker from '../components/MonthPicker';
 import { Pencil, Trash2, ChevronDown, X, Plus } from 'lucide-react';
 import { formatSignedAmount } from '../utils/formatters';
+import { getMonthRange } from '../utils/dateRange';
 
 const OPERATION_TYPES = {
   income: { label: 'Доход',    sign: '+', color: 'text-green-600' },
@@ -23,15 +25,6 @@ function formatOperationDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Без даты';
   return date.toLocaleDateString('ru-RU');
-}
-
-function isDateInCurrentMonth(value) {
-  if (!value) return false;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return false;
-
-  const now = new Date();
-  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
 }
 
 function getDefaultType(searchParams) {
@@ -49,6 +42,17 @@ export function OperationPage() {
 
   const workspaceId = params.workspaceId || searchParams.get('workspaceId') || workspaceIdFromContext;
 
+  // Month selection state
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const now = new Date();
+    return { year: now.getFullYear(), month: now.getMonth() };
+  });
+
+  const { dateFrom, dateTo } = useMemo(
+    () => getMonthRange(selectedMonth.year, selectedMonth.month),
+    [selectedMonth.year, selectedMonth.month]
+  );
+
   const {
     operations,
     loading,
@@ -56,7 +60,7 @@ export function OperationPage() {
     addOperation,
     updateOperation,
     deleteOperation
-  } = useOperations(workspaceId);
+  } = useOperations(workspaceId, { dateFrom, dateTo });
 
   const { categories } = useCategories(workspaceId);
   const { tags } = useTags(workspaceId);
@@ -91,16 +95,10 @@ export function OperationPage() {
     }
   };
 
-  const monthlyOperations = useMemo(() => (
-    (operations || []).filter((operation) => (
-      isDateInCurrentMonth(operation.operation_date || operation.created_at)
-    ))
-  ), [operations]);
-
   const visibleOperations = useMemo(() => {
     let filtered = filterType
-      ? monthlyOperations.filter((op) => op.type === filterType)
-      : [...monthlyOperations];
+      ? (operations || []).filter((op) => op.type === filterType)
+      : [...(operations || [])];
 
     if (filterCategory)
       filtered = filtered.filter((op) => op.category_id === filterCategory);
@@ -121,12 +119,12 @@ export function OperationPage() {
       }
       return sortDir === 'asc' ? valA - valB : valB - valA;
     });
-  }, [monthlyOperations, filterType, filterCategory, filterTags, sortField, sortDir]);
+  }, [operations, filterType, filterCategory, filterTags, sortField, sortDir]);
 
   useEffect(() => {
     const loadEmails = async () => {
       const ids = Array.from(new Set(
-        monthlyOperations
+        (operations || [])
           .map((operation) => operation.user_id)
           .filter(Boolean)
       ));
@@ -145,7 +143,7 @@ export function OperationPage() {
     };
 
     loadEmails();
-  }, [monthlyOperations]);
+  }, [operations]);
 
   const closeModal = () => {
     setIsModalOpen(false);
@@ -250,8 +248,12 @@ export function OperationPage() {
 
   return (
     <div className="max-w-3xl mx-auto p-4 pb-24">
-      <header className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">Операции за текущий месяц</h1>
+      <header className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <MonthPicker
+          year={selectedMonth.year}
+          month={selectedMonth.month}
+          onChange={setSelectedMonth}
+        />
         <button onClick={goBack} className="btn-secondary">
           Назад
         </button>
@@ -353,7 +355,7 @@ export function OperationPage() {
 
         {filterType && (
           <span className="text-xs text-gray-400">
-            {visibleOperations.length} из {monthlyOperations.length}
+            {visibleOperations.length} из {operations.length}
           </span>
         )}
 
@@ -466,7 +468,7 @@ export function OperationPage() {
       </div>
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 divide-y divide-gray-100">
-        {loading && monthlyOperations.length === 0 ? (
+        {loading && operations.length === 0 ? (
           <div className="p-8 text-center text-gray-500">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
             <p className="mt-3">Загрузка операций...</p>
@@ -475,7 +477,7 @@ export function OperationPage() {
           <div className="p-8 text-center text-gray-500">
             {filterType || filterCategory || filterTags.length > 0
               ? 'Нет операций, соответствующих фильтру.'
-              : 'В этом месяце операций пока нет.'}
+              : 'В этом месяце операций нет.'}
           </div>
         ) : (
           visibleOperations.map((operation) => {
