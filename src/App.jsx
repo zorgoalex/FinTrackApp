@@ -15,6 +15,7 @@ const WorkspaceSettingsPage = lazy(() => import('./pages/WorkspaceSettingsPage')
 const OperationPage = lazy(() => import('./pages/OperationPage').then(m => ({ default: m.OperationPage })));
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'));
 const DictionariesPage = lazy(() => import('./pages/DictionariesPage'));
+const ScheduledPage = lazy(() => import('./pages/ScheduledPage'));
 const InvitationAcceptPage = lazy(() => import('./pages/InvitationAcceptPage'));
 
 function LoadingFallback() {
@@ -89,6 +90,16 @@ const router = createBrowserRouter([
       {
         index: true,
         element: <AnalyticsPage />
+      }
+    ]
+  },
+  {
+    path: '/scheduled',
+    element: protectedLayoutWithWorkspace,
+    children: [
+      {
+        index: true,
+        element: <ScheduledPage />
       }
     ]
   },

@@ -252,7 +252,7 @@ export default function WorkspaceSettingsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-4xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-4xl mx-auto py-6 px-4 sm:px-6 lg:px-8" data-testid="settings-page">
         {/* Заголовок */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Настройки рабочего пространства</h1>
@@ -263,13 +263,14 @@ export default function WorkspaceSettingsPage() {
 
         {/* Табы */}
         <div className="border-b border-gray-200 mb-6">
-          <nav className="-mb-px flex space-x-8">
+          <nav className="-mb-px flex space-x-8" data-testid="settings-tabs">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
+                  data-testid={`settings-tab-${tab.id}`}
                   className={`flex items-center py-2 px-1 border-b-2 font-medium text-sm ${
                     activeTab === tab.id
                       ? 'border-blue-500 text-blue-600'
