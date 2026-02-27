@@ -65,9 +65,10 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
   const set = (field) => (e) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
-  const filteredCategories = form.type === 'salary'
+  const filteredCategories = (form.type === 'salary'
     ? categories.filter((c) => c.type === 'expense')
-    : categories.filter((c) => c.type === form.type);
+    : categories.filter((c) => c.type === form.type)
+  ).filter((c) => !c.is_archived);
 
   const handleAddCategory = async () => {
     if (!newCatName.trim()) return;

@@ -373,7 +373,7 @@ export function OperationPage() {
           <option value="">Все категории</option>
           {categories.map((c) => (
             <option key={c.id} value={c.id}>
-              {c.name} ({c.type === 'income' ? 'доход' : 'расход'})
+              {c.name} ({c.type === 'income' ? 'доход' : 'расход'}){c.is_archived ? ' (архив)' : ''}
             </option>
           ))}
         </select>

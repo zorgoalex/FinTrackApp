@@ -41,9 +41,10 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
   const set = (field) => (e) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
-  const filteredCategories = operation.type === 'salary'
+  const filteredCategories = (operation.type === 'salary'
     ? categories.filter((c) => c.type === 'expense')
-    : categories.filter((c) => c.type === operation.type);
+    : categories.filter((c) => c.type === operation.type)
+  ).filter((c) => !c.is_archived || c.id === form.categoryId);
 
   const handleAddCategory = async () => {
     if (!newCatName.trim()) return;

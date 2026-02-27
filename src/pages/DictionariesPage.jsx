@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Pencil, Trash2, Plus, X, Check } from 'lucide-react';
+import { Pencil, Trash2, Plus, X, Check, Archive, ArchiveRestore } from 'lucide-react';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { useCategories } from '../hooks/useCategories';
@@ -63,9 +63,10 @@ export default function DictionariesPage() {
 
 /* ─── Categories Tab ─── */
 function CategoriesTab({ workspaceId, canEdit }) {
-  const { categories, loading, error, addCategory, updateCategory, deleteCategory } = useCategories(workspaceId);
+  const { categories, loading, error, addCategory, updateCategory, deleteCategory, archiveCategory, unarchiveCategory } = useCategories(workspaceId);
   const [editingId, setEditingId] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [form, setForm] = useState({ name: '', type: 'expense', color: '#6B7280' });
   const [saving, setSaving] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
@@ -104,13 +105,41 @@ function CategoriesTab({ workspaceId, canEdit }) {
     }
   };
 
+  const handleArchive = async (id) => {
+    const result = await archiveCategory(id);
+    if (result?.error) {
+      setDeleteError(result.error);
+    }
+  };
+
+  const handleUnarchive = async (id) => {
+    const result = await unarchiveCategory(id);
+    if (result?.error) {
+      setDeleteError(result.error);
+    }
+  };
+
   if (loading) return <p className="text-sm text-gray-500">Загрузка...</p>;
   if (error) return <p className="text-sm text-red-500">{error}</p>;
+
+  const visibleCategories = showArchived ? categories : categories.filter((c) => !c.is_archived);
 
   return (
     <div className="space-y-2">
       {deleteError && <DeleteAlert message={deleteError} onClose={clearDeleteError} />}
-      {categories.map((cat) =>
+
+      <div className="flex justify-end mb-1">
+        <button
+          data-testid="archive-toggle"
+          onClick={() => setShowArchived((v) => !v)}
+          className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded px-2 py-1"
+        >
+          {showArchived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+          {showArchived ? 'Скрыть архивные' : 'Показать архивные'}
+        </button>
+      </div>
+
+      {visibleCategories.map((cat) =>
         editingId === cat.id ? (
           <InlineCategoryForm
             key={cat.id}
@@ -123,7 +152,7 @@ function CategoriesTab({ workspaceId, canEdit }) {
         ) : (
           <div
             key={cat.id}
-            className="flex items-center justify-between bg-white border border-gray-200 rounded-lg px-4 py-2"
+            className={`flex items-center justify-between bg-white border border-gray-200 rounded-lg px-4 py-2${cat.is_archived ? ' opacity-60' : ''}`}
           >
             <div className="flex items-center gap-2">
               <span
@@ -140,15 +169,45 @@ function CategoriesTab({ workspaceId, canEdit }) {
               >
                 {cat.type === 'income' ? 'Доход' : 'Расход'}
               </span>
+              {cat.is_archived && (
+                <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">архив</span>
+              )}
             </div>
             {canEdit && (
               <div className="flex items-center gap-1">
-                <button onClick={() => startEdit(cat)} className="p-1 text-gray-400 hover:text-blue-600">
-                  <Pencil size={16} />
-                </button>
-                <button onClick={() => handleDelete(cat.id)} className="p-1 text-gray-400 hover:text-red-600">
-                  <Trash2 size={16} />
-                </button>
+                {!cat.is_archived && (
+                  <button onClick={() => startEdit(cat)} className="p-1 text-gray-400 hover:text-blue-600">
+                    <Pencil size={16} />
+                  </button>
+                )}
+                {!cat.is_archived ? (
+                  <button
+                    data-testid={`archive-btn-${cat.id}`}
+                    onClick={() => handleArchive(cat.id)}
+                    className="p-1 text-gray-400 hover:text-orange-500"
+                    title="Архивировать"
+                  >
+                    <Archive size={16} />
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      data-testid={`unarchive-btn-${cat.id}`}
+                      onClick={() => handleUnarchive(cat.id)}
+                      className="p-1 text-gray-400 hover:text-blue-600"
+                      title="Разархивировать"
+                    >
+                      <ArchiveRestore size={16} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(cat.id)}
+                      className="p-1 text-gray-400 hover:text-red-600"
+                      title="Удалить"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -218,9 +277,10 @@ function InlineCategoryForm({ form, setForm, onSave, onCancel, saving }) {
 
 /* ─── Tags Tab ─── */
 function TagsTab({ workspaceId, canEdit }) {
-  const { tags, loading, error, addTag, updateTag, deleteTag } = useTags(workspaceId);
+  const { tags, loading, error, addTag, updateTag, deleteTag, archiveTag, unarchiveTag } = useTags(workspaceId);
   const [editingId, setEditingId] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [form, setForm] = useState({ name: '', color: '#6B7280' });
   const [saving, setSaving] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
@@ -259,13 +319,41 @@ function TagsTab({ workspaceId, canEdit }) {
     }
   };
 
+  const handleArchive = async (id) => {
+    const result = await archiveTag(id);
+    if (result?.error) {
+      setDeleteError(result.error);
+    }
+  };
+
+  const handleUnarchive = async (id) => {
+    const result = await unarchiveTag(id);
+    if (result?.error) {
+      setDeleteError(result.error);
+    }
+  };
+
   if (loading) return <p className="text-sm text-gray-500">Загрузка...</p>;
   if (error) return <p className="text-sm text-red-500">{error}</p>;
+
+  const visibleTags = showArchived ? tags : tags.filter((t) => !t.is_archived);
 
   return (
     <div className="space-y-2">
       {deleteError && <DeleteAlert message={deleteError} onClose={clearDeleteError} />}
-      {tags.map((tag) =>
+
+      <div className="flex justify-end mb-1">
+        <button
+          data-testid="archive-toggle"
+          onClick={() => setShowArchived((v) => !v)}
+          className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded px-2 py-1"
+        >
+          {showArchived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+          {showArchived ? 'Скрыть архивные' : 'Показать архивные'}
+        </button>
+      </div>
+
+      {visibleTags.map((tag) =>
         editingId === tag.id ? (
           <InlineTagForm
             key={tag.id}
@@ -278,7 +366,7 @@ function TagsTab({ workspaceId, canEdit }) {
         ) : (
           <div
             key={tag.id}
-            className="flex items-center justify-between bg-white border border-gray-200 rounded-lg px-4 py-2"
+            className={`flex items-center justify-between bg-white border border-gray-200 rounded-lg px-4 py-2${tag.is_archived ? ' opacity-60' : ''}`}
           >
             <div className="flex items-center gap-2">
               <span
@@ -286,15 +374,45 @@ function TagsTab({ workspaceId, canEdit }) {
                 style={{ backgroundColor: tag.color || '#6B7280' }}
               />
               <span className="text-sm text-gray-900">{tag.name}</span>
+              {tag.is_archived && (
+                <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">архив</span>
+              )}
             </div>
             {canEdit && (
               <div className="flex items-center gap-1">
-                <button onClick={() => startEdit(tag)} className="p-1 text-gray-400 hover:text-blue-600">
-                  <Pencil size={16} />
-                </button>
-                <button onClick={() => handleDelete(tag.id)} className="p-1 text-gray-400 hover:text-red-600">
-                  <Trash2 size={16} />
-                </button>
+                {!tag.is_archived && (
+                  <button onClick={() => startEdit(tag)} className="p-1 text-gray-400 hover:text-blue-600">
+                    <Pencil size={16} />
+                  </button>
+                )}
+                {!tag.is_archived ? (
+                  <button
+                    data-testid={`archive-btn-${tag.id}`}
+                    onClick={() => handleArchive(tag.id)}
+                    className="p-1 text-gray-400 hover:text-orange-500"
+                    title="Архивировать"
+                  >
+                    <Archive size={16} />
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      data-testid={`unarchive-btn-${tag.id}`}
+                      onClick={() => handleUnarchive(tag.id)}
+                      className="p-1 text-gray-400 hover:text-blue-600"
+                      title="Разархивировать"
+                    >
+                      <ArchiveRestore size={16} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(tag.id)}
+                      className="p-1 text-gray-400 hover:text-red-600"
+                      title="Удалить"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>

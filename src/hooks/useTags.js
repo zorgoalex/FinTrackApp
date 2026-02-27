@@ -16,7 +16,7 @@ export function useTags(workspaceId) {
       setError(null);
       const { data, error: loadErr } = await supabase
         .from('tags')
-        .select('id, workspace_id, name, color')
+        .select('id, workspace_id, name, color, is_archived')
         .eq('workspace_id', workspaceId)
         .order('name', { ascending: true });
 
@@ -38,7 +38,7 @@ export function useTags(workspaceId) {
       // SELECT first to avoid upsert requiring UPDATE policy
       const { data: existing } = await supabase
         .from('tags')
-        .select('id, workspace_id, name, color')
+        .select('id, workspace_id, name, color, is_archived')
         .eq('workspace_id', workspaceId)
         .eq('name', trimmed)
         .maybeSingle();
@@ -47,7 +47,7 @@ export function useTags(workspaceId) {
       const { data, error: insertErr } = await supabase
         .from('tags')
         .insert({ workspace_id: workspaceId, name: trimmed, color: color || '#6B7280' })
-        .select('id, workspace_id, name, color')
+        .select('id, workspace_id, name, color, is_archived')
         .single();
 
       if (insertErr) throw insertErr;
@@ -102,7 +102,7 @@ export function useTags(workspaceId) {
         .update(updates)
         .eq('id', id)
         .eq('workspace_id', workspaceId)
-        .select('id, workspace_id, name, color')
+        .select('id, workspace_id, name, color, is_archived')
         .single();
 
       if (updateErr) throw updateErr;
@@ -144,11 +144,51 @@ export function useTags(workspaceId) {
     }
   }, [workspaceId, loadTags]);
 
+  const archiveTag = useCallback(async (id) => {
+    if (!workspaceId) return { error: 'Нет рабочего пространства' };
+    try {
+      const { error: updateErr } = await supabase
+        .from('tags')
+        .update({ is_archived: true })
+        .eq('id', id)
+        .eq('workspace_id', workspaceId);
+
+      if (updateErr) throw updateErr;
+      await loadTags();
+      return { success: true };
+    } catch (e) {
+      console.error('useTags: archive error', e);
+      const msg = e.message || 'Ошибка архивации тега';
+      setError(msg);
+      return { error: msg };
+    }
+  }, [workspaceId, loadTags]);
+
+  const unarchiveTag = useCallback(async (id) => {
+    if (!workspaceId) return { error: 'Нет рабочего пространства' };
+    try {
+      const { error: updateErr } = await supabase
+        .from('tags')
+        .update({ is_archived: false })
+        .eq('id', id)
+        .eq('workspace_id', workspaceId);
+
+      if (updateErr) throw updateErr;
+      await loadTags();
+      return { success: true };
+    } catch (e) {
+      console.error('useTags: unarchive error', e);
+      const msg = e.message || 'Ошибка разархивации тега';
+      setError(msg);
+      return { error: msg };
+    }
+  }, [workspaceId, loadTags]);
+
   useEffect(() => {
     loadTags();
   }, [loadTags]);
 
-  return { tags, loading, error, addTag, updateTag, deleteTag, findOrCreateTag, refresh: loadTags };
+  return { tags, loading, error, addTag, updateTag, deleteTag, archiveTag, unarchiveTag, findOrCreateTag, refresh: loadTags };
 }
 
 export default useTags;

@@ -16,7 +16,7 @@ export function useCategories(workspaceId) {
       setError(null);
       const { data, error: loadErr } = await supabase
         .from('categories')
-        .select('id, workspace_id, name, type, color')
+        .select('id, workspace_id, name, type, color, is_archived')
         .eq('workspace_id', workspaceId)
         .order('name', { ascending: true });
 
@@ -37,7 +37,7 @@ export function useCategories(workspaceId) {
       const { data, error: insertErr } = await supabase
         .from('categories')
         .insert([{ workspace_id: workspaceId, name: name.trim(), type, color: color || '#6B7280' }])
-        .select('id, workspace_id, name, type, color')
+        .select('id, workspace_id, name, type, color, is_archived')
         .single();
 
       if (insertErr) throw insertErr;
@@ -63,7 +63,7 @@ export function useCategories(workspaceId) {
         .update(updates)
         .eq('id', id)
         .eq('workspace_id', workspaceId)
-        .select('id, workspace_id, name, type, color')
+        .select('id, workspace_id, name, type, color, is_archived')
         .single();
 
       if (updateErr) throw updateErr;
@@ -106,11 +106,51 @@ export function useCategories(workspaceId) {
     }
   }, [workspaceId, loadCategories]);
 
+  const archiveCategory = useCallback(async (id) => {
+    if (!workspaceId) return { error: 'Нет рабочего пространства' };
+    try {
+      const { error: updateErr } = await supabase
+        .from('categories')
+        .update({ is_archived: true })
+        .eq('id', id)
+        .eq('workspace_id', workspaceId);
+
+      if (updateErr) throw updateErr;
+      await loadCategories();
+      return { success: true };
+    } catch (e) {
+      console.error('useCategories: archive error', e);
+      const msg = e.message || 'Ошибка архивации категории';
+      setError(msg);
+      return { error: msg };
+    }
+  }, [workspaceId, loadCategories]);
+
+  const unarchiveCategory = useCallback(async (id) => {
+    if (!workspaceId) return { error: 'Нет рабочего пространства' };
+    try {
+      const { error: updateErr } = await supabase
+        .from('categories')
+        .update({ is_archived: false })
+        .eq('id', id)
+        .eq('workspace_id', workspaceId);
+
+      if (updateErr) throw updateErr;
+      await loadCategories();
+      return { success: true };
+    } catch (e) {
+      console.error('useCategories: unarchive error', e);
+      const msg = e.message || 'Ошибка разархивации категории';
+      setError(msg);
+      return { error: msg };
+    }
+  }, [workspaceId, loadCategories]);
+
   useEffect(() => {
     loadCategories();
   }, [loadCategories]);
 
-  return { categories, loading, error, addCategory, updateCategory, deleteCategory, refresh: loadCategories };
+  return { categories, loading, error, addCategory, updateCategory, deleteCategory, archiveCategory, unarchiveCategory, refresh: loadCategories };
 }
 
 export default useCategories;
