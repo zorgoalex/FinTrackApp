@@ -6,6 +6,8 @@ import { formatUnsignedAmount } from '../utils/formatters';
 import { getMonthRange, formatMonthYear } from '../utils/dateRange';
 import { startOfYear, endOfYear, subMonths, format } from 'date-fns';
 import { ru } from 'date-fns/locale';
+import { exportToCSV, buildTextReport } from '../utils/export';
+import { Download, Copy } from 'lucide-react';
 
 const PERIODS = [
   { key: 'current', label: 'Текущий месяц' },
@@ -54,6 +56,7 @@ export default function AnalyticsPage() {
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [breakdownTab, setBreakdownTab] = useState('categories');
+  const [copied, setCopied] = useState(false);
 
   const { dateFrom, dateTo } = useMemo(() => {
     if (period === 'custom' && customFrom && customTo) {
@@ -75,6 +78,29 @@ export default function AnalyticsPage() {
   const { totalIncome, totalExpense, totalSalary, balance, categoryBreakdown, tagBreakdown, operationCount } = analytics;
   const maxCategoryAmount = Math.max(...categoryBreakdown.map(c => c.amount), 1);
   const maxTagAmount = Math.max(...tagBreakdown.map(t => t.amount), 1);
+
+  const handleExportCSV = () => {
+    exportToCSV(analytics, dateFrom, dateTo);
+  };
+
+  const handleCopyReport = async () => {
+    const text = buildTextReport(analytics, dateFrom, dateTo);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   return (
     <div className="max-w-3xl mx-auto p-4 pb-24" data-testid="analytics-page">
@@ -158,6 +184,26 @@ export default function AnalyticsPage() {
           ) : (
             <BreakdownTable items={tagBreakdown} maxAmount={maxTagAmount} emptyText="Нет данных по тегам" />
           )}
+
+          {/* Export buttons */}
+          <div className="flex gap-2 mt-6" data-testid="export-buttons">
+            <button
+              onClick={handleExportCSV}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 text-sm font-medium transition-colors"
+              data-testid="export-csv"
+            >
+              <Download size={16} />
+              Скачать CSV
+            </button>
+            <button
+              onClick={handleCopyReport}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 text-sm font-medium transition-colors"
+              data-testid="export-copy"
+            >
+              <Copy size={16} />
+              {copied ? 'Скопировано!' : 'Копировать отчёт'}
+            </button>
+          </div>
         </>
       )}
     </div>

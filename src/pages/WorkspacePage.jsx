@@ -7,6 +7,7 @@ import AddOperationModal from '../components/AddOperationModal';
 import QuickButtonsSettings from '../components/QuickButtonsSettings';
 import { Plus } from 'lucide-react';
 import { formatUnsignedAmount, formatSignedAmount as formatBalance } from '../utils/formatters';
+import useCategories from '../hooks/useCategories';
 
 function formatSignedAmount(value) {
   return formatBalance(value >= 0 ? 'income' : 'expense', value);
@@ -31,6 +32,7 @@ export default function WorkspacePage() {
   const [showQuickSettings, setShowQuickSettings] = useState(false);
   const { hasManagementRights, canCreateOperations } = usePermissions();
   const quickButtons = currentWorkspace?.quick_buttons || [];
+  const { categories } = useCategories(workspaceId);
 
   // Режим итоговых блоков: 'compact' | 'expanded'
   const [summaryMode, setSummaryMode] = useState(
@@ -71,6 +73,26 @@ export default function WorkspacePage() {
   const monthTotalColor = useMemo(() => (
     (summary?.month?.total || 0) >= 0 ? 'text-green-600' : 'text-red-600'
   ), [summary?.month?.total]);
+
+  const topExpenseCategories = useMemo(() => {
+    if (!operations || !categories || categories.length === 0) return [];
+
+    const catMap = new Map();
+    operations.forEach(op => {
+      if ((op.type === 'expense' || op.type === 'salary') && op.category_id) {
+        const existing = catMap.get(op.category_id) || 0;
+        catMap.set(op.category_id, existing + Number(op.amount || 0));
+      }
+    });
+
+    return Array.from(catMap.entries())
+      .map(([catId, amount]) => {
+        const cat = categories.find(c => c.id === catId);
+        return { id: catId, name: cat?.name || 'Без категории', color: cat?.color || '#6B7280', amount };
+      })
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 3);
+  }, [operations, categories]);
 
   const goToWorkspaceSelect = () => {
     navigate('/workspaces');
@@ -227,6 +249,24 @@ export default function WorkspacePage() {
                         <div>Расходы: <span className="text-red-600 font-medium">−{formatUnsignedAmount(expense)}</span></div>
                         <div>Зарплаты: <span className="text-blue-600 font-medium">−{formatUnsignedAmount(salary)}</span></div>
                       </div>
+                      {key === 'month' && topExpenseCategories.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-gray-100" data-testid="top-categories">
+                          <div className="text-xs text-gray-400 mb-1">Топ расходов:</div>
+                          {topExpenseCategories.map(cat => {
+                            const maxAmt = topExpenseCategories[0]?.amount || 1;
+                            return (
+                              <div key={cat.id} className="flex items-center gap-2 mb-1">
+                                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+                                <span className="text-xs text-gray-600 truncate flex-1">{cat.name}</span>
+                                <span className="text-xs font-medium text-gray-700">{formatUnsignedAmount(cat.amount)}</span>
+                                <div className="w-16 bg-gray-100 rounded-full h-1.5">
+                                  <div className="h-1.5 rounded-full" style={{ width: `${Math.round((cat.amount / maxAmt) * 100)}%`, backgroundColor: cat.color }} />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                       <button onClick={openAnalytics} className="mt-2 text-xs text-blue-600 hover:text-blue-800">
                         Детали →
                       </button>
