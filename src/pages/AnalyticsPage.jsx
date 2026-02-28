@@ -69,7 +69,7 @@ export default function AnalyticsPage() {
 
   if (!workspaceId) {
     return (
-      <div className="max-w-2xl mx-auto p-4 text-center text-gray-500">
+      <div className="max-w-2xl mx-auto p-4 text-center text-gray-500 dark:text-gray-400">
         Выберите рабочее пространство.
       </div>
     );
@@ -104,7 +104,7 @@ export default function AnalyticsPage() {
 
   return (
     <div className="max-w-2xl mx-auto p-4 pb-24" data-testid="analytics-page">
-      <h1 className="text-xl font-semibold text-gray-900 mb-4">Аналитика</h1>
+      <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">Аналитика</h1>
 
       {/* Period selector */}
       <div className="flex flex-wrap gap-2 mb-4" data-testid="period-selector">
@@ -114,8 +114,8 @@ export default function AnalyticsPage() {
             onClick={() => setPeriod(p.key)}
             className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
               period === p.key
-                ? 'bg-blue-600 text-white border-blue-600'
-                : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
+                ? 'bg-primary-600 dark:bg-primary-500 text-white border-primary-600 dark:border-primary-500'
+                : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:border-primary-400'
             }`}
           >
             {p.label}
@@ -134,37 +134,37 @@ export default function AnalyticsPage() {
       )}
 
       {/* Period info */}
-      <p className="text-sm text-gray-500 mb-4">
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
         Период: {dateFrom} — {dateTo} · {operationCount} операций
       </p>
 
       {loading && (
         <div className="text-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-3 text-gray-500">Загрузка...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 dark:border-primary-400 mx-auto"></div>
+          <p className="mt-3 text-gray-500 dark:text-gray-400">Загрузка...</p>
         </div>
       )}
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 mb-4">{error}</div>
+        <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl p-3 text-sm text-red-700 dark:text-red-400 mb-4">{error}</div>
       )}
 
       {!loading && !error && (
         <>
           {/* Summary cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6" data-testid="summary-cards">
-            <SummaryCard label="Доходы" amount={totalIncome} color="text-green-600" bg="bg-green-50" />
-            <SummaryCard label="Расходы" amount={totalExpense} color="text-red-600" bg="bg-red-50" />
-            <SummaryCard label="Зарплаты" amount={totalSalary} color="text-blue-600" bg="bg-blue-50" />
-            <SummaryCard label="Баланс" amount={balance} color={balance >= 0 ? 'text-green-700' : 'text-red-700'} bg="bg-gray-50" />
+            <SummaryCard label="Доходы" amount={totalIncome} color="text-green-600" bg="bg-green-50 dark:bg-green-900/30" />
+            <SummaryCard label="Расходы" amount={totalExpense} color="text-red-600" bg="bg-red-50 dark:bg-red-900/30" />
+            <SummaryCard label="Зарплаты" amount={totalSalary} color="text-primary-600 dark:text-primary-400" bg="bg-primary-50 dark:bg-primary-900/30" />
+            <SummaryCard label="Баланс" amount={balance} color={balance >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'} bg="bg-gray-50 dark:bg-gray-800" />
           </div>
 
           {/* Breakdown tabs (mobile) */}
-          <div className="flex border-b border-gray-200 mb-4">
+          <div className="flex border-b border-gray-200 dark:border-gray-700 mb-4">
             <button
               onClick={() => setBreakdownTab('categories')}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                breakdownTab === 'categories' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                breakdownTab === 'categories' ? 'border-primary-600 dark:border-primary-400 text-primary-600 dark:text-primary-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
               }`}
             >
               По категориям
@@ -172,7 +172,7 @@ export default function AnalyticsPage() {
             <button
               onClick={() => setBreakdownTab('tags')}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                breakdownTab === 'tags' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                breakdownTab === 'tags' ? 'border-primary-600 dark:border-primary-400 text-primary-600 dark:text-primary-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
               }`}
             >
               По тегам
@@ -189,7 +189,7 @@ export default function AnalyticsPage() {
           <div className="flex gap-2 mt-6" data-testid="export-buttons">
             <button
               onClick={handleExportCSV}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 text-sm font-medium transition-colors"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/50 text-sm font-medium transition-colors"
               data-testid="export-csv"
             >
               <Download size={16} />
@@ -197,7 +197,7 @@ export default function AnalyticsPage() {
             </button>
             <button
               onClick={handleCopyReport}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 text-sm font-medium transition-colors"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 border border-primary-200 dark:border-primary-800 hover:bg-primary-100 dark:hover:bg-primary-900/50 text-sm font-medium transition-colors"
               data-testid="export-copy"
             >
               <Copy size={16} />
@@ -212,8 +212,8 @@ export default function AnalyticsPage() {
 
 function SummaryCard({ label, amount, color, bg }) {
   return (
-    <div className={`${bg} rounded-lg p-3 border border-gray-100`}>
-      <p className="text-xs text-gray-500 mb-1">{label}</p>
+    <div className={`${bg} rounded-xl p-3 border border-gray-100 dark:border-gray-700`}>
+      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{label}</p>
       <p className={`text-lg font-semibold tabular-nums ${color}`}>{formatUnsignedAmount(amount)}</p>
     </div>
   );
@@ -221,22 +221,22 @@ function SummaryCard({ label, amount, color, bg }) {
 
 function BreakdownTable({ items, maxAmount, emptyText }) {
   if (items.length === 0) {
-    return <p className="text-sm text-gray-500 text-center py-4">{emptyText}</p>;
+    return <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">{emptyText}</p>;
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 divide-y divide-gray-100">
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
       {items.map((item, i) => (
         <div key={item.categoryId || item.tagId || i} className="px-4 py-3">
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
-              <span className="text-sm font-medium text-gray-900">{item.name}</span>
-              <span className="text-xs text-gray-400">{item.count} оп.</span>
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.name}</span>
+              <span className="text-xs text-gray-400 dark:text-gray-500">{item.count} оп.</span>
             </div>
-            <span className="text-sm font-semibold text-gray-900">{formatUnsignedAmount(item.amount)}</span>
+            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatUnsignedAmount(item.amount)}</span>
           </div>
-          <div className="w-full bg-gray-100 rounded-full h-2">
+          <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2">
             <div
               className="h-2 rounded-full transition-all"
               style={{

@@ -8,8 +8,8 @@ export default function Toast({ message, type = 'success', onClose, duration = 3
   }, [onClose, duration]);
 
   const styles = {
-    success: 'bg-green-50 border-green-200 text-green-800',
-    error: 'bg-red-50 border-red-200 text-red-800',
+    success: 'bg-green-50 dark:bg-green-900/80 border-green-200 dark:border-green-700 text-green-800 dark:text-green-300',
+    error: 'bg-red-50 dark:bg-red-900/80 border-red-200 dark:border-red-700 text-red-800 dark:text-red-300',
   };
 
   const Icon = type === 'success' ? CheckCircle : XCircle;

@@ -83,7 +83,7 @@ const TagInput = forwardRef(function TagInput(
           {selected.map((tag, i) => (
             <span
               key={tag.id || tag.name}
-              className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200"
+              className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700"
             >
               #{tag.name}
               <button
@@ -116,14 +116,14 @@ const TagInput = forwardRef(function TagInput(
 
       {/* Suggestions dropdown */}
       {showSuggestions && filtered.length > 0 && (
-        <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+        <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg max-h-40 overflow-y-auto">
           {filtered.map((tag) => (
             <button
               key={tag.id}
               type="button"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => addTag(tag)}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 transition-colors"
+              className="w-full text-left px-3 py-2 text-sm text-gray-900 dark:text-gray-100 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors"
             >
               #{tag.name}
             </button>

@@ -90,9 +90,9 @@ export default function WorkspaceSwitcher() {
     // which on mobile could catch a phantom touch event and redirect to /workspaces.
     if (loading || workspaceId) {
       return (
-        <div className="flex items-center space-x-2 px-3 py-2 bg-gray-100 rounded-md animate-pulse">
-          <Building2 size={16} className="text-gray-400" />
-          <span className="text-sm text-gray-500">Загрузка...</span>
+        <div className="flex items-center space-x-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded-md animate-pulse">
+          <Building2 size={16} className="text-gray-400 dark:text-gray-500" />
+          <span className="text-sm text-gray-500 dark:text-gray-400">Загрузка...</span>
         </div>
       );
     }
@@ -100,10 +100,10 @@ export default function WorkspaceSwitcher() {
     return (
       <button
         onClick={() => navigate('/workspaces')}
-        className="flex items-center space-x-2 px-3 py-2 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors"
+        className="flex items-center space-x-2 px-3 py-2 bg-primary-50 dark:bg-primary-900/30 hover:bg-primary-100 dark:hover:bg-primary-900/50 rounded-md transition-colors"
       >
-        <Building2 size={16} className="text-blue-600" />
-        <span className="text-sm text-blue-700">Выбрать пространство</span>
+        <Building2 size={16} className="text-primary-600 dark:text-primary-400" />
+        <span className="text-sm text-primary-700 dark:text-primary-400">Выбрать пространство</span>
       </button>
     );
   }
@@ -116,11 +116,11 @@ export default function WorkspaceSwitcher() {
       {/* Кнопка переключателя */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center space-x-2 px-3 py-2 bg-white hover:bg-gray-50 border border-gray-200 rounded-md transition-colors min-w-48"
+        className="flex items-center space-x-2 px-3 py-2 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-750 border border-gray-200 dark:border-gray-700 rounded-xl transition-colors min-w-48"
       >
-        <Building2 size={16} className="text-gray-600" />
+        <Building2 size={16} className="text-gray-600 dark:text-gray-400" />
         <div className="flex-1 text-left">
-          <div className="text-sm font-medium text-gray-900 truncate">
+          <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
             {currentWorkspace.name}
           </div>
           <div className={`text-xs ${roleColors[currentWorkspaceRole]} flex items-center`}>
@@ -137,19 +137,19 @@ export default function WorkspaceSwitcher() {
       {/* Выпадающий список */}
       {isOpen && (
         <div
-          className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50"
+          className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-50"
           onClick={(e) => e.stopPropagation()}
           onTouchEnd={(e) => e.stopPropagation()}
         >
           {/* Поиск */}
           {(allWorkspaces || []).length > 3 && (
-            <div className="p-3 border-b border-gray-100">
+            <div className="p-3 border-b border-gray-100 dark:border-gray-700">
               <input
                 type="text"
                 placeholder="Поиск пространств..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 autoFocus
               />
             </div>
@@ -171,21 +171,21 @@ export default function WorkspaceSwitcher() {
                     onClick={() => handleWorkspaceSelect(workspace.id)}
                     className={`w-full flex items-center space-x-3 px-3 py-3 text-left transition-colors border-l-2 ${
                       isForeignWorkspace
-                        ? 'bg-blue-50 border-blue-300 hover:bg-blue-100'
-                        : 'bg-white border-transparent hover:bg-gray-50'
-                    } ${isActive ? 'border-r-2 border-r-blue-500' : ''}`}
+                        ? 'bg-primary-50 dark:bg-primary-900/20 border-primary-300 dark:border-primary-700 hover:bg-primary-100 dark:hover:bg-primary-900/40'
+                        : 'bg-white dark:bg-gray-800 border-transparent hover:bg-gray-50 dark:hover:bg-gray-750'
+                    } ${isActive ? 'border-r-2 border-r-primary-500 dark:border-r-primary-400' : ''}`}
                   >
                     <Building2 
                       size={16} 
-                      className={isActive ? 'text-blue-600' : 'text-gray-400'} 
+                      className={isActive ? 'text-primary-600 dark:text-primary-400' : 'text-gray-400 dark:text-gray-500'}
                     />
                     <div className="flex-1 min-w-0">
                       <div className={`text-sm ${workspaceRole === 'owner' ? 'font-bold' : 'font-medium'} truncate ${
-                        isActive ? 'text-blue-900' : 'text-gray-900'
+                        isActive ? 'text-primary-900 dark:text-primary-300' : 'text-gray-900 dark:text-gray-100'
                       }`}>
                         {workspace.name}
                         {workspace.is_personal && (
-                          <span className="ml-2 text-xs text-gray-500">(Личное)</span>
+                          <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">(Личное)</span>
                         )}
                       </div>
                       <div className={`text-xs flex items-center ${roleColors[workspaceRole] || roleColors.member}`}>
@@ -193,29 +193,29 @@ export default function WorkspaceSwitcher() {
                         {roleLabels[workspaceRole] || roleLabels.member}
                       </div>
                       {isForeignWorkspace && ownerDisplay && (
-                        <div className="text-xs text-gray-500 truncate">
+                        <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
                           Владелец: {ownerDisplay}
                         </div>
                       )}
                     </div>
                     {isActive && (
-                      <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                      <div className="w-2 h-2 bg-primary-600 dark:bg-primary-400 rounded-full"></div>
                     )}
                   </button>
                 );
               })
             ) : (
-              <div className="px-3 py-4 text-sm text-gray-500 text-center">
+              <div className="px-3 py-4 text-sm text-gray-500 dark:text-gray-400 text-center">
                 {searchTerm ? 'Пространства не найдены' : 'Нет доступных пространств'}
               </div>
             )}
           </div>
 
           {/* Действия */}
-          <div className="border-t border-gray-100 p-2">
+          <div className="border-t border-gray-100 dark:border-gray-700 p-2">
             <button
               onClick={handleCreateNew}
-              className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+              className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-md transition-colors"
             >
               <Plus size={16} />
               <span>Создать новое пространство</span>
@@ -226,7 +226,7 @@ export default function WorkspaceSwitcher() {
                 setIsOpen(false);
                 navigate('/workspaces');
               }}
-              className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded-md transition-colors"
+              className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md transition-colors"
             >
               <Users size={16} />
               <span>Управление пространствами</span>

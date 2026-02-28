@@ -24,7 +24,7 @@ export default function MonthPicker({ year, month, onChange }) {
     <div className="flex items-center gap-2" data-testid="month-picker">
       <button
         onClick={handlePrev}
-        className="p-2 rounded-lg hover:bg-gray-100 text-gray-600 transition-colors"
+        className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 transition-colors"
         aria-label="Предыдущий месяц"
         data-testid="month-prev"
       >
@@ -32,7 +32,7 @@ export default function MonthPicker({ year, month, onChange }) {
       </button>
 
       <span
-        className="text-sm font-medium text-gray-800 min-w-[140px] text-center capitalize"
+        className="text-sm font-medium text-gray-800 dark:text-gray-200 min-w-[140px] text-center capitalize"
         data-testid="month-label"
       >
         {label}
@@ -40,7 +40,7 @@ export default function MonthPicker({ year, month, onChange }) {
 
       <button
         onClick={handleNext}
-        className="p-2 rounded-lg hover:bg-gray-100 text-gray-600 transition-colors"
+        className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 transition-colors"
         aria-label="Следующий месяц"
         data-testid="month-next"
       >
@@ -50,7 +50,7 @@ export default function MonthPicker({ year, month, onChange }) {
       {!isCurrent && (
         <button
           onClick={handleToday}
-          className="ml-1 text-xs px-2 py-1 rounded border border-blue-300 text-blue-600 hover:bg-blue-50 transition-colors"
+          className="ml-1 text-xs px-2 py-1 rounded border border-primary-300 dark:border-primary-600 text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/30 transition-colors"
           data-testid="month-today"
         >
           Сегодня

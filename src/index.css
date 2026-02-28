@@ -1,6 +1,6 @@
 :root {
   /* Brand */
-  --color-brand: #4338CA;        /* indigo-700 */
+  --color-brand: #4F46E5;        /* indigo-600 */
   --color-brand-light: #6366F1;  /* indigo-500 */
   --color-brand-bg: #EEF2FF;     /* indigo-50 */
 
@@ -9,15 +9,51 @@
   --color-income-bg: #F0FDF4;    /* green-50 */
   --color-expense: #DC2626;      /* red-600 */
   --color-expense-bg: #FEF2F2;   /* red-50 */
-  --color-salary: #2563EB;       /* blue-600 */
-  --color-salary-bg: #EFF6FF;    /* blue-50 */
+  --color-salary: #4F46E5;       /* indigo-600 */
+  --color-salary-bg: #EEF2FF;    /* indigo-50 */
 
   /* Surface */
   --color-surface: #FFFFFF;
   --color-surface-secondary: #F8FAFC; /* slate-50 */
+  --color-elevated: #FFFFFF;
   --color-border: #E2E8F0;       /* slate-200 */
   --color-text: #0F172A;         /* slate-900 */
   --color-text-secondary: #64748B; /* slate-500 */
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.05);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.05);
+}
+
+.dark {
+  --color-brand: #818CF8;        /* indigo-400 */
+  --color-brand-light: #A5B4FC;  /* indigo-300 */
+  --color-brand-bg: #312E81;     /* indigo-900 */
+
+  --color-income: #4ADE80;       /* green-400 */
+  --color-income-bg: #14532D;    /* green-900 */
+  --color-expense: #F87171;      /* red-400 */
+  --color-expense-bg: #7F1D1D;   /* red-900 */
+  --color-salary: #818CF8;       /* indigo-400 */
+  --color-salary-bg: #312E81;    /* indigo-900 */
+
+  --color-surface: #1E1E2E;
+  --color-surface-secondary: #181825;
+  --color-elevated: #2A2A3C;
+  --color-border: #3B3B50;
+  --color-text: #E2E8F0;
+  --color-text-secondary: #94A3B8;
+
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.4);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.6), 0 8px 10px -6px rgb(0 0 0 / 0.5);
+}
+
+html {
+  transition: background-color 300ms ease, color 300ms ease;
 }
 
 .tabular-nums {
@@ -38,32 +74,37 @@
 }
 
 @layer components {
-  /* Основные кнопки */
+  /* Buttons */
   .btn-primary {
-    @apply bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+    @apply bg-primary-600 hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
   }
 
   .btn-secondary {
-    @apply bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+    @apply bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-medium py-2 px-4 rounded-lg transition-colors duration-200;
   }
 
-  /* Поля ввода */
+  /* Input fields */
   .input-field {
-    @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent;
+    @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors duration-200;
   }
 
-  /* Карточки */
+  /* Cards */
   .card {
-    @apply bg-white rounded-lg shadow-sm border border-gray-200 p-4;
+    @apply bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 transition-colors duration-200;
   }
 
-  /* FAB кнопка */
+  /* FAB */
   .fab {
-    @apply fixed bottom-6 right-6 w-14 h-14 bg-primary-600 hover:bg-primary-700 text-white rounded-full shadow-lg flex items-center justify-center transition-all duration-200 z-50;
+    @apply fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-br from-primary-500 to-primary-700 hover:from-primary-600 hover:to-primary-800 text-white rounded-full shadow-lg flex items-center justify-center transition-all duration-200 z-50;
+  }
+
+  /* Glass effect */
+  .glass {
+    @apply backdrop-blur-xl bg-white/80 dark:bg-gray-900/80;
   }
 }
 
-/* Кастомные стили для мобильной версии */
+/* Mobile styles */
 @media (max-width: 640px) {
   .container {
     max-width: 640px;

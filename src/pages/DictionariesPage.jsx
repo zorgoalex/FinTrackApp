@@ -33,18 +33,18 @@ export default function DictionariesPage() {
 
   return (
     <div className="p-4 sm:p-6 max-w-2xl mx-auto">
-      <h1 className="text-xl font-semibold text-gray-900 mb-4">Справочники</h1>
+      <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">Справочники</h1>
 
       {/* Tabs */}
-      <div className="flex border-b border-gray-200 mb-4">
+      <div className="flex border-b border-gray-200 dark:border-gray-700 mb-4">
         {TABS.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
               activeTab === tab.key
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+                ? 'border-primary-600 dark:border-primary-400 text-primary-600 dark:text-primary-400'
+                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
             }`}
           >
             {tab.label}
@@ -119,8 +119,8 @@ function CategoriesTab({ workspaceId, canEdit }) {
     }
   };
 
-  if (loading) return <p className="text-sm text-gray-500">Загрузка...</p>;
-  if (error) return <p className="text-sm text-red-500">{error}</p>;
+  if (loading) return <p className="text-sm text-gray-500 dark:text-gray-400">Загрузка...</p>;
+  if (error) return <p className="text-sm text-red-500 dark:text-red-400">{error}</p>;
 
   const visibleCategories = showArchived ? categories : categories.filter((c) => !c.is_archived);
 
@@ -132,7 +132,7 @@ function CategoriesTab({ workspaceId, canEdit }) {
         <button
           data-testid="archive-toggle"
           onClick={() => setShowArchived((v) => !v)}
-          className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded px-2 py-1"
+          className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 border border-gray-200 dark:border-gray-700 rounded px-2 py-1"
         >
           {showArchived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
           {showArchived ? 'Скрыть архивные' : 'Показать архивные'}
@@ -152,31 +152,31 @@ function CategoriesTab({ workspaceId, canEdit }) {
         ) : (
           <div
             key={cat.id}
-            className={`flex items-center justify-between bg-white border border-gray-200 rounded-lg px-4 py-2${cat.is_archived ? ' opacity-60' : ''}`}
+            className={`flex items-center justify-between bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2${cat.is_archived ? ' opacity-60' : ''}`}
           >
             <div className="flex items-center gap-2">
               <span
                 className="w-3 h-3 rounded-full flex-shrink-0"
                 style={{ backgroundColor: cat.color || '#6B7280' }}
               />
-              <span className="text-sm text-gray-900">{cat.name}</span>
+              <span className="text-sm text-gray-900 dark:text-gray-100">{cat.name}</span>
               <span
                 className={`text-xs px-1.5 py-0.5 rounded ${
                   cat.type === 'income'
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-red-100 text-red-700'
+                    ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400'
+                    : 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400'
                 }`}
               >
                 {cat.type === 'income' ? 'Доход' : 'Расход'}
               </span>
               {cat.is_archived && (
-                <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">архив</span>
+                <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">архив</span>
               )}
             </div>
             {canEdit && (
               <div className="flex items-center gap-1">
                 {!cat.is_archived && (
-                  <button onClick={() => startEdit(cat)} className="p-1 text-gray-400 hover:text-blue-600">
+                  <button onClick={() => startEdit(cat)} className="p-1 text-gray-400 dark:text-gray-500 hover:text-primary-600 dark:hover:text-primary-400">
                     <Pencil size={16} />
                   </button>
                 )}
@@ -184,7 +184,7 @@ function CategoriesTab({ workspaceId, canEdit }) {
                   <button
                     data-testid={`archive-btn-${cat.id}`}
                     onClick={() => handleArchive(cat.id)}
-                    className="p-1 text-gray-400 hover:text-orange-500"
+                    className="p-1 text-gray-400 dark:text-gray-500 hover:text-orange-500 dark:hover:text-orange-400"
                     title="Архивировать"
                   >
                     <Archive size={16} />
@@ -194,14 +194,14 @@ function CategoriesTab({ workspaceId, canEdit }) {
                     <button
                       data-testid={`unarchive-btn-${cat.id}`}
                       onClick={() => handleUnarchive(cat.id)}
-                      className="p-1 text-gray-400 hover:text-blue-600"
+                      className="p-1 text-gray-400 dark:text-gray-500 hover:text-primary-600 dark:hover:text-primary-400"
                       title="Разархивировать"
                     >
                       <ArchiveRestore size={16} />
                     </button>
                     <button
                       onClick={() => handleDelete(cat.id)}
-                      className="p-1 text-gray-400 hover:text-red-600"
+                      className="p-1 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400"
                       title="Удалить"
                     >
                       <Trash2 size={16} />
@@ -227,7 +227,7 @@ function CategoriesTab({ workspaceId, canEdit }) {
       {canEdit && !showAdd && !editingId && (
         <button
           onClick={() => { resetForm(); setShowAdd(true); }}
-          className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 mt-2"
+          className="flex items-center gap-1 text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 mt-2"
         >
           <Plus size={16} /> Добавить категорию
         </button>
@@ -238,19 +238,19 @@ function CategoriesTab({ workspaceId, canEdit }) {
 
 function InlineCategoryForm({ form, setForm, onSave, onCancel, saving }) {
   return (
-    <div className="flex flex-wrap items-center gap-2 bg-white border border-blue-200 rounded-lg px-4 py-2">
+    <div className="flex flex-wrap items-center gap-2 bg-white dark:bg-gray-800 border border-primary-200 dark:border-primary-700 rounded-xl px-4 py-2">
       <input
         type="text"
         placeholder="Название"
         value={form.name}
         onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-        className="flex-1 min-w-[120px] text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        className="flex-1 min-w-[120px] text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary-500"
         autoFocus
       />
       <select
         value={form.type}
         onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
-        className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        className="text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary-500"
       >
         <option value="income">Доход</option>
         <option value="expense">Расход</option>
@@ -259,16 +259,16 @@ function InlineCategoryForm({ form, setForm, onSave, onCancel, saving }) {
         type="color"
         value={form.color}
         onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
-        className="w-8 h-8 p-0 border border-gray-300 rounded cursor-pointer"
+        className="w-8 h-8 p-0 border border-gray-300 dark:border-gray-600 rounded cursor-pointer"
       />
       <button
         onClick={onSave}
         disabled={saving || !form.name.trim()}
-        className="p-1 text-green-600 hover:text-green-700 disabled:opacity-40"
+        className="p-1 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 disabled:opacity-40"
       >
         <Check size={18} />
       </button>
-      <button onClick={onCancel} className="p-1 text-gray-400 hover:text-gray-600">
+      <button onClick={onCancel} className="p-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300">
         <X size={18} />
       </button>
     </div>
@@ -333,8 +333,8 @@ function TagsTab({ workspaceId, canEdit }) {
     }
   };
 
-  if (loading) return <p className="text-sm text-gray-500">Загрузка...</p>;
-  if (error) return <p className="text-sm text-red-500">{error}</p>;
+  if (loading) return <p className="text-sm text-gray-500 dark:text-gray-400">Загрузка...</p>;
+  if (error) return <p className="text-sm text-red-500 dark:text-red-400">{error}</p>;
 
   const visibleTags = showArchived ? tags : tags.filter((t) => !t.is_archived);
 
@@ -346,7 +346,7 @@ function TagsTab({ workspaceId, canEdit }) {
         <button
           data-testid="archive-toggle"
           onClick={() => setShowArchived((v) => !v)}
-          className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded px-2 py-1"
+          className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 border border-gray-200 dark:border-gray-700 rounded px-2 py-1"
         >
           {showArchived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
           {showArchived ? 'Скрыть архивные' : 'Показать архивные'}
@@ -366,22 +366,22 @@ function TagsTab({ workspaceId, canEdit }) {
         ) : (
           <div
             key={tag.id}
-            className={`flex items-center justify-between bg-white border border-gray-200 rounded-lg px-4 py-2${tag.is_archived ? ' opacity-60' : ''}`}
+            className={`flex items-center justify-between bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2${tag.is_archived ? ' opacity-60' : ''}`}
           >
             <div className="flex items-center gap-2">
               <span
                 className="w-3 h-3 rounded-full flex-shrink-0"
                 style={{ backgroundColor: tag.color || '#6B7280' }}
               />
-              <span className="text-sm text-gray-900">{tag.name}</span>
+              <span className="text-sm text-gray-900 dark:text-gray-100">{tag.name}</span>
               {tag.is_archived && (
-                <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">архив</span>
+                <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">архив</span>
               )}
             </div>
             {canEdit && (
               <div className="flex items-center gap-1">
                 {!tag.is_archived && (
-                  <button onClick={() => startEdit(tag)} className="p-1 text-gray-400 hover:text-blue-600">
+                  <button onClick={() => startEdit(tag)} className="p-1 text-gray-400 dark:text-gray-500 hover:text-primary-600 dark:hover:text-primary-400">
                     <Pencil size={16} />
                   </button>
                 )}
@@ -389,7 +389,7 @@ function TagsTab({ workspaceId, canEdit }) {
                   <button
                     data-testid={`archive-btn-${tag.id}`}
                     onClick={() => handleArchive(tag.id)}
-                    className="p-1 text-gray-400 hover:text-orange-500"
+                    className="p-1 text-gray-400 dark:text-gray-500 hover:text-orange-500 dark:hover:text-orange-400"
                     title="Архивировать"
                   >
                     <Archive size={16} />
@@ -399,14 +399,14 @@ function TagsTab({ workspaceId, canEdit }) {
                     <button
                       data-testid={`unarchive-btn-${tag.id}`}
                       onClick={() => handleUnarchive(tag.id)}
-                      className="p-1 text-gray-400 hover:text-blue-600"
+                      className="p-1 text-gray-400 dark:text-gray-500 hover:text-primary-600 dark:hover:text-primary-400"
                       title="Разархивировать"
                     >
                       <ArchiveRestore size={16} />
                     </button>
                     <button
                       onClick={() => handleDelete(tag.id)}
-                      className="p-1 text-gray-400 hover:text-red-600"
+                      className="p-1 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400"
                       title="Удалить"
                     >
                       <Trash2 size={16} />
@@ -432,7 +432,7 @@ function TagsTab({ workspaceId, canEdit }) {
       {canEdit && !showAdd && !editingId && (
         <button
           onClick={() => { resetForm(); setShowAdd(true); }}
-          className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 mt-2"
+          className="flex items-center gap-1 text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 mt-2"
         >
           <Plus size={16} /> Добавить тег
         </button>
@@ -443,29 +443,29 @@ function TagsTab({ workspaceId, canEdit }) {
 
 function InlineTagForm({ form, setForm, onSave, onCancel, saving }) {
   return (
-    <div className="flex flex-wrap items-center gap-2 bg-white border border-blue-200 rounded-lg px-4 py-2">
+    <div className="flex flex-wrap items-center gap-2 bg-white dark:bg-gray-800 border border-primary-200 dark:border-primary-700 rounded-xl px-4 py-2">
       <input
         type="text"
         placeholder="Название"
         value={form.name}
         onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-        className="flex-1 min-w-[120px] text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        className="flex-1 min-w-[120px] text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary-500"
         autoFocus
       />
       <input
         type="color"
         value={form.color}
         onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
-        className="w-8 h-8 p-0 border border-gray-300 rounded cursor-pointer"
+        className="w-8 h-8 p-0 border border-gray-300 dark:border-gray-600 rounded cursor-pointer"
       />
       <button
         onClick={onSave}
         disabled={saving || !form.name.trim()}
-        className="p-1 text-green-600 hover:text-green-700 disabled:opacity-40"
+        className="p-1 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 disabled:opacity-40"
       >
         <Check size={18} />
       </button>
-      <button onClick={onCancel} className="p-1 text-gray-400 hover:text-gray-600">
+      <button onClick={onCancel} className="p-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300">
         <X size={18} />
       </button>
     </div>

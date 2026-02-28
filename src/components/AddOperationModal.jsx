@@ -110,13 +110,13 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-backdrop-in">
-      <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md max-h-[90vh] overflow-y-auto animate-modal-in">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 w-full max-w-md max-h-[90vh] overflow-y-auto animate-modal-in">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700">
           <h2 className={`text-base font-semibold ${typeInfo.color}`}>
             Новая операция — {typeInfo.label}
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <button onClick={onClose} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300">
             <X size={20} />
           </button>
         </div>
@@ -125,7 +125,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           {/* Тип */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Тип</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Тип</label>
             <select
               value={form.type}
               onChange={(e) => {
@@ -143,7 +143,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
 
           {/* Категория */}
           <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Категория</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Категория</label>
               <div className="flex gap-2">
                 <select
                   value={form.categoryId}
@@ -162,7 +162,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
                     setShowNewCat(!showNewCat);
                     setNewCatType(form.type);
                   }}
-                  className="px-2 py-1 border border-gray-300 rounded-lg text-gray-500 hover:text-indigo-600 hover:border-indigo-400 transition-colors"
+                  className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 hover:border-primary-400 dark:hover:border-primary-500 transition-colors"
                   title="Добавить категорию"
                   data-testid="add-category-btn"
                 >
@@ -195,7 +195,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
 
           {/* Сумма */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Сумма, ₽</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Сумма, ₽</label>
             <input
               type="text"
               inputMode="decimal"
@@ -215,7 +215,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
 
           {/* Описание */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Описание</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Описание</label>
             <textarea
               value={form.description}
               onChange={set('description')}
@@ -227,7 +227,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
 
           {/* Теги */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Теги</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Теги</label>
             <TagInput
               ref={tagInputRef}
               allTags={tags}
@@ -239,7 +239,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
 
           {/* Дата */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Дата</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Дата</label>
             <input
               type="date"
               value={form.operationDate}

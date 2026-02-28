@@ -203,10 +203,10 @@ export default function WorkspaceSettingsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Загрузка настроек...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 dark:border-primary-400 mx-auto"></div>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">Загрузка настроек...</p>
         </div>
       </div>
     );
@@ -214,12 +214,12 @@ export default function WorkspaceSettingsPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-red-600 mb-4">{error}</p>
-          <button 
+          <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
+          <button
             onClick={() => navigate(-1)}
-            className="btn btn-secondary"
+            className="btn-secondary"
           >
             Назад
           </button>
@@ -230,12 +230,12 @@ export default function WorkspaceSettingsPage() {
 
   if (!currentWorkspace) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-gray-600 mb-4">Рабочее пространство не найдено</p>
-          <button 
+          <p className="text-gray-600 dark:text-gray-400 mb-4">Рабочее пространство не найдено</p>
+          <button
             onClick={() => navigate('/workspaces')}
-            className="btn btn-primary"
+            className="btn-primary"
           >
             К выбору пространств
           </button>
@@ -251,18 +251,18 @@ export default function WorkspaceSettingsPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-4xl mx-auto py-6 px-4 sm:px-6 lg:px-8" data-testid="settings-page">
         {/* Заголовок */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Настройки рабочего пространства</h1>
-          <p className="mt-2 text-sm text-gray-600">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Настройки рабочего пространства</h1>
+          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
             Управление настройками "{currentWorkspace.name}"
           </p>
         </div>
 
         {/* Табы */}
-        <div className="border-b border-gray-200 mb-6">
+        <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
           <nav className="-mb-px flex space-x-8" data-testid="settings-tabs">
             {tabs.map((tab) => {
               const Icon = tab.icon;
@@ -273,8 +273,8 @@ export default function WorkspaceSettingsPage() {
                   data-testid={`settings-tab-${tab.id}`}
                   className={`flex items-center py-2 px-1 border-b-2 font-medium text-sm ${
                     activeTab === tab.id
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      ? 'border-primary-500 dark:border-primary-400 text-primary-600 dark:text-primary-400'
+                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
                   }`}
                 >
                   <Icon size={16} className="mr-2" />
@@ -289,12 +289,12 @@ export default function WorkspaceSettingsPage() {
         <div className="space-y-6">
           {/* Общие настройки */}
           {activeTab === 'general' && (
-            <div className="bg-white shadow rounded-lg p-6">
-              <h2 className="text-lg font-medium mb-4">Информация о пространстве</h2>
+            <div className="bg-white dark:bg-gray-800 shadow-md rounded-xl p-6">
+              <h2 className="text-lg font-medium mb-4 text-gray-900 dark:text-gray-100">Информация о пространстве</h2>
               
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Название
                   </label>
                   {userRole?.toLowerCase() === 'owner' ? (
@@ -303,13 +303,13 @@ export default function WorkspaceSettingsPage() {
                         type="text"
                         value={workspaceName}
                         onChange={(e) => { setWorkspaceName(e.target.value); setRenameSuccess(false); setRenameError(''); }}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                         maxLength={80}
                       />
                       <button
                         type="submit"
                         disabled={renameLoading || workspaceName.trim() === currentWorkspace?.name || !workspaceName.trim()}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="px-4 py-2 bg-primary-600 dark:bg-primary-500 hover:bg-primary-700 dark:hover:bg-primary-600 text-white text-sm rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         {renameLoading ? '...' : 'Сохранить'}
                       </button>
@@ -319,7 +319,7 @@ export default function WorkspaceSettingsPage() {
                       type="text"
                       value={currentWorkspace.name}
                       disabled
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-600"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-400"
                     />
                   )}
                   {renameError   && <p className="text-sm text-red-600 mt-1">{renameError}</p>}
@@ -327,16 +327,16 @@ export default function WorkspaceSettingsPage() {
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Тип пространства
                   </label>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
                     {currentWorkspace.is_personal ? 'Личное пространство' : 'Командное пространство'}
                   </p>
                 </div>
-                
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Ваша роль
                   </label>
                   <div className="flex items-center">
@@ -354,13 +354,13 @@ export default function WorkspaceSettingsPage() {
               </div>
 
               {/* Опасная зона */}
-              <div className="mt-8 pt-6 border-t border-gray-200">
-                <h3 className="text-lg font-medium text-red-600 mb-4">Опасная зона</h3>
+              <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+                <h3 className="text-lg font-medium text-red-600 dark:text-red-400 mb-4">Опасная зона</h3>
                 <div className="space-y-3">
                   {canLeaveWorkspace && (
                     <button
                       onClick={handleLeaveWorkspace}
-                      className="flex items-center px-4 py-2 border border-red-300 text-red-700 rounded-md hover:bg-red-50"
+                      className="flex items-center px-4 py-2 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-900/30"
                     >
                       <User size={16} className="mr-2" />
                       Покинуть пространство
@@ -383,8 +383,8 @@ export default function WorkspaceSettingsPage() {
 
           {/* Участники */}
           {activeTab === 'members' && (
-            <div className="bg-white shadow rounded-lg p-6">
-              <h2 className="text-lg font-medium mb-4">Участники ({workspaceMembers.length})</h2>
+            <div className="bg-white dark:bg-gray-800 shadow-md rounded-xl p-6">
+              <h2 className="text-lg font-medium mb-4 text-gray-900 dark:text-gray-100">Участники ({workspaceMembers.length})</h2>
               
               <div className="space-y-3">
                 {workspaceMembers.map((member) => {
@@ -392,15 +392,15 @@ export default function WorkspaceSettingsPage() {
                   const canManageThisMember = canManageRolesFromWorkspace && member.role.toLowerCase() !== 'owner';
                   
                   return (
-                    <div key={member.user_id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
+                    <div key={member.user_id} className="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-700 rounded-xl">
                       <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-                          <span className="text-sm font-medium text-gray-700">
+                        <div className="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center">
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                             {member.email?.charAt(0).toUpperCase()}
                           </span>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-900">
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
                             {member.email}
                           </p>
                           <div className="flex items-center">
@@ -417,7 +417,7 @@ export default function WorkspaceSettingsPage() {
                           <select
                             value={member.role}
                             onChange={(e) => handleChangeRole(member.user_id, e.target.value, member.email)}
-                            className="text-xs border border-gray-300 rounded px-2 py-1"
+                            className="text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                           >
                             <option value="admin">Администратор</option>
                             <option value="member">Участник</option>
@@ -444,12 +444,12 @@ export default function WorkspaceSettingsPage() {
           {activeTab === 'invites' && shouldShowInvitesTab && (
             <div className="space-y-6">
               {/* Форма приглашения */}
-              <div className="bg-white shadow rounded-lg p-6">
-                <h2 className="text-lg font-medium mb-4">Пригласить участника</h2>
-                
+              <div className="bg-white dark:bg-gray-800 shadow-md rounded-xl p-6">
+                <h2 className="text-lg font-medium mb-4 text-gray-900 dark:text-gray-100">Пригласить участника</h2>
+
                 <form onSubmit={handleInviteUser} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Email адрес
                     </label>
                     <input
@@ -457,19 +457,19 @@ export default function WorkspaceSettingsPage() {
                       value={inviteEmail}
                       onChange={(e) => setInviteEmail(e.target.value)}
                       placeholder="user@example.com"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                       required
                     />
                   </div>
-                  
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Роль
                     </label>
                     <select
                       value={inviteRole}
                       onChange={(e) => setInviteRole(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                     >
                       {canManageRolesFromWorkspace && <option value="admin">Администратор</option>}
                       <option value="member">Участник</option>
@@ -478,10 +478,10 @@ export default function WorkspaceSettingsPage() {
                   </div>
                   
                   {inviteError && (
-                    <div className="text-sm text-orange-600 space-y-1">
+                    <div className="text-sm text-orange-600 dark:text-orange-400 space-y-1">
                       <p>{inviteError}</p>
                       {inviteLink && (
-                        <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded p-2 mt-1">
+                        <div className="flex items-center gap-2 bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 rounded p-2 mt-1">
                           <input
                             readOnly
                             value={inviteLink}
@@ -503,7 +503,7 @@ export default function WorkspaceSettingsPage() {
                   <button
                     type="submit"
                     disabled={isInviting}
-                    className="btn btn-primary disabled:opacity-50"
+                    className="btn-primary disabled:opacity-50"
                   >
                     <UserPlus size={16} className="mr-2" />
                     {isInviting ? 'Отправка...' : 'Отправить приглашение'}
@@ -513,24 +513,24 @@ export default function WorkspaceSettingsPage() {
 
               {/* Активные приглашения */}
               {pendingInvitations.length > 0 && (
-                <div className="bg-white shadow rounded-lg p-6">
-                  <h2 className="text-lg font-medium mb-4">Активные приглашения ({pendingInvitations.length})</h2>
-                  
+                <div className="bg-white dark:bg-gray-800 shadow-md rounded-xl p-6">
+                  <h2 className="text-lg font-medium mb-4 text-gray-900 dark:text-gray-100">Активные приглашения ({pendingInvitations.length})</h2>
+
                   <div className="space-y-3">
                     {pendingInvitations.map((invitation) => (
-                      <div key={invitation.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
+                      <div key={invitation.id} className="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-700 rounded-xl">
                         <div>
-                          <p className="text-sm font-medium text-gray-900">
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
                             {invitation.invited_email}
                           </p>
-                          <p className="text-xs text-gray-500">
-                            Роль: {roleLabels[invitation.role]} • 
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Роль: {roleLabels[invitation.role]} •
                             Отправлено: {new Date(invitation.invited_at).toLocaleDateString()}
                           </p>
                         </div>
-                        
+
                         <div className="flex items-center space-x-2">
-                          <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
+                          <span className="px-2 py-1 bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-400 text-xs rounded-full">
                             Ожидание
                           </span>
                           <button

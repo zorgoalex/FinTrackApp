@@ -45,7 +45,7 @@ export default function ScheduledPage() {
   }, [categories]);
 
   if (!workspaceId) {
-    return <div className="max-w-2xl mx-auto p-4 text-center text-gray-500">Выберите рабочее пространство.</div>;
+    return <div className="max-w-2xl mx-auto p-4 text-center text-gray-500 dark:text-gray-400">Выберите рабочее пространство.</div>;
   }
 
   const resetForm = () => {
@@ -91,10 +91,10 @@ export default function ScheduledPage() {
   return (
     <div className="max-w-2xl mx-auto p-4 pb-24" data-testid="scheduled-page">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-semibold text-gray-900">Запланированные</h1>
+        <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Запланированные</h1>
         <button
           onClick={() => { resetForm(); setShowForm(true); }}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors btn-press"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-600 dark:bg-primary-500 text-white text-sm font-medium hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors btn-press"
           data-testid="add-scheduled-btn"
         >
           <Plus size={16} /> Добавить
@@ -102,38 +102,38 @@ export default function ScheduledPage() {
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 mb-4">{error}</div>
+        <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl p-3 text-sm text-red-700 dark:text-red-400 mb-4">{error}</div>
       )}
 
       {/* Form */}
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4 space-y-3" data-testid="scheduled-form">
+        <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 space-y-3" data-testid="scheduled-form">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-700">{editingId ? 'Редактировать' : 'Новая запланированная операция'}</h2>
-            <button type="button" onClick={resetForm} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{editingId ? 'Редактировать' : 'Новая запланированная операция'}</h2>
+            <button type="button" onClick={resetForm} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"><X size={18} /></button>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Сумма</label>
+              <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Сумма</label>
               <input
                 type="number"
                 step="0.01"
                 min="0"
                 value={form.amount}
                 onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 placeholder="0.00"
                 required
                 data-testid="scheduled-amount"
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Тип</label>
+              <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Тип</label>
               <select
                 value={form.type}
                 onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 data-testid="scheduled-type"
               >
                 <option value="income">Доход</option>
@@ -144,12 +144,12 @@ export default function ScheduledPage() {
           </div>
 
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Описание</label>
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Описание</label>
             <input
               type="text"
               value={form.description}
               onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               placeholder="Аренда, подписка..."
               data-testid="scheduled-description"
             />
@@ -157,11 +157,11 @@ export default function ScheduledPage() {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Категория</label>
+              <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Категория</label>
               <select
                 value={form.category_id}
                 onChange={e => setForm(f => ({ ...f, category_id: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 data-testid="scheduled-category"
               >
                 <option value="">Без категории</option>
@@ -171,11 +171,11 @@ export default function ScheduledPage() {
               </select>
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Частота</label>
+              <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Частота</label>
               <select
                 value={form.frequency}
                 onChange={e => setForm(f => ({ ...f, frequency: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 data-testid="scheduled-frequency"
               >
                 <option value="daily">Ежедневно</option>
@@ -187,12 +187,12 @@ export default function ScheduledPage() {
           </div>
 
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Следующая дата</label>
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Следующая дата</label>
             <input
               type="date"
               value={form.next_date}
               onChange={e => setForm(f => ({ ...f, next_date: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               required
               data-testid="scheduled-next-date"
             />
@@ -200,7 +200,7 @@ export default function ScheduledPage() {
 
           <button
             type="submit"
-            className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors btn-press"
+            className="w-full px-4 py-2 bg-primary-600 dark:bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors btn-press"
             data-testid="scheduled-submit"
           >
             {editingId ? 'Сохранить' : 'Создать'}
@@ -211,14 +211,14 @@ export default function ScheduledPage() {
       {/* Loading */}
       {loading && (
         <div className="text-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-3 text-gray-500">Загрузка...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 dark:border-primary-400 mx-auto"></div>
+          <p className="mt-3 text-gray-500 dark:text-gray-400">Загрузка...</p>
         </div>
       )}
 
       {/* Empty state */}
       {!loading && items.length === 0 && (
-        <div className="text-center py-12 text-gray-400" data-testid="scheduled-empty">
+        <div className="text-center py-12 text-gray-400 dark:text-gray-500" data-testid="scheduled-empty">
           <p className="text-lg mb-1">Нет запланированных операций</p>
           <p className="text-sm">Добавьте повторяющиеся платежи и доходы</p>
         </div>
@@ -232,7 +232,7 @@ export default function ScheduledPage() {
             return (
               <div
                 key={item.id}
-                className={`bg-white rounded-lg shadow-sm border border-gray-200 p-3 transition-opacity ${!item.is_active ? 'opacity-50' : ''}`}
+                className={`bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-3 transition-opacity ${!item.is_active ? 'opacity-50' : ''}`}
                 data-testid="scheduled-item"
               >
                 <div className="flex items-start justify-between gap-2">
@@ -244,15 +244,15 @@ export default function ScheduledPage() {
                       <span className={`text-xs px-1.5 py-0.5 rounded-full ${TYPE_COLORS[item.type] || 'text-gray-600 bg-gray-50'}`}>
                         {TYPE_LABELS[item.type] || item.type}
                       </span>
-                      <span className="text-xs text-gray-400">{FREQ_LABELS[item.frequency]}</span>
+                      <span className="text-xs text-gray-400 dark:text-gray-500">{FREQ_LABELS[item.frequency]}</span>
                     </div>
                     {item.description && (
-                      <p className="text-sm text-gray-600 truncate">{item.description}</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 truncate">{item.description}</p>
                     )}
                     <div className="flex items-center gap-2 mt-1">
-                      <span className="text-xs text-gray-400">Следующая: {item.next_date}</span>
+                      <span className="text-xs text-gray-400 dark:text-gray-500">Следующая: {item.next_date}</span>
                       {cat && (
-                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
                           {cat.name}
                         </span>
                       )}
@@ -261,7 +261,7 @@ export default function ScheduledPage() {
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <button
                       onClick={() => toggle(item.id, !item.is_active)}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+                      className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                       title={item.is_active ? 'Приостановить' : 'Возобновить'}
                       data-testid="scheduled-toggle"
                     >
@@ -269,7 +269,7 @@ export default function ScheduledPage() {
                     </button>
                     <button
                       onClick={() => startEdit(item)}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+                      className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                       title="Редактировать"
                       data-testid="scheduled-edit"
                     >
@@ -277,7 +277,7 @@ export default function ScheduledPage() {
                     </button>
                     <button
                       onClick={() => handleDelete(item.id)}
-                      className={`p-1.5 rounded-lg transition-colors ${deleting === item.id ? 'bg-red-100 text-red-600' : 'hover:bg-gray-100 text-gray-400 hover:text-gray-600'}`}
+                      className={`p-1.5 rounded-lg transition-colors ${deleting === item.id ? 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400' : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'}`}
                       title={deleting === item.id ? 'Нажмите ещё раз' : 'Удалить'}
                       data-testid="scheduled-delete"
                     >

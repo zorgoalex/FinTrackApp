@@ -3,6 +3,7 @@ import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import { WorkspaceProvider } from './contexts/WorkspaceContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 
 // Lazy-loaded pages
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -20,8 +21,10 @@ const InvitationAcceptPage = lazy(() => import('./pages/InvitationAcceptPage'));
 
 function LoadingFallback() {
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600 dark:border-primary-400 mx-auto"></div>
+      </div>
     </div>
   );
 }
@@ -115,11 +118,13 @@ const router = createBrowserRouter([
 
 function App() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Suspense fallback={<LoadingFallback />}>
-        <RouterProvider router={router} />
-      </Suspense>
-    </div>
+    <ThemeProvider>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+        <Suspense fallback={<LoadingFallback />}>
+          <RouterProvider router={router} />
+        </Suspense>
+      </div>
+    </ThemeProvider>
   )
 }
 
