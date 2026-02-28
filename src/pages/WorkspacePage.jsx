@@ -6,7 +6,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import useAccounts from '../hooks/useAccounts';
 import AddOperationModal from '../components/AddOperationModal';
 import QuickButtonsSettings from '../components/QuickButtonsSettings';
-import { Plus, BarChart3, TrendingUp, FileText, Pin, Minimize2, Maximize2, Wallet, Settings, Receipt } from 'lucide-react';
+import { Plus, BarChart3, TrendingUp, FileText, Pin, Minimize2, Maximize2, Wallet, Settings, Receipt, Eye, EyeOff } from 'lucide-react';
 import { formatUnsignedAmount, formatSignedAmount as formatBalance } from '../utils/formatters';
 import useCategories from '../hooks/useCategories';
 import useDebts from '../hooks/useDebts';
@@ -40,6 +40,22 @@ export default function WorkspacePage() {
   const [balances, setBalances] = useState({});
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
 
+  // Dashboard block visibility (localStorage per workspace)
+  const [dashboardBlocks, setDashboardBlocks] = useState(() => {
+    if (!workspaceId) return { debts: true };
+    try {
+      const stored = localStorage.getItem(`dashboardBlocks_${workspaceId}`);
+      return stored ? { debts: true, ...JSON.parse(stored) } : { debts: true };
+    } catch { return { debts: true }; }
+  });
+  const [dashboardSettingsOpen, setDashboardSettingsOpen] = useState(false);
+
+  // Accounts "summary only" mode (localStorage per workspace)
+  const [accountsSummaryOnly, setAccountsSummaryOnly] = useState(() => {
+    if (!workspaceId) return false;
+    return localStorage.getItem(`accountsSummaryOnly_${workspaceId}`) === 'true';
+  });
+
   // Visible accounts from localStorage (null = all visible)
   const [visibleAccountIds, setVisibleAccountIds] = useState(() => {
     if (!workspaceId) return null;
@@ -54,6 +70,16 @@ export default function WorkspacePage() {
     const stored = localStorage.getItem(`visibleAccounts_${workspaceId}`);
     if (!stored) { setVisibleAccountIds(null); return; }
     try { setVisibleAccountIds(JSON.parse(stored)); } catch { setVisibleAccountIds(null); }
+  }, [workspaceId]);
+
+  // Sync dashboard settings when workspaceId changes
+  useEffect(() => {
+    if (!workspaceId) return;
+    try {
+      const stored = localStorage.getItem(`dashboardBlocks_${workspaceId}`);
+      setDashboardBlocks(stored ? { debts: true, ...JSON.parse(stored) } : { debts: true });
+    } catch { setDashboardBlocks({ debts: true }); }
+    setAccountsSummaryOnly(localStorage.getItem(`accountsSummaryOnly_${workspaceId}`) === 'true');
   }, [workspaceId]);
 
   const activeAccounts = useMemo(() => accounts.filter(a => !a.is_archived), [accounts]);
@@ -401,6 +427,43 @@ export default function WorkspacePage() {
             )}
           </div>
 
+          {/* Dashboard visibility settings */}
+          <div className="flex justify-end">
+            <button
+              onClick={() => setDashboardSettingsOpen(v => !v)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${
+                dashboardSettingsOpen
+                  ? 'text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 border-primary-200 dark:border-primary-800'
+                  : 'text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+              }`}
+              title="Настройка виджетов"
+            >
+              {dashboardSettingsOpen ? <EyeOff size={14} /> : <Eye size={14} />}
+              Виджеты
+            </button>
+          </div>
+          {dashboardSettingsOpen && (
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-3 border border-gray-200 dark:border-gray-700">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Показывать на главной:</p>
+              <label className="flex items-center gap-2 cursor-pointer py-0.5">
+                <input
+                  type="checkbox"
+                  checked={dashboardBlocks.debts !== false}
+                  onChange={() => {
+                    setDashboardBlocks(prev => {
+                      const next = { ...prev, debts: !prev.debts };
+                      localStorage.setItem(`dashboardBlocks_${workspaceId}`, JSON.stringify(next));
+                      return next;
+                    });
+                  }}
+                  className="rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500"
+                />
+                <Receipt size={14} className="text-gray-500 dark:text-gray-400" />
+                <span className="text-sm text-gray-700 dark:text-gray-300">Долги</span>
+              </label>
+            </div>
+          )}
+
           {/* Account balances */}
           {activeAccounts.length > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border border-gray-200 dark:border-gray-700">
@@ -431,6 +494,25 @@ export default function WorkspacePage() {
 
               {accountSettingsOpen && (
                 <div className="mb-3 p-2 bg-gray-50 dark:bg-gray-750 rounded-lg border border-gray-200 dark:border-gray-700 space-y-1">
+                  <label className="flex items-center gap-2 cursor-pointer py-0.5 mb-1 pb-1.5 border-b border-gray-200 dark:border-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={accountsSummaryOnly}
+                      onChange={() => {
+                        setAccountsSummaryOnly(prev => {
+                          const next = !prev;
+                          if (next) {
+                            localStorage.setItem(`accountsSummaryOnly_${workspaceId}`, 'true');
+                          } else {
+                            localStorage.removeItem(`accountsSummaryOnly_${workspaceId}`);
+                          }
+                          return next;
+                        });
+                      }}
+                      className="rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500"
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Только итого</span>
+                  </label>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Отображать на главной:</p>
                   {activeAccounts.map(acc => {
                     const isVisible = !visibleAccountIds || visibleAccountIds.includes(acc.id);
@@ -450,28 +532,41 @@ export default function WorkspacePage() {
                 </div>
               )}
 
-              <div className="space-y-1.5">
-                {displayedAccounts.map(acc => {
-                  const bal = balances[acc.id] || 0;
-                  const balColor = bal >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
-                  return (
-                    <div key={acc.id} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: acc.color || '#6B7280' }} />
-                        <span className="text-sm text-gray-700 dark:text-gray-300">{acc.name}</span>
+              {accountsSummaryOnly ? (() => {
+                const total = displayedAccounts.reduce((sum, acc) => sum + (balances[acc.id] || 0), 0);
+                const totalColor = total >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
+                return (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Итого</span>
+                    <span className={`text-sm font-semibold tabular-nums ${totalColor}`}>
+                      {formatSignedAmount(total)}
+                    </span>
+                  </div>
+                );
+              })() : (
+                <div className="space-y-1.5">
+                  {displayedAccounts.map(acc => {
+                    const bal = balances[acc.id] || 0;
+                    const balColor = bal >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
+                    return (
+                      <div key={acc.id} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: acc.color || '#6B7280' }} />
+                          <span className="text-sm text-gray-700 dark:text-gray-300">{acc.name}</span>
+                        </div>
+                        <span className={`text-sm font-semibold tabular-nums ${balColor}`}>
+                          {formatSignedAmount(bal)}
+                        </span>
                       </div>
-                      <span className={`text-sm font-semibold tabular-nums ${balColor}`}>
-                        {formatSignedAmount(bal)}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
           {/* Debts widget */}
-          {activeDebts.length > 0 && (
+          {dashboardBlocks.debts !== false && activeDebts.length > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
