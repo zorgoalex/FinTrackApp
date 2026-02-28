@@ -1,10 +1,9 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import useDebts from '../hooks/useDebts';
-import useAccounts from '../hooks/useAccounts';
 import { useAuth } from '../contexts/AuthContext';
 import DebtFormModal from '../components/DebtFormModal';
-import AddOperationModal from '../components/AddOperationModal';
+import DebtPaymentModal from '../components/DebtPaymentModal';
 import { formatUnsignedAmount } from '../utils/formatters';
 import { Plus, Pencil, Archive, ArchiveRestore, Trash2, ChevronDown, ChevronUp, Banknote } from 'lucide-react';
 
@@ -21,7 +20,6 @@ export function DebtsPage() {
   const currentWorkspace = workspaces?.find(w => w.id === workspaceId);
 
   const { debts, loading, error, createDebt, updateDebt, archiveDebt, unarchiveDebt, deleteDebt, getDebtHistory, refresh } = useDebts(workspaceId);
-  const { accounts } = useAccounts(workspaceId);
 
   const [filterDirection, setFilterDirection] = useState(null);
   const [showArchived, setShowArchived] = useState(false);
@@ -63,11 +61,6 @@ export function DebtsPage() {
     }
   }, [formModal, createDebt, updateDebt]);
 
-  const handleQuickPaySave = useCallback(async () => {
-    // After operation modal closes, refresh debts
-    await refresh();
-    setQuickPayDebt(null);
-  }, [refresh]);
 
   // Auto-clear delete error
   useEffect(() => {
@@ -290,15 +283,11 @@ export function DebtsPage() {
       )}
 
       {quickPayDebt && (
-        <AddOperationModal
-          type={quickPayDebt.direction === 'i_owe' ? 'expense' : 'income'}
+        <DebtPaymentModal
+          debt={quickPayDebt}
           workspaceId={workspaceId}
-          onClose={() => { handleQuickPaySave(); }}
-          onSave={async (payload) => {
-            // The payload already goes through useOperations.addOperation
-            // We just need to ensure debt_id and debt_applied_amount are set
-          }}
-          prefillDebt={quickPayDebt}
+          onClose={() => setQuickPayDebt(null)}
+          onDone={refresh}
         />
       )}
     </div>
