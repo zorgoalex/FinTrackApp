@@ -659,8 +659,8 @@ export function OperationPage() {
                         <span className="text-sm text-gray-500 dark:text-gray-400 shrink-0">
                           {formatOperationDate(operation.operation_date || operation.created_at)}
                         </span>
-                        <span className={`text-sm font-medium shrink-0 ${typeInfo.color}`}>
-                          {typeInfo.label}
+                        <span className={`text-sm font-bold shrink-0 ${typeInfo.color}`} title={typeInfo.label}>
+                          {typeInfo.sign}
                         </span>
                         <span className="text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100 truncate">
                           {formatSignedAmount(operation.type, operation.amount)}
@@ -704,8 +704,8 @@ export function OperationPage() {
                         <span className="text-sm text-gray-500 dark:text-gray-400">
                           {formatOperationDate(operation.operation_date || operation.created_at)}
                         </span>
-                        <span className={`text-sm font-medium ${typeInfo.color}`}>
-                          {typeInfo.label}
+                        <span className={`text-sm font-bold ${typeInfo.color}`} title={typeInfo.label}>
+                          {typeInfo.sign}
                         </span>
                       </div>
                       <div className="text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100">
