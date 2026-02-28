@@ -6,9 +6,10 @@ import { usePermissions } from '../hooks/usePermissions';
 import useAccounts from '../hooks/useAccounts';
 import AddOperationModal from '../components/AddOperationModal';
 import QuickButtonsSettings from '../components/QuickButtonsSettings';
-import { Plus, BarChart3, TrendingUp, FileText, Pin, Minimize2, Maximize2, Wallet, Settings } from 'lucide-react';
+import { Plus, BarChart3, TrendingUp, FileText, Pin, Minimize2, Maximize2, Wallet, Settings, Receipt } from 'lucide-react';
 import { formatUnsignedAmount, formatSignedAmount as formatBalance } from '../utils/formatters';
 import useCategories from '../hooks/useCategories';
+import useDebts from '../hooks/useDebts';
 
 function formatSignedAmount(value) {
   return formatBalance(value >= 0 ? 'income' : 'expense', value);
@@ -35,6 +36,7 @@ export default function WorkspacePage() {
   const quickButtons = currentWorkspace?.quick_buttons || [];
   const { categories } = useCategories(workspaceId);
   const { accounts, loadBalances } = useAccounts(workspaceId);
+  const { activeDebts } = useDebts(workspaceId);
   const [balances, setBalances] = useState({});
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
 
@@ -461,6 +463,52 @@ export default function WorkspacePage() {
                       <span className={`text-sm font-semibold tabular-nums ${balColor}`}>
                         {formatSignedAmount(bal)}
                       </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Debts widget */}
+          {activeDebts.length > 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Receipt size={16} className="text-gray-500 dark:text-gray-400" />
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Долги</h3>
+                </div>
+                <button
+                  onClick={() => navigate(workspaceId ? `/debts?workspaceId=${workspaceId}` : '/debts')}
+                  className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300"
+                >
+                  Все долги
+                </button>
+              </div>
+              <div className="space-y-2">
+                {activeDebts.slice(0, 5).map(debt => {
+                  const progressPct = Number(debt.progress_pct || 0);
+                  const isIOwe = debt.direction === 'i_owe';
+                  const barColor = isIOwe ? 'bg-red-500' : 'bg-green-500';
+                  const dirLabel = isIOwe ? 'Я должен' : 'Мне должны';
+                  const dirColor = isIOwe ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400';
+                  return (
+                    <div key={debt.id} className="p-2 bg-gray-50 dark:bg-gray-750 rounded-lg">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="min-w-0 flex-1">
+                          <span className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate block">{debt.title}</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">{debt.counterparty}</span>
+                        </div>
+                        <div className="text-right ml-2 flex-shrink-0">
+                          <span className={`text-xs font-medium ${dirColor}`}>{dirLabel}</span>
+                          <div className="text-sm font-semibold text-gray-800 dark:text-gray-200 tabular-nums">
+                            {formatUnsignedAmount(Number(debt.remaining_amount))} <span className="text-xs text-gray-400 font-normal">/ {formatUnsignedAmount(Number(debt.initial_amount))}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+                        <div className={`h-1.5 rounded-full ${barColor} transition-all`} style={{ width: `${progressPct}%` }} />
+                      </div>
                     </div>
                   );
                 })}

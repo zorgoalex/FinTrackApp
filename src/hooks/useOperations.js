@@ -122,7 +122,7 @@ export function useOperations(workspaceId, options = {}) {
         (async () => {
           let query = supabase
             .from('operations')
-            .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id, account_id, transfer_group_id, transfer_direction, linked_operation_id')
+            .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id, account_id, transfer_group_id, transfer_direction, linked_operation_id, debt_id, debt_applied_amount')
             .eq('workspace_id', workspaceId);
           if (dateFrom) query = query.gte('operation_date', dateFrom);
           if (dateTo) query = query.lte('operation_date', dateTo);
@@ -279,6 +279,8 @@ export function useOperations(workspaceId, options = {}) {
       operation_date: data?.operation_date || new Date().toISOString().slice(0, 10),
       category_id: data?.category_id || null,
       account_id: data?.account_id || null,
+      debt_id: data?.debt_id || null,
+      debt_applied_amount: data?.debt_applied_amount ? Number(data.debt_applied_amount) : null,
     };
 
     const tagNames = data?.tagNames || [];
@@ -290,7 +292,7 @@ export function useOperations(workspaceId, options = {}) {
       const { data: insertedData, error: insertError } = await supabase
         .from('operations')
         .insert([payload])
-        .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id, account_id, transfer_group_id, transfer_direction, linked_operation_id')
+        .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id, account_id, transfer_group_id, transfer_direction, linked_operation_id, debt_id, debt_applied_amount')
         .single();
 
       if (insertError) {
@@ -412,6 +414,8 @@ export function useOperations(workspaceId, options = {}) {
     if (data.operation_date !== undefined) payload.operation_date = data.operation_date;
     if (data.category_id !== undefined) payload.category_id = data.category_id || null;
     if (data.account_id !== undefined) payload.account_id = data.account_id;
+    if (data.debt_id !== undefined) payload.debt_id = data.debt_id || null;
+    if (data.debt_applied_amount !== undefined) payload.debt_applied_amount = data.debt_applied_amount ? Number(data.debt_applied_amount) : null;
 
     try {
       setLoading(true);

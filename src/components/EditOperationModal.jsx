@@ -4,7 +4,9 @@ import { parseAmount, normalizeAmountInput, formatAmountInput } from '../utils/f
 import useCategories from '../hooks/useCategories';
 import useTags from '../hooks/useTags';
 import useAccounts from '../hooks/useAccounts';
+import useDebts from '../hooks/useDebts';
 import TagInput from './TagInput';
+import DebtSelector from './DebtSelector';
 
 const OPERATION_TYPES = {
   income:   { label: 'Доход',    color: 'text-green-600',  bg: 'bg-green-600 hover:bg-green-700' },
@@ -23,6 +25,7 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
   const { categories, addCategory } = useCategories(workspaceId);
   const { tags } = useTags(workspaceId);
   const { accounts } = useAccounts(workspaceId);
+  const { activeDebts } = useDebts(workspaceId);
 
   const activeAccounts = accounts.filter(a => !a.is_archived);
   const isTransfer = operation.type === 'transfer';
@@ -37,6 +40,8 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
     accountId:     operation.account_id || '',
     fromAccountId: isTransfer && operation.transfer_direction === 'out' ? (operation.account_id || '') : '',
     toAccountId:   isTransfer && operation.transfer_direction === 'in' ? (operation.account_id || '') : '',
+    debtId:            operation.debt_id || '',
+    debtAppliedAmount: operation.debt_applied_amount ? String(operation.debt_applied_amount) : '',
   });
 
   // For transfer 'out' operations, find the linked 'in' op to fill toAccountId
@@ -106,6 +111,8 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
             category_id:    form.categoryId || null,
             account_id:     form.accountId || undefined,
             tagNames:       (tagInputRef.current?.getAllTags() ?? form.selectedTags).map((t) => t.name),
+            debt_id:        form.debtId || null,
+            debt_applied_amount: form.debtId ? (Number(form.debtAppliedAmount?.replace(',', '.')) || amount) : null,
           };
       await onSave(operation.id, payload);
       onClose();
@@ -268,6 +275,19 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
               placeholder="Добавить тег..."
             />
           </div>
+
+          {/* Debt selector (expense/income only) */}
+          {!isTransfer && operation.type !== 'salary' && (
+            <DebtSelector
+              debts={activeDebts}
+              operationType={operation.type}
+              selectedDebtId={form.debtId}
+              onDebtChange={(debtId) => setForm(prev => ({ ...prev, debtId: debtId || '' }))}
+              appliedAmount={form.debtAppliedAmount}
+              onAppliedAmountChange={(val) => setForm(prev => ({ ...prev, debtAppliedAmount: val }))}
+              operationAmount={form.amount}
+            />
+          )}
 
           {/* Дата */}
           <div>

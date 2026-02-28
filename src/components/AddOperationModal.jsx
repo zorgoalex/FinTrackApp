@@ -4,7 +4,9 @@ import { parseAmount, normalizeAmountInput, formatAmountInput } from '../utils/f
 import useCategories from '../hooks/useCategories';
 import useTags from '../hooks/useTags';
 import useAccounts from '../hooks/useAccounts';
+import useDebts from '../hooks/useDebts';
 import TagInput from './TagInput';
+import DebtSelector from './DebtSelector';
 
 const OPERATION_TYPES = {
   income:   { label: 'Доход',    color: 'text-green-600',  bg: 'bg-green-600 hover:bg-green-700' },
@@ -21,7 +23,7 @@ function todayDateString() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-export default function AddOperationModal({ type: initialType, defaultCategory, workspaceId, onClose, onSave }) {
+export default function AddOperationModal({ type: initialType, defaultCategory, workspaceId, onClose, onSave, prefillDebt }) {
   // Close on Escape
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose(); };
@@ -31,6 +33,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
   const { categories, addCategory } = useCategories(workspaceId);
   const { tags } = useTags(workspaceId);
   const { accounts } = useAccounts(workspaceId);
+  const { activeDebts } = useDebts(workspaceId);
 
   const defaultAccount = accounts.find(a => a.is_default);
   const activeAccounts = accounts.filter(a => !a.is_archived);
@@ -47,6 +50,8 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
       accountId:     '',
       fromAccountId: '',
       toAccountId:   '',
+      debtId:        prefillDebt?.id || '',
+      debtAppliedAmount: '',
     };
   });
 
@@ -136,6 +141,8 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
             category_id:    form.categoryId || null,
             account_id:     form.accountId || defaultAccount?.id || null,
             tagNames:       (tagInputRef.current?.getAllTags() ?? form.selectedTags).map((t) => t.name),
+            debt_id:        form.debtId || null,
+            debt_applied_amount: form.debtId ? (Number(form.debtAppliedAmount?.replace(',', '.')) || amount) : null,
           };
       await onSave(payload);
       onClose();
@@ -323,6 +330,19 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
                 placeholder="Добавить тег..."
               />
             </div>
+
+          {/* Debt selector (expense/income only) */}
+          {form.type !== 'transfer' && form.type !== 'salary' && (
+            <DebtSelector
+              debts={activeDebts}
+              operationType={form.type}
+              selectedDebtId={form.debtId}
+              onDebtChange={(debtId) => setForm(prev => ({ ...prev, debtId: debtId || '' }))}
+              appliedAmount={form.debtAppliedAmount}
+              onAppliedAmountChange={(val) => setForm(prev => ({ ...prev, debtAppliedAmount: val }))}
+              operationAmount={form.amount}
+            />
+          )}
 
           {/* Дата */}
           <div>

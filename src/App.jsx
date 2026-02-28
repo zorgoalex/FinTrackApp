@@ -18,6 +18,7 @@ const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'));
 const DictionariesPage = lazy(() => import('./pages/DictionariesPage'));
 const ScheduledPage = lazy(() => import('./pages/ScheduledPage'));
 const InvitationAcceptPage = lazy(() => import('./pages/InvitationAcceptPage'));
+const DebtsPage = lazy(() => import('./pages/DebtsPage'));
 
 function LoadingFallback() {
   return (
@@ -93,6 +94,16 @@ const router = createBrowserRouter([
       {
         index: true,
         element: <AnalyticsPage />
+      }
+    ]
+  },
+  {
+    path: '/debts',
+    element: protectedLayoutWithWorkspace,
+    children: [
+      {
+        index: true,
+        element: <DebtsPage />
       }
     ]
   },
