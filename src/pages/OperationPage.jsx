@@ -648,6 +648,8 @@ export function OperationPage() {
               {group.operations.map(operation => {
                 const typeInfo = OPERATION_TYPES[operation.type] || OPERATION_TYPES.expense;
 
+                const typeColor = operation.type === 'transfer' ? 'text-gray-600 dark:text-gray-400' : typeInfo.color;
+
                 if (viewMode === 'compact') {
                   return (
                     <div
@@ -660,7 +662,7 @@ export function OperationPage() {
                         <span className="text-sm text-gray-500 dark:text-gray-400 shrink-0">
                           {formatOperationDate(operation.operation_date || operation.created_at)}
                         </span>
-                        <span className={`text-sm font-medium shrink-0 ${typeInfo.color}`}>
+                        <span className={`text-sm font-medium shrink-0 ${typeColor}`}>
                           {typeInfo.label}
                         </span>
                         <span className="text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100 truncate">
@@ -705,7 +707,7 @@ export function OperationPage() {
                         <span className="text-sm text-gray-500 dark:text-gray-400">
                           {formatOperationDate(operation.operation_date || operation.created_at)}
                         </span>
-                        <span className={`text-sm font-medium ${typeInfo.color}`}>
+                        <span className={`text-sm font-medium ${typeColor}`}>
                           {typeInfo.label}
                         </span>
                       </div>
@@ -719,7 +721,7 @@ export function OperationPage() {
                             const fromAcc = accountMap.get(operation.account_id);
                             const toAcc = accountMap.get(operation._linkedAccountId);
                             parts.push(
-                              <span key="transfer-info" className="text-purple-600 text-xs">
+                              <span key="transfer-info" className="text-gray-600 dark:text-gray-400 text-xs">
                                 {fromAcc?.name || '?'} → {toAcc?.name || '?'}
                               </span>
                             );
