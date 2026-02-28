@@ -16,6 +16,30 @@ function formatSignedAmount(value) {
   return formatBalance(value >= 0 ? 'income' : 'expense', value);
 }
 
+function WidgetSettingsDropdown({ dashboardBlocks, setDashboardBlocks, workspaceId }) {
+  return (
+    <div className="absolute right-0 top-full mt-2 z-50 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-3 border border-gray-200 dark:border-gray-700 min-w-[180px]">
+      <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Показывать на главной:</p>
+      <label className="flex items-center gap-2 cursor-pointer py-0.5">
+        <input
+          type="checkbox"
+          checked={dashboardBlocks.debts !== false}
+          onChange={() => {
+            setDashboardBlocks(prev => {
+              const next = { ...prev, debts: !prev.debts };
+              localStorage.setItem(`dashboardBlocks_${workspaceId}`, JSON.stringify(next));
+              return next;
+            });
+          }}
+          className="rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500"
+        />
+        <Receipt size={14} className="text-gray-500 dark:text-gray-400" />
+        <span className="text-sm text-gray-700 dark:text-gray-300">Долги</span>
+      </label>
+    </div>
+  );
+}
+
 export default function WorkspacePage() {
   const navigate = useNavigate();
   const params = useParams();
@@ -428,8 +452,8 @@ export default function WorkspacePage() {
             )}
           </div>
 
-          {/* Dashboard visibility settings — desktop-only toggle (mobile uses header portal) */}
-          <div className="hidden lg:flex justify-end">
+          {/* Dashboard visibility settings — desktop only (mobile uses header portal) */}
+          <div className="hidden lg:flex justify-end relative">
             <button
               onClick={() => setDashboardSettingsOpen(v => !v)}
               className={`p-1.5 rounded-lg transition-colors ${
@@ -441,28 +465,8 @@ export default function WorkspacePage() {
             >
               {dashboardSettingsOpen ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
+            {dashboardSettingsOpen && <WidgetSettingsDropdown dashboardBlocks={dashboardBlocks} setDashboardBlocks={setDashboardBlocks} workspaceId={workspaceId} />}
           </div>
-          {dashboardSettingsOpen && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-3 border border-gray-200 dark:border-gray-700">
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Показывать на главной:</p>
-              <label className="flex items-center gap-2 cursor-pointer py-0.5">
-                <input
-                  type="checkbox"
-                  checked={dashboardBlocks.debts !== false}
-                  onChange={() => {
-                    setDashboardBlocks(prev => {
-                      const next = { ...prev, debts: !prev.debts };
-                      localStorage.setItem(`dashboardBlocks_${workspaceId}`, JSON.stringify(next));
-                      return next;
-                    });
-                  }}
-                  className="rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500"
-                />
-                <Receipt size={14} className="text-gray-500 dark:text-gray-400" />
-                <span className="text-sm text-gray-700 dark:text-gray-300">Долги</span>
-              </label>
-            </div>
-          )}
 
           {/* Account balances */}
           {activeAccounts.length > 0 && (
@@ -686,20 +690,23 @@ export default function WorkspacePage() {
         />
       )}
 
-      {/* Eye icon in header via portal */}
+      {/* Eye icon + dropdown in header via portal */}
       {typeof document !== 'undefined' && document.getElementById('page-header-actions') &&
         createPortal(
-          <button
-            onClick={() => setDashboardSettingsOpen(v => !v)}
-            className={`p-1.5 rounded-lg transition-colors ${
-              dashboardSettingsOpen
-                ? 'text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20'
-                : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
-            }`}
-            title="Настройка виджетов"
-          >
-            {dashboardSettingsOpen ? <EyeOff size={18} /> : <Eye size={18} />}
-          </button>,
+          <div className="relative">
+            <button
+              onClick={() => setDashboardSettingsOpen(v => !v)}
+              className={`p-1.5 rounded-lg transition-colors ${
+                dashboardSettingsOpen
+                  ? 'text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20'
+                  : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
+              }`}
+              title="Настройка виджетов"
+            >
+              {dashboardSettingsOpen ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+            {dashboardSettingsOpen && <WidgetSettingsDropdown dashboardBlocks={dashboardBlocks} setDashboardBlocks={setDashboardBlocks} workspaceId={workspaceId} />}
+          </div>,
           document.getElementById('page-header-actions')
         )
       }
