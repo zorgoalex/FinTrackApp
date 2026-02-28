@@ -1,35 +1,33 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import useAnalytics from '../hooks/useAnalytics';
 import { formatUnsignedAmount } from '../utils/formatters';
 import { getMonthRange, formatMonthYear } from '../utils/dateRange';
-import { startOfYear, endOfYear, subMonths, format } from 'date-fns';
+import { startOfYear, endOfYear, addMonths, subMonths, addYears, subYears, format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { exportToCSV, buildTextReport } from '../utils/export';
-import { Download, Copy } from 'lucide-react';
+import { Download, Copy, ChevronDown, Check } from 'lucide-react';
 
 const PERIODS = [
-  { key: 'current', label: 'Текущий месяц' },
-  { key: 'prev', label: 'Прошлый месяц' },
-  { key: 'quarter', label: 'Квартал' },
-  { key: 'year', label: 'Год' },
+  { key: 'month', label: '1м' },
+  { key: 'quarter', label: '1к' },
+  { key: 'year', label: '1г' },
   { key: 'custom', label: 'Произвольный' },
 ];
 
-function getPeriodDates(periodKey) {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth();
+function getPeriodDates(periodKey, offset) {
+  const base = new Date();
 
   switch (periodKey) {
-    case 'current':
-      return getMonthRange(y, m);
-    case 'prev': {
-      const prev = subMonths(now, 1);
-      return getMonthRange(prev.getFullYear(), prev.getMonth());
+    case 'month': {
+      const d = offset > 0 ? addMonths(base, offset) : offset < 0 ? subMonths(base, -offset) : base;
+      return getMonthRange(d.getFullYear(), d.getMonth());
     }
     case 'quarter': {
+      const shifted = offset > 0 ? addMonths(base, offset * 3) : offset < 0 ? subMonths(base, -offset * 3) : base;
+      const y = shifted.getFullYear();
+      const m = shifted.getMonth();
       const qStart = new Date(y, Math.floor(m / 3) * 3, 1);
       const qEnd = new Date(y, Math.floor(m / 3) * 3 + 3, 0);
       return {
@@ -37,13 +35,15 @@ function getPeriodDates(periodKey) {
         dateTo: format(qEnd, 'yyyy-MM-dd'),
       };
     }
-    case 'year':
+    case 'year': {
+      const d = offset > 0 ? addYears(base, offset) : offset < 0 ? subYears(base, -offset) : base;
       return {
-        dateFrom: format(startOfYear(now), 'yyyy-MM-dd'),
-        dateTo: format(endOfYear(now), 'yyyy-MM-dd'),
+        dateFrom: format(startOfYear(d), 'yyyy-MM-dd'),
+        dateTo: format(endOfYear(d), 'yyyy-MM-dd'),
       };
+    }
     default:
-      return getMonthRange(y, m);
+      return getMonthRange(base.getFullYear(), base.getMonth());
   }
 }
 
@@ -53,7 +53,10 @@ export default function AnalyticsPage() {
   const workspaceId = searchParams.get('workspaceId') || wsFromCtx;
 
   const [selectedWsIds, setSelectedWsIds] = useState([workspaceId]);
-  const [period, setPeriod] = useState('current');
+  const [wsDropdownOpen, setWsDropdownOpen] = useState(false);
+  const wsDropdownRef = useRef(null);
+  const [period, setPeriod] = useState('month');
+  const [periodOffset, setPeriodOffset] = useState(0);
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [breakdownTab, setBreakdownTab] = useState('categories');
@@ -64,12 +67,28 @@ export default function AnalyticsPage() {
     setSelectedWsIds([workspaceId]);
   }, [workspaceId]);
 
+  // Reset offset when period type changes
+  const handlePeriodChange = (key) => {
+    setPeriod(key);
+    setPeriodOffset(0);
+  };
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (wsDropdownRef.current && !wsDropdownRef.current.contains(e.target)) {
+        setWsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
   const showMultiselect = allWorkspaces && allWorkspaces.length > 1;
 
   const toggleWs = (id) => {
     setSelectedWsIds(prev => {
       if (prev.includes(id)) {
-        // Don't allow deselecting all
         if (prev.length === 1) return prev;
         return prev.filter(x => x !== id);
       }
@@ -83,12 +102,23 @@ export default function AnalyticsPage() {
     setSelectedWsIds(allSelected ? [workspaceId] : allIds);
   };
 
+  const wsDropdownLabel = useMemo(() => {
+    if (!allWorkspaces || allWorkspaces.length <= 1) return '';
+    const allIds = allWorkspaces.map(w => w.id);
+    if (allIds.every(id => selectedWsIds.includes(id))) return 'Все пространства';
+    if (selectedWsIds.length === 1) {
+      const ws = allWorkspaces.find(w => w.id === selectedWsIds[0]);
+      return ws?.name || 'Пространство';
+    }
+    return `${selectedWsIds.length} из ${allWorkspaces.length}`;
+  }, [selectedWsIds, allWorkspaces]);
+
   const { dateFrom, dateTo } = useMemo(() => {
     if (period === 'custom' && customFrom && customTo) {
       return { dateFrom: customFrom, dateTo: customTo };
     }
-    return getPeriodDates(period);
-  }, [period, customFrom, customTo]);
+    return getPeriodDates(period, periodOffset);
+  }, [period, periodOffset, customFrom, customTo]);
 
   const { analytics, loading, error } = useAnalytics(selectedWsIds, { dateFrom, dateTo });
 
@@ -131,57 +161,90 @@ export default function AnalyticsPage() {
     <div className="max-w-2xl mx-auto p-4 pb-24" data-testid="analytics-page">
       <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">Аналитика</h1>
 
-      {/* Workspace multiselect */}
-      {showMultiselect && (
-        <div className="flex flex-wrap items-center gap-2 mb-4" data-testid="workspace-multiselect">
-          <button
-            onClick={toggleAll}
-            aria-pressed={allWorkspaces.every(w => selectedWsIds.includes(w.id))}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
-              allWorkspaces.every(w => selectedWsIds.includes(w.id))
-                ? 'bg-primary-600 dark:bg-primary-500 text-white border-primary-600 dark:border-primary-500'
-                : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:border-primary-400'
-            }`}
-          >
-            Все
-          </button>
-          {allWorkspaces.map(ws => (
+      {/* Controls row: workspace dropdown + period selector */}
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
+        {/* Workspace dropdown multiselect */}
+        {showMultiselect && (
+          <div className="relative" ref={wsDropdownRef} data-testid="workspace-multiselect">
             <button
-              key={ws.id}
-              onClick={() => toggleWs(ws.id)}
-              aria-pressed={selectedWsIds.includes(ws.id)}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
-                selectedWsIds.includes(ws.id)
-                  ? 'bg-primary-600 dark:bg-primary-500 text-white border-primary-600 dark:border-primary-500'
-                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:border-primary-400'
-              }`}
+              onClick={() => setWsDropdownOpen(v => !v)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-primary-400 transition-colors"
             >
-              {ws.name}
+              {wsDropdownLabel}
+              <ChevronDown size={14} className={`transition-transform ${wsDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
-          ))}
-          {allWorkspaces.length > 2 && (
-            <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">
-              {selectedWsIds.length} из {allWorkspaces.length}
-            </span>
-          )}
-        </div>
-      )}
+            {wsDropdownOpen && (
+              <div className="absolute z-20 mt-1 left-0 min-w-[200px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1">
+                <button
+                  onClick={toggleAll}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                >
+                  <span className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
+                    allWorkspaces.every(w => selectedWsIds.includes(w.id))
+                      ? 'bg-primary-600 dark:bg-primary-500 border-primary-600 dark:border-primary-500'
+                      : 'border-gray-300 dark:border-gray-600'
+                  }`}>
+                    {allWorkspaces.every(w => selectedWsIds.includes(w.id)) && <Check size={12} className="text-white" />}
+                  </span>
+                  Все пространства
+                </button>
+                <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
+                {allWorkspaces.map(ws => (
+                  <button
+                    key={ws.id}
+                    onClick={() => toggleWs(ws.id)}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                  >
+                    <span className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
+                      selectedWsIds.includes(ws.id)
+                        ? 'bg-primary-600 dark:bg-primary-500 border-primary-600 dark:border-primary-500'
+                        : 'border-gray-300 dark:border-gray-600'
+                    }`}>
+                      {selectedWsIds.includes(ws.id) && <Check size={12} className="text-white" />}
+                    </span>
+                    {ws.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
-      {/* Period selector */}
-      <div className="flex flex-wrap gap-2 mb-4" data-testid="period-selector">
-        {PERIODS.map(p => (
-          <button
-            key={p.key}
-            onClick={() => setPeriod(p.key)}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
-              period === p.key
-                ? 'bg-primary-600 dark:bg-primary-500 text-white border-primary-600 dark:border-primary-500'
-                : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:border-primary-400'
-            }`}
-          >
-            {p.label}
-          </button>
-        ))}
+        {/* Period selector with prev/next arrows */}
+        <div className="flex items-center gap-1" data-testid="period-selector">
+          {PERIODS.map(p => (
+            <div key={p.key} className="flex items-center">
+              {period === p.key && p.key !== 'custom' && (
+                <button
+                  onClick={() => setPeriodOffset(o => o - 1)}
+                  className="p-1 text-gray-400 dark:text-gray-500 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+                  aria-label="Предыдущий период"
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><polygon points="8,1 8,11 2,6" /></svg>
+                </button>
+              )}
+              <button
+                onClick={() => handlePeriodChange(p.key)}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                  period === p.key
+                    ? 'bg-primary-600 dark:bg-primary-500 text-white border-primary-600 dark:border-primary-500'
+                    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:border-primary-400'
+                }`}
+              >
+                {p.label}
+              </button>
+              {period === p.key && p.key !== 'custom' && (
+                <button
+                  onClick={() => setPeriodOffset(o => o + 1)}
+                  className="p-1 text-gray-400 dark:text-gray-500 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+                  aria-label="Следующий период"
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><polygon points="4,1 4,11 10,6" /></svg>
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Custom date range inputs */}
