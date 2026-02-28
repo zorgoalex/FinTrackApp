@@ -250,3 +250,18 @@ AI_helpers/**/*.md
 AI_helpers/**/*.prd
 test_browser.js
 specdata/
+
+# Claude Code
+.claude/
+
+# Vercel
+.vercel/
+
+# GitHub config
+.github*
+
+# AI helpers
+for_GJ_AI/
+
+# Documentation
+docs/
