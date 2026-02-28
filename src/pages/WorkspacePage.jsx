@@ -6,7 +6,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import useAccounts from '../hooks/useAccounts';
 import AddOperationModal from '../components/AddOperationModal';
 import QuickButtonsSettings from '../components/QuickButtonsSettings';
-import { Plus, BarChart3, TrendingUp, FileText, Pin, Minimize2, Maximize2, Wallet } from 'lucide-react';
+import { Plus, BarChart3, TrendingUp, FileText, Pin, Minimize2, Maximize2, Wallet, Settings } from 'lucide-react';
 import { formatUnsignedAmount, formatSignedAmount as formatBalance } from '../utils/formatters';
 import useCategories from '../hooks/useCategories';
 
@@ -36,6 +36,53 @@ export default function WorkspacePage() {
   const { categories } = useCategories(workspaceId);
   const { accounts, loadBalances } = useAccounts(workspaceId);
   const [balances, setBalances] = useState({});
+  const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
+
+  // Visible accounts from localStorage (null = all visible)
+  const [visibleAccountIds, setVisibleAccountIds] = useState(() => {
+    if (!workspaceId) return null;
+    const stored = localStorage.getItem(`visibleAccounts_${workspaceId}`);
+    if (!stored) return null;
+    try { return JSON.parse(stored); } catch { return null; }
+  });
+
+  // Sync visibleAccountIds when workspaceId changes
+  useEffect(() => {
+    if (!workspaceId) { setVisibleAccountIds(null); return; }
+    const stored = localStorage.getItem(`visibleAccounts_${workspaceId}`);
+    if (!stored) { setVisibleAccountIds(null); return; }
+    try { setVisibleAccountIds(JSON.parse(stored)); } catch { setVisibleAccountIds(null); }
+  }, [workspaceId]);
+
+  const activeAccounts = useMemo(() => accounts.filter(a => !a.is_archived), [accounts]);
+
+  const toggleAccountVisibility = useCallback((accountId) => {
+    setVisibleAccountIds(prev => {
+      // If null (all visible), start with all IDs minus the toggled one
+      const allIds = activeAccounts.map(a => a.id);
+      const current = prev || allIds;
+      let next;
+      if (current.includes(accountId)) {
+        next = current.filter(id => id !== accountId);
+        // Don't allow empty selection
+        if (next.length === 0) return prev;
+      } else {
+        next = [...current, accountId];
+      }
+      // If all selected, store null (= all)
+      if (next.length >= allIds.length) {
+        localStorage.removeItem(`visibleAccounts_${workspaceId}`);
+        return null;
+      }
+      localStorage.setItem(`visibleAccounts_${workspaceId}`, JSON.stringify(next));
+      return next;
+    });
+  }, [activeAccounts, workspaceId]);
+
+  const displayedAccounts = useMemo(() => {
+    if (!visibleAccountIds) return activeAccounts;
+    return activeAccounts.filter(a => visibleAccountIds.includes(a.id));
+  }, [activeAccounts, visibleAccountIds]);
 
   useEffect(() => {
     if (workspaceId) {
@@ -353,14 +400,56 @@ export default function WorkspacePage() {
           </div>
 
           {/* Account balances */}
-          {accounts.filter(a => !a.is_archived).length > 0 && (
+          {activeAccounts.length > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border border-gray-200 dark:border-gray-700">
-              <div className="flex items-center gap-2 mb-2">
-                <Wallet size={16} className="text-gray-500 dark:text-gray-400" />
-                <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Счета</h3>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Wallet size={16} className="text-gray-500 dark:text-gray-400" />
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Счета</h3>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {visibleAccountIds && (
+                    <span className="text-xs text-gray-400 dark:text-gray-500 tabular-nums">
+                      [{displayedAccounts.length}/{activeAccounts.length}]
+                    </span>
+                  )}
+                  <button
+                    onClick={() => setAccountSettingsOpen(v => !v)}
+                    className={`p-1 rounded transition-colors ${
+                      accountSettingsOpen
+                        ? 'text-primary-600 dark:text-primary-400'
+                        : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
+                    }`}
+                    title="Настройка отображения счетов"
+                  >
+                    <Settings size={15} />
+                  </button>
+                </div>
               </div>
+
+              {accountSettingsOpen && (
+                <div className="mb-3 p-2 bg-gray-50 dark:bg-gray-750 rounded-lg border border-gray-200 dark:border-gray-700 space-y-1">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Отображать на главной:</p>
+                  {activeAccounts.map(acc => {
+                    const isVisible = !visibleAccountIds || visibleAccountIds.includes(acc.id);
+                    return (
+                      <label key={acc.id} className="flex items-center gap-2 cursor-pointer py-0.5">
+                        <input
+                          type="checkbox"
+                          checked={isVisible}
+                          onChange={() => toggleAccountVisibility(acc.id)}
+                          className="rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500"
+                        />
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: acc.color || '#6B7280' }} />
+                        <span className="text-sm text-gray-700 dark:text-gray-300">{acc.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+
               <div className="space-y-1.5">
-                {accounts.filter(a => !a.is_archived).map(acc => {
+                {displayedAccounts.map(acc => {
                   const bal = balances[acc.id] || 0;
                   const balColor = bal >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
                   return (

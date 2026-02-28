@@ -12,7 +12,7 @@ import AddOperationModal from '../components/AddOperationModal';
 import EditOperationModal from '../components/EditOperationModal';
 import QuickButtonsSettings from '../components/QuickButtonsSettings';
 import MonthPicker from '../components/MonthPicker';
-import { Pencil, Trash2, ChevronDown, X, Plus } from 'lucide-react';
+import { Pencil, Trash2, ChevronDown, X, Plus, Settings, Wallet } from 'lucide-react';
 import { formatSignedAmount, formatUnsignedAmount, formatGroupDate } from '../utils/formatters';
 import { getMonthRange } from '../utils/dateRange';
 
@@ -89,6 +89,44 @@ export function OperationPage() {
   const [sortField, setSortField] = useState('date');
   const [sortDir, setSortDir] = useState('desc');
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('operationsViewMode') || 'detailed');
+  const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
+
+  // Visible accounts filter (null = all visible)
+  const [visibleAccountIds, setVisibleAccountIds] = useState(() => {
+    if (!workspaceId) return null;
+    const stored = localStorage.getItem(`visibleAccounts_${workspaceId}`);
+    if (!stored) return null;
+    try { return JSON.parse(stored); } catch { return null; }
+  });
+
+  useEffect(() => {
+    if (!workspaceId) { setVisibleAccountIds(null); return; }
+    const stored = localStorage.getItem(`visibleAccounts_${workspaceId}`);
+    if (!stored) { setVisibleAccountIds(null); return; }
+    try { setVisibleAccountIds(JSON.parse(stored)); } catch { setVisibleAccountIds(null); }
+  }, [workspaceId]);
+
+  const activeAccounts = useMemo(() => accounts.filter(a => !a.is_archived), [accounts]);
+
+  const toggleAccountVisibility = useCallback((accountId) => {
+    setVisibleAccountIds(prev => {
+      const allIds = activeAccounts.map(a => a.id);
+      const current = prev || allIds;
+      let next;
+      if (current.includes(accountId)) {
+        next = current.filter(id => id !== accountId);
+        if (next.length === 0) return prev;
+      } else {
+        next = [...current, accountId];
+      }
+      if (next.length >= allIds.length) {
+        localStorage.removeItem(`visibleAccounts_${workspaceId}`);
+        return null;
+      }
+      localStorage.setItem(`visibleAccounts_${workspaceId}`, JSON.stringify(next));
+      return next;
+    });
+  }, [activeAccounts, workspaceId]);
 
   const handleViewMode = (mode) => {
     setViewMode(mode);
@@ -140,6 +178,11 @@ export function OperationPage() {
         filterTags.some((tagId) => op.tags?.some((t) => t.id === tagId))
       );
 
+    // Filter by visible accounts
+    if (visibleAccountIds) {
+      filtered = filtered.filter((op) => visibleAccountIds.includes(op.account_id));
+    }
+
     return filtered.sort((a, b) => {
       let valA, valB;
       if (sortField === 'amount') {
@@ -151,7 +194,7 @@ export function OperationPage() {
       }
       return sortDir === 'asc' ? valA - valB : valB - valA;
     });
-  }, [operations, filterType, filterCategory, filterTags, sortField, sortDir]);
+  }, [operations, filterType, filterCategory, filterTags, sortField, sortDir, visibleAccountIds]);
 
   const groupedOperations = useMemo(() => {
     const groups = new Map();
@@ -440,6 +483,53 @@ export function OperationPage() {
           ))}
         </select>
       </div>
+
+      {/* Account filter */}
+      {activeAccounts.length > 0 && (
+        <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-1.5">
+            <Wallet size={14} className="text-gray-500 dark:text-gray-400" />
+            <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">Счета:</span>
+            {visibleAccountIds && (
+              <span className="text-xs text-gray-400 dark:text-gray-500 tabular-nums">
+                [{visibleAccountIds.length}/{activeAccounts.length}]
+              </span>
+            )}
+            <button
+              onClick={() => setAccountSettingsOpen(v => !v)}
+              className={`p-1 rounded transition-colors ${
+                accountSettingsOpen
+                  ? 'text-primary-600 dark:text-primary-400'
+                  : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
+              }`}
+              title="Настройка отображения счетов"
+            >
+              <Settings size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {accountSettingsOpen && activeAccounts.length > 0 && (
+        <div className="mb-3 p-2 bg-gray-50 dark:bg-gray-750 rounded-lg border border-gray-200 dark:border-gray-700 space-y-1">
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Отображать операции по счетам:</p>
+          {activeAccounts.map(acc => {
+            const isVisible = !visibleAccountIds || visibleAccountIds.includes(acc.id);
+            return (
+              <label key={acc.id} className="flex items-center gap-2 cursor-pointer py-0.5">
+                <input
+                  type="checkbox"
+                  checked={isVisible}
+                  onChange={() => toggleAccountVisibility(acc.id)}
+                  className="rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500"
+                />
+                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: acc.color || '#6B7280' }} />
+                <span className="text-sm text-gray-700 dark:text-gray-300">{acc.name}</span>
+              </label>
+            );
+          })}
+        </div>
+      )}
 
       {/* Tag filter + View mode toggle row */}
       <div className="flex items-start justify-between mb-3">

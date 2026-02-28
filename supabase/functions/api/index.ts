@@ -154,6 +154,18 @@ async function createOperation(
     return errorResponse('amount and type are required', 400);
   }
 
+  // If account_id not provided, use default account
+  let resolvedAccountId = account_id;
+  if (!resolvedAccountId) {
+    const { data: defaultAcc } = await supabase
+      .from('accounts')
+      .select('id')
+      .eq('workspace_id', workspaceId)
+      .eq('is_default', true)
+      .single();
+    resolvedAccountId = defaultAcc?.id || null;
+  }
+
   const { data, error } = await supabase
     .from('operations')
     .insert({
@@ -163,7 +175,7 @@ async function createOperation(
       type,
       description: description || null,
       category_id: category_id || null,
-      account_id: account_id || null,
+      account_id: resolvedAccountId,
       operation_date: operation_date || new Date().toISOString().split('T')[0],
     })
     .select()
