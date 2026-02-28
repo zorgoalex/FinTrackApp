@@ -336,9 +336,9 @@ export default function AnalyticsPage() {
 
 function SummaryCard({ label, amount, color, bg }) {
   return (
-    <div className={`${bg} rounded-xl px-3 py-2 border border-gray-100 dark:border-gray-700 flex items-center gap-1.5 min-w-0`}>
-      <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{label}</span>
-      <span className={`text-sm font-semibold tabular-nums truncate ${color}`}>{formatUnsignedAmount(amount)}</span>
+    <div className={`${bg} rounded-xl px-2 py-1.5 sm:px-3 sm:py-2 border border-gray-100 dark:border-gray-700 text-center`}>
+      <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 leading-tight">{label}</p>
+      <p className={`text-[11px] sm:text-sm font-semibold tabular-nums leading-tight break-all ${color}`}>{formatUnsignedAmount(amount)}</p>
     </div>
   );
 }
