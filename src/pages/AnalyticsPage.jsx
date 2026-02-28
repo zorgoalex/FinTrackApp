@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import useAnalytics from '../hooks/useAnalytics';
@@ -49,14 +49,39 @@ function getPeriodDates(periodKey) {
 
 export default function AnalyticsPage() {
   const [searchParams] = useSearchParams();
-  const { workspaceId: wsFromCtx } = useWorkspace();
+  const { workspaceId: wsFromCtx, allWorkspaces } = useWorkspace();
   const workspaceId = searchParams.get('workspaceId') || wsFromCtx;
 
+  const [selectedWsIds, setSelectedWsIds] = useState([workspaceId]);
   const [period, setPeriod] = useState('current');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [breakdownTab, setBreakdownTab] = useState('categories');
   const [copied, setCopied] = useState(false);
+
+  // Reset selection when active workspace changes
+  useEffect(() => {
+    setSelectedWsIds([workspaceId]);
+  }, [workspaceId]);
+
+  const showMultiselect = allWorkspaces && allWorkspaces.length > 1;
+
+  const toggleWs = (id) => {
+    setSelectedWsIds(prev => {
+      if (prev.includes(id)) {
+        // Don't allow deselecting all
+        if (prev.length === 1) return prev;
+        return prev.filter(x => x !== id);
+      }
+      return [...prev, id];
+    });
+  };
+
+  const toggleAll = () => {
+    const allIds = allWorkspaces.map(w => w.id);
+    const allSelected = allIds.every(id => selectedWsIds.includes(id));
+    setSelectedWsIds(allSelected ? [workspaceId] : allIds);
+  };
 
   const { dateFrom, dateTo } = useMemo(() => {
     if (period === 'custom' && customFrom && customTo) {
@@ -65,7 +90,7 @@ export default function AnalyticsPage() {
     return getPeriodDates(period);
   }, [period, customFrom, customTo]);
 
-  const { analytics, loading, error } = useAnalytics(workspaceId, { dateFrom, dateTo });
+  const { analytics, loading, error } = useAnalytics(selectedWsIds, { dateFrom, dateTo });
 
   if (!workspaceId) {
     return (
@@ -105,6 +130,42 @@ export default function AnalyticsPage() {
   return (
     <div className="max-w-2xl mx-auto p-4 pb-24" data-testid="analytics-page">
       <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">Аналитика</h1>
+
+      {/* Workspace multiselect */}
+      {showMultiselect && (
+        <div className="flex flex-wrap items-center gap-2 mb-4" data-testid="workspace-multiselect">
+          <button
+            onClick={toggleAll}
+            aria-pressed={allWorkspaces.every(w => selectedWsIds.includes(w.id))}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+              allWorkspaces.every(w => selectedWsIds.includes(w.id))
+                ? 'bg-primary-600 dark:bg-primary-500 text-white border-primary-600 dark:border-primary-500'
+                : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:border-primary-400'
+            }`}
+          >
+            Все
+          </button>
+          {allWorkspaces.map(ws => (
+            <button
+              key={ws.id}
+              onClick={() => toggleWs(ws.id)}
+              aria-pressed={selectedWsIds.includes(ws.id)}
+              className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                selectedWsIds.includes(ws.id)
+                  ? 'bg-primary-600 dark:bg-primary-500 text-white border-primary-600 dark:border-primary-500'
+                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:border-primary-400'
+              }`}
+            >
+              {ws.name}
+            </button>
+          ))}
+          {allWorkspaces.length > 2 && (
+            <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">
+              {selectedWsIds.length} из {allWorkspaces.length}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Period selector */}
       <div className="flex flex-wrap gap-2 mb-4" data-testid="period-selector">
