@@ -484,7 +484,7 @@ export default function WorkspacePage() {
                     income: 'text-green-600 dark:text-green-400',
                     expense: 'text-red-600 dark:text-red-400',
                     salary: 'text-primary-600 dark:text-primary-400',
-                    transfer: 'text-purple-600 dark:text-purple-400',
+                    transfer: 'text-gray-600 dark:text-gray-400',
                   };
                   const typeLabels = { income: 'Доход', expense: 'Расход', salary: 'Зарплата', transfer: 'Перевод' };
                   const color = typeColors[op.type] || 'text-gray-600 dark:text-gray-400';
