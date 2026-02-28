@@ -97,6 +97,7 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
             operation_date:  form.operationDate,
             from_account_id: form.fromAccountId || undefined,
             to_account_id:   form.toAccountId || undefined,
+            tagNames:        (tagInputRef.current?.getAllTags() ?? form.selectedTags).map((t) => t.name),
           }
         : {
             amount,
@@ -256,19 +257,17 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
             />
           </div>
 
-          {/* Теги (hidden for transfers) */}
-          {!isTransfer && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Теги</label>
-              <TagInput
-                ref={tagInputRef}
-                allTags={tags}
-                selected={form.selectedTags}
-                onChange={(newTags) => setForm((prev) => ({ ...prev, selectedTags: newTags }))}
-                placeholder="Добавить тег..."
-              />
-            </div>
-          )}
+          {/* Теги */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Теги</label>
+            <TagInput
+              ref={tagInputRef}
+              allTags={tags}
+              selected={form.selectedTags}
+              onChange={(newTags) => setForm((prev) => ({ ...prev, selectedTags: newTags }))}
+              placeholder="Добавить тег..."
+            />
+          </div>
 
           {/* Дата */}
           <div>

@@ -237,6 +237,28 @@ export function useOperations(workspaceId, options = {}) {
 
         if (transferErr) throw transferErr;
 
+        // Link tags to both transfer operations
+        const transferTagNames = data?.tagNames || [];
+        if (transferTagNames.length > 0 && transferResult?.[0]) {
+          const { out_operation_id, in_operation_id } = transferResult[0];
+          const tagIds = (await Promise.all(transferTagNames.map(async (tagName) => {
+            const trimmed = tagName.trim();
+            if (!trimmed) return null;
+            const { data: existing } = await supabase
+              .from('tags').select('id').eq('workspace_id', workspaceId).eq('name', trimmed).maybeSingle();
+            if (existing?.id) return existing.id;
+            const { data: inserted } = await supabase
+              .from('tags').insert({ workspace_id: workspaceId, name: trimmed, color: '#6B7280' }).select('id').single();
+            return inserted?.id || null;
+          }))).filter(Boolean);
+          if (tagIds.length > 0) {
+            const links = [out_operation_id, in_operation_id]
+              .filter(Boolean)
+              .flatMap(opId => tagIds.map(tagId => ({ operation_id: opId, tag_id: tagId })));
+            await supabase.from('operation_tags').insert(links);
+          }
+        }
+
         await loadOperations();
         return transferResult?.[0] || { success: true };
       } catch (transferException) {
@@ -346,6 +368,33 @@ export function useOperations(workspaceId, options = {}) {
         });
 
         if (rpcErr) throw rpcErr;
+
+        // Update tags on both transfer operations
+        if (data.tagNames !== undefined) {
+          const { data: transferOps } = await supabase
+            .from('operations').select('id').eq('transfer_group_id', data._transferGroupId);
+          const opIds = (transferOps || []).map(o => o.id);
+          for (const opId of opIds) {
+            await supabase.from('operation_tags').delete().eq('operation_id', opId);
+          }
+          if (data.tagNames.length > 0 && opIds.length > 0) {
+            const tagIds = (await Promise.all(data.tagNames.map(async (tagName) => {
+              const trimmed = tagName.trim();
+              if (!trimmed) return null;
+              const { data: existing } = await supabase
+                .from('tags').select('id').eq('workspace_id', workspaceId).eq('name', trimmed).maybeSingle();
+              if (existing?.id) return existing.id;
+              const { data: inserted } = await supabase
+                .from('tags').insert({ workspace_id: workspaceId, name: trimmed, color: '#6B7280' }).select('id').single();
+              return inserted?.id || null;
+            }))).filter(Boolean);
+            if (tagIds.length > 0) {
+              const links = opIds.flatMap(opId => tagIds.map(tagId => ({ operation_id: opId, tag_id: tagId })));
+              await supabase.from('operation_tags').insert(links);
+            }
+          }
+        }
+
         await loadOperations();
         return true;
       } catch (e) {

@@ -126,6 +126,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
             operation_date:  form.operationDate,
             from_account_id: form.fromAccountId,
             to_account_id:   form.toAccountId,
+            tagNames:        (tagInputRef.current?.getAllTags() ?? form.selectedTags).map((t) => t.name),
           }
         : {
             type:           form.type,
@@ -311,9 +312,8 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
             />
           </div>
 
-          {/* Теги (hidden for transfers) */}
-          {form.type !== 'transfer' && (
-            <div>
+          {/* Теги */}
+          <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Теги</label>
               <TagInput
                 ref={tagInputRef}
@@ -323,7 +323,6 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
                 placeholder="Добавить тег..."
               />
             </div>
-          )}
 
           {/* Дата */}
           <div>
