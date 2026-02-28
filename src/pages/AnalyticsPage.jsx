@@ -10,10 +10,10 @@ import { exportToCSV, buildTextReport } from '../utils/export';
 import { Download, Copy, ChevronDown, Check } from 'lucide-react';
 
 const PERIODS = [
-  { key: 'month', label: '1м' },
-  { key: 'quarter', label: '1к' },
-  { key: 'year', label: '1г' },
-  { key: 'custom', label: 'Произвольный' },
+  { key: 'month', label: '1м', title: 'Месяц' },
+  { key: 'quarter', label: '1к', title: 'Квартал' },
+  { key: 'year', label: '1г', title: 'Год' },
+  { key: 'custom', label: 'Произвольный', title: 'Произвольный период' },
 ];
 
 function getPeriodDates(periodKey, offset) {
@@ -130,7 +130,7 @@ export default function AnalyticsPage() {
     );
   }
 
-  const { totalIncome, totalExpense, totalSalary, balance, categoryBreakdown, tagBreakdown, operationCount } = analytics;
+  const { totalIncome, totalExpense, balance, categoryBreakdown, tagBreakdown, operationCount } = analytics;
   const maxCategoryAmount = Math.max(...categoryBreakdown.map(c => c.amount), 1);
   const maxTagAmount = Math.max(...tagBreakdown.map(t => t.amount), 1);
 
@@ -225,6 +225,7 @@ export default function AnalyticsPage() {
               )}
               <button
                 onClick={() => handlePeriodChange(p.key)}
+                title={p.title}
                 className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
                   period === p.key
                     ? 'bg-primary-600 dark:bg-primary-500 text-white border-primary-600 dark:border-primary-500'
@@ -275,11 +276,10 @@ export default function AnalyticsPage() {
 
       {!loading && !error && (
         <>
-          {/* Summary cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6" data-testid="summary-cards">
+          {/* Summary cards — 3 in one row */}
+          <div className="grid grid-cols-3 gap-2 mb-6" data-testid="summary-cards">
             <SummaryCard label="Доходы" amount={totalIncome} color="text-green-600" bg="bg-green-50 dark:bg-green-900/30" />
             <SummaryCard label="Расходы" amount={totalExpense} color="text-red-600" bg="bg-red-50 dark:bg-red-900/30" />
-            <SummaryCard label="Зарплаты" amount={totalSalary} color="text-primary-600 dark:text-primary-400" bg="bg-primary-50 dark:bg-primary-900/30" />
             <SummaryCard label="Баланс" amount={balance} color={balance >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'} bg="bg-gray-50 dark:bg-gray-800" />
           </div>
 
@@ -336,9 +336,9 @@ export default function AnalyticsPage() {
 
 function SummaryCard({ label, amount, color, bg }) {
   return (
-    <div className={`${bg} rounded-xl p-3 border border-gray-100 dark:border-gray-700`}>
-      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{label}</p>
-      <p className={`text-lg font-semibold tabular-nums ${color}`}>{formatUnsignedAmount(amount)}</p>
+    <div className={`${bg} rounded-xl px-3 py-2 border border-gray-100 dark:border-gray-700 flex items-center gap-1.5 min-w-0`}>
+      <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{label}</span>
+      <span className={`text-sm font-semibold tabular-nums truncate ${color}`}>{formatUnsignedAmount(amount)}</span>
     </div>
   );
 }
