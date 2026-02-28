@@ -148,7 +148,7 @@ async function createOperation(
   userId: string,
   body: Record<string, unknown>,
 ) {
-  const { amount, type, description, category_id, operation_date, tag_ids } = body;
+  const { amount, type, description, category_id, operation_date, tag_ids, account_id } = body;
 
   if (!amount || !type) {
     return errorResponse('amount and type are required', 400);
@@ -163,6 +163,7 @@ async function createOperation(
       type,
       description: description || null,
       category_id: category_id || null,
+      account_id: account_id || null,
       operation_date: operation_date || new Date().toISOString().split('T')[0],
     })
     .select()
@@ -348,6 +349,148 @@ async function updateTag(
   return jsonResponse(data);
 }
 
+// --- Accounts ---
+
+async function getAccounts(
+  supabase: ReturnType<typeof createClient>,
+  workspaceId: string,
+) {
+  const { data, error } = await supabase
+    .from('accounts')
+    .select('id, workspace_id, name, color, is_default, is_archived, created_at, updated_at')
+    .eq('workspace_id', workspaceId)
+    .order('is_default', { ascending: false })
+    .order('name');
+
+  if (error) return errorResponse(error.message, 500);
+  return jsonResponse(data);
+}
+
+async function createAccount(
+  supabase: ReturnType<typeof createClient>,
+  workspaceId: string,
+  body: Record<string, unknown>,
+) {
+  const { name, color } = body;
+  if (!name) return errorResponse('name is required', 400);
+
+  const { data, error } = await supabase
+    .from('accounts')
+    .insert({ workspace_id: workspaceId, name, color: color || '#6B7280' })
+    .select()
+    .single();
+
+  if (error) {
+    if (error.code === '23505') return errorResponse('Account name already exists', 409);
+    return errorResponse(error.message, 500);
+  }
+  return jsonResponse(data, 201);
+}
+
+async function updateAccount(
+  supabase: ReturnType<typeof createClient>,
+  workspaceId: string,
+  accountId: string,
+  body: Record<string, unknown>,
+) {
+  const { data, error } = await supabase
+    .from('accounts')
+    .update(body)
+    .eq('id', accountId)
+    .eq('workspace_id', workspaceId)
+    .select()
+    .single();
+
+  if (error) return errorResponse(error.message, error.code === 'PGRST116' ? 404 : 500);
+  return jsonResponse(data);
+}
+
+async function deleteAccount(
+  supabase: ReturnType<typeof createClient>,
+  workspaceId: string,
+  accountId: string,
+) {
+  const { error } = await supabase
+    .from('accounts')
+    .delete()
+    .eq('id', accountId)
+    .eq('workspace_id', workspaceId);
+
+  if (error) return errorResponse(error.message, 500);
+  return jsonResponse({ success: true });
+}
+
+async function getAccountBalances(
+  supabase: ReturnType<typeof createClient>,
+  workspaceId: string,
+) {
+  const { data, error } = await supabase.rpc('get_account_balances', { p_workspace_id: workspaceId });
+  if (error) return errorResponse(error.message, 500);
+  return jsonResponse(data);
+}
+
+// --- Transfers ---
+
+async function createTransfer(
+  supabase: ReturnType<typeof createClient>,
+  workspaceId: string,
+  userId: string,
+  body: Record<string, unknown>,
+) {
+  const { from_account_id, to_account_id, amount, description, operation_date } = body;
+  if (!from_account_id || !to_account_id || !amount) {
+    return errorResponse('from_account_id, to_account_id, and amount are required', 400);
+  }
+
+  const { data, error } = await supabase.rpc('create_transfer', {
+    p_workspace_id: workspaceId,
+    p_user_id: userId,
+    p_from_account_id: from_account_id,
+    p_to_account_id: to_account_id,
+    p_amount: amount,
+    p_description: description || null,
+    p_operation_date: operation_date || new Date().toISOString().split('T')[0],
+  });
+
+  if (error) return errorResponse(error.message, 500);
+  return jsonResponse(data?.[0] || data, 201);
+}
+
+async function updateTransfer(
+  supabase: ReturnType<typeof createClient>,
+  workspaceId: string,
+  transferGroupId: string,
+  body: Record<string, unknown>,
+) {
+  const { data, error } = await supabase.rpc('update_transfer', {
+    p_workspace_id: workspaceId,
+    p_transfer_group_id: transferGroupId,
+    p_from_account_id: body.from_account_id || null,
+    p_to_account_id: body.to_account_id || null,
+    p_amount: body.amount || null,
+    p_description: body.description !== undefined ? body.description : null,
+    p_operation_date: body.operation_date || null,
+  });
+
+  if (error) return errorResponse(error.message, 500);
+  return jsonResponse(data?.[0] || data);
+}
+
+async function deleteTransfer(
+  supabase: ReturnType<typeof createClient>,
+  workspaceId: string,
+  transferGroupId: string,
+) {
+  const { error } = await supabase
+    .from('operations')
+    .delete()
+    .eq('transfer_group_id', transferGroupId)
+    .eq('workspace_id', workspaceId);
+
+  if (error) return errorResponse(error.message, 500);
+  return jsonResponse({ success: true });
+}
+
 // --- Main Router ---
 
 Deno.serve(async (req) => {
@@ -403,6 +546,32 @@ Deno.serve(async (req) => {
           const opId = segments[3];
           if (method === 'PATCH') return await updateOperation(supabase, workspaceId, opId, body);
           if (method === 'DELETE') return await deleteOperation(supabase, workspaceId, opId);
+        }
+      }
+
+      // /workspaces/:id/accounts
+      if (segments[2] === 'accounts') {
+        if (segments.length === 3) {
+          if (method === 'GET') return await getAccounts(supabase, workspaceId);
+          if (method === 'POST') return await createAccount(supabase, workspaceId, body);
+        }
+        if (segments.length === 4 && segments[3] === 'balances' && method === 'GET') {
+          return await getAccountBalances(supabase, workspaceId);
+        }
+        if (segments.length === 4) {
+          if (method === 'PATCH') return await updateAccount(supabase, workspaceId, segments[3], body);
+          if (method === 'DELETE') return await deleteAccount(supabase, workspaceId, segments[3]);
+        }
+      }
+
+      // /workspaces/:id/transfers
+      if (segments[2] === 'transfers') {
+        if (segments.length === 3 && method === 'POST') {
+          return await createTransfer(supabase, workspaceId, user.id, body);
+        }
+        if (segments.length === 4) {
+          if (method === 'PATCH') return await updateTransfer(supabase, workspaceId, segments[3], body);
+          if (method === 'DELETE') return await deleteTransfer(supabase, workspaceId, segments[3]);
         }
       }
 

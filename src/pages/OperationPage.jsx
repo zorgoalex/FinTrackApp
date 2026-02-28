@@ -7,6 +7,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import useOperations from '../hooks/useOperations';
 import useCategories from '../hooks/useCategories';
 import useTags from '../hooks/useTags';
+import useAccounts from '../hooks/useAccounts';
 import AddOperationModal from '../components/AddOperationModal';
 import EditOperationModal from '../components/EditOperationModal';
 import QuickButtonsSettings from '../components/QuickButtonsSettings';
@@ -16,8 +17,10 @@ import { formatSignedAmount, formatUnsignedAmount, formatGroupDate } from '../ut
 import { getMonthRange } from '../utils/dateRange';
 
 const OPERATION_TYPES = {
-  income: { label: 'Доход',    sign: '+', color: 'text-green-600' },
-  expense: { label: 'Расход',  sign: '−', color: 'text-red-600' },
+  income:   { label: 'Доход',    sign: '+', color: 'text-green-600' },
+  expense:  { label: 'Расход',   sign: '−', color: 'text-red-600' },
+  salary:   { label: 'Зарплата', sign: '−', color: 'text-blue-600' },
+  transfer: { label: 'Перевод',  sign: '⇄', color: 'text-purple-600' },
 };
 
 function formatOperationDate(value) {
@@ -64,6 +67,7 @@ export function OperationPage() {
 
   const { categories } = useCategories(workspaceId);
   const { tags } = useTags(workspaceId);
+  const { accounts } = useAccounts(workspaceId);
 
   const categoryMap = useMemo(() => {
     const map = new Map();
@@ -100,10 +104,33 @@ export function OperationPage() {
     }
   };
 
+  // Build account map for display
+  const accountMap = useMemo(() => {
+    const map = new Map();
+    accounts.forEach(a => map.set(a.id, a));
+    return map;
+  }, [accounts]);
+
   const visibleOperations = useMemo(() => {
+    // Filter out 'in' direction transfers (keep 'out' only to avoid duplicates)
+    let base = (operations || []).filter(op => !(op.type === 'transfer' && op.transfer_direction === 'in'));
+
+    // Enrich transfer 'out' operations with linked account info
+    const inOps = (operations || []).filter(op => op.type === 'transfer' && op.transfer_direction === 'in');
+    const inByGroup = new Map();
+    inOps.forEach(op => { if (op.transfer_group_id) inByGroup.set(op.transfer_group_id, op); });
+
+    base = base.map(op => {
+      if (op.type === 'transfer' && op.transfer_group_id) {
+        const linked = inByGroup.get(op.transfer_group_id);
+        return { ...op, _linkedAccountId: linked?.account_id || null };
+      }
+      return op;
+    });
+
     let filtered = filterType
-      ? (operations || []).filter((op) => op.type === filterType)
-      : [...(operations || [])];
+      ? base.filter((op) => op.type === filterType)
+      : [...base];
 
     if (filterCategory)
       filtered = filtered.filter((op) => op.category_id === filterCategory);
@@ -198,13 +225,15 @@ export function OperationPage() {
     return permissions.canEditOwnOperations && operation.user_id === user?.id;
   };
 
-  const handleDelete = async (operationId) => {
-    if (!operationId) return;
+  const handleDelete = async (operation) => {
+    const id = typeof operation === 'string' ? operation : operation?.id;
+    if (!id) return;
 
-    const confirmed = window.confirm('Удалить операцию?');
+    const isTransfer = typeof operation === 'object' && operation?.type === 'transfer';
+    const confirmed = window.confirm(isTransfer ? 'Удалить перевод (обе операции)?' : 'Удалить операцию?');
     if (!confirmed) return;
 
-    await deleteOperation(operationId);
+    await deleteOperation(id, isTransfer ? operation.transfer_group_id : null);
   };
 
   const handleEditSave = async (operationId, data) => {
@@ -298,6 +327,15 @@ export function OperationPage() {
           >
             ＋ Расход
           </button>
+          {accounts.filter(a => !a.is_archived).length > 1 && (
+            <button
+              onClick={() => openAddModal('transfer')}
+              disabled={!permissions.canCreateOperations || loading}
+              className="px-3 py-2 rounded-lg bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800 disabled:opacity-50 font-medium text-sm truncate btn-press"
+            >
+              ⇄ Перевод
+            </button>
+          )}
           {/* Custom quick buttons */}
           {quickButtons.map((btn, i) => (
             <button
@@ -334,9 +372,10 @@ export function OperationPage() {
       {/* Фильтр + Сортировка */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
         {[
-          { key: null,      label: 'Все' },
-          { key: 'income',  label: '+ Доход' },
-          { key: 'expense', label: '− Расход' },
+          { key: null,       label: 'Все' },
+          { key: 'income',   label: '+ Доход' },
+          { key: 'expense',  label: '− Расход' },
+          { key: 'transfer', label: '⇄ Перевод' },
         ].map(({ key, label }) => (
           <button
             key={String(key)}
@@ -550,7 +589,7 @@ export function OperationPage() {
                         )}
                         {canDeleteRecord(operation) && (
                           <button
-                            onClick={() => handleDelete(operation.id)}
+                            onClick={() => handleDelete(operation)}
                             disabled={loading}
                             className="text-xs px-2 py-1.5 rounded-md border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-50"
                             title="Удалить"
@@ -585,6 +624,15 @@ export function OperationPage() {
                       <div className="flex flex-wrap gap-x-2 gap-y-0.5 items-center text-sm text-gray-500 dark:text-gray-400">
                         {(() => {
                           const parts = [];
+                          if (operation.type === 'transfer') {
+                            const fromAcc = accountMap.get(operation.account_id);
+                            const toAcc = accountMap.get(operation._linkedAccountId);
+                            parts.push(
+                              <span key="transfer-info" className="text-purple-600 text-xs">
+                                {fromAcc?.name || '?'} → {toAcc?.name || '?'}
+                              </span>
+                            );
+                          }
                           if (operation.description) {
                             parts.push(
                               <span key="desc" className="text-purple-600">
@@ -642,7 +690,7 @@ export function OperationPage() {
                       )}
                       {canDeleteRecord(operation) && (
                         <button
-                          onClick={() => handleDelete(operation.id)}
+                          onClick={() => handleDelete(operation)}
                           disabled={loading}
                           className="text-xs px-2.5 py-1.5 rounded-md border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-50"
                         >

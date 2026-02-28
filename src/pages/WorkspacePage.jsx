@@ -1,11 +1,12 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import useOperations from '../hooks/useOperations';
 import { usePermissions } from '../hooks/usePermissions';
+import useAccounts from '../hooks/useAccounts';
 import AddOperationModal from '../components/AddOperationModal';
 import QuickButtonsSettings from '../components/QuickButtonsSettings';
-import { Plus, BarChart3, TrendingUp, FileText, Pin, Minimize2, Maximize2 } from 'lucide-react';
+import { Plus, BarChart3, TrendingUp, FileText, Pin, Minimize2, Maximize2, Wallet } from 'lucide-react';
 import { formatUnsignedAmount, formatSignedAmount as formatBalance } from '../utils/formatters';
 import useCategories from '../hooks/useCategories';
 
@@ -33,6 +34,14 @@ export default function WorkspacePage() {
   const { hasManagementRights, canCreateOperations } = usePermissions();
   const quickButtons = currentWorkspace?.quick_buttons || [];
   const { categories } = useCategories(workspaceId);
+  const { accounts, loadBalances } = useAccounts(workspaceId);
+  const [balances, setBalances] = useState({});
+
+  useEffect(() => {
+    if (workspaceId) {
+      loadBalances().then(setBalances);
+    }
+  }, [workspaceId, loadBalances, operations]);
 
   const [summaryMode, setSummaryMode] = useState(
     () => localStorage.getItem('summaryMode') || 'expanded'
@@ -314,6 +323,15 @@ export default function WorkspacePage() {
             >
               + Расход
             </button>
+            {accounts.filter(a => !a.is_archived).length > 1 && (
+              <button
+                onClick={() => openOperationForm('transfer')}
+                disabled={!canCreateOperations}
+                className="px-3 py-2 rounded-xl bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800 disabled:opacity-50 font-medium text-sm btn-press"
+              >
+                ⇄ Перевод
+              </button>
+            )}
             {quickButtons.map((btn, i) => (
               <button
                 key={i}
@@ -334,6 +352,33 @@ export default function WorkspacePage() {
             )}
           </div>
 
+          {/* Account balances */}
+          {accounts.filter(a => !a.is_archived).length > 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-2 mb-2">
+                <Wallet size={16} className="text-gray-500 dark:text-gray-400" />
+                <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Счета</h3>
+              </div>
+              <div className="space-y-1.5">
+                {accounts.filter(a => !a.is_archived).map(acc => {
+                  const bal = balances[acc.id] || 0;
+                  const balColor = bal >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
+                  return (
+                    <div key={acc.id} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: acc.color || '#6B7280' }} />
+                        <span className="text-sm text-gray-700 dark:text-gray-300">{acc.name}</span>
+                      </div>
+                      <span className={`text-sm font-semibold tabular-nums ${balColor}`}>
+                        {formatSignedAmount(bal)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Последние операции</h3>
@@ -349,10 +394,13 @@ export default function WorkspacePage() {
                   const typeColors = {
                     income: 'text-green-600 dark:text-green-400',
                     expense: 'text-red-600 dark:text-red-400',
-                    salary: 'text-primary-600 dark:text-primary-400'
+                    salary: 'text-primary-600 dark:text-primary-400',
+                    transfer: 'text-purple-600 dark:text-purple-400',
                   };
-                  const typeLabels = { income: 'Доход', expense: 'Расход', salary: 'Зарплата' };
+                  const typeLabels = { income: 'Доход', expense: 'Расход', salary: 'Зарплата', transfer: 'Перевод' };
                   const color = typeColors[op.type] || 'text-gray-600 dark:text-gray-400';
+                  // Skip 'in' transfers (show only 'out' to avoid duplicates)
+                  if (op.type === 'transfer' && op.transfer_direction === 'in') return null;
                   return (
                     <div key={op.id} className="py-2 flex items-center justify-between">
                       <div className="min-w-0">
@@ -362,7 +410,9 @@ export default function WorkspacePage() {
                         )}
                       </div>
                       <span className={`text-sm font-semibold ${color} ml-2 whitespace-nowrap`}>
-                        {formatSignedAmount(op.type === 'income' ? op.amount : -Math.abs(op.amount))}
+                        {op.type === 'transfer'
+                          ? formatUnsignedAmount(op.amount)
+                          : formatSignedAmount(op.type === 'income' ? op.amount : -Math.abs(op.amount))}
                       </span>
                     </div>
                   );

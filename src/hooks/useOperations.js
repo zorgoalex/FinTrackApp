@@ -13,7 +13,7 @@ const EMPTY_SUMMARY = {
   month: { ...EMPTY_PERIOD_SUMMARY }
 };
 
-const ALLOWED_TYPES = ['income', 'expense', 'salary'];
+const ALLOWED_TYPES = ['income', 'expense', 'salary', 'transfer'];
 
 function toOperationDate(value) {
   if (!value) return null;
@@ -65,7 +65,7 @@ function calculateSummary(operations) {
 
   operations.forEach((operation) => {
     const type = (operation?.type || '').toLowerCase();
-    if (!ALLOWED_TYPES.includes(type)) {
+    if (!['income', 'expense', 'salary'].includes(type)) {
       return;
     }
 
@@ -122,7 +122,7 @@ export function useOperations(workspaceId, options = {}) {
         (async () => {
           let query = supabase
             .from('operations')
-            .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id')
+            .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id, account_id, transfer_group_id, transfer_direction, linked_operation_id')
             .eq('workspace_id', workspaceId);
           if (dateFrom) query = query.gte('operation_date', dateFrom);
           if (dateTo) query = query.lte('operation_date', dateTo);
@@ -218,6 +218,36 @@ export function useOperations(workspaceId, options = {}) {
       return null;
     }
 
+    // Handle transfer type separately via RPC
+    if (type === 'transfer') {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const { data: transferResult, error: transferErr } = await supabase
+          .rpc('create_transfer', {
+            p_workspace_id: workspaceId,
+            p_user_id: userId,
+            p_from_account_id: data.from_account_id,
+            p_to_account_id: data.to_account_id,
+            p_amount: Number(data?.amount) || 0,
+            p_description: data?.description || null,
+            p_operation_date: data?.operation_date || new Date().toISOString().slice(0, 10),
+          });
+
+        if (transferErr) throw transferErr;
+
+        await loadOperations();
+        return transferResult?.[0] || { success: true };
+      } catch (transferException) {
+        console.error('useOperations: transfer error', transferException);
+        setError(transferException.message || 'Ошибка создания перевода');
+        return null;
+      } finally {
+        setLoading(false);
+      }
+    }
+
     const payload = {
       workspace_id: workspaceId,
       user_id: userId,
@@ -225,7 +255,8 @@ export function useOperations(workspaceId, options = {}) {
       type,
       description: data?.description || '',
       operation_date: data?.operation_date || new Date().toISOString().slice(0, 10),
-      category_id: data?.category_id || null
+      category_id: data?.category_id || null,
+      account_id: data?.account_id || null,
     };
 
     const tagNames = data?.tagNames || [];
@@ -237,7 +268,7 @@ export function useOperations(workspaceId, options = {}) {
       const { data: insertedData, error: insertError } = await supabase
         .from('operations')
         .insert([payload])
-        .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id')
+        .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id, account_id, transfer_group_id, transfer_direction, linked_operation_id')
         .single();
 
       if (insertError) {
@@ -298,11 +329,40 @@ export function useOperations(workspaceId, options = {}) {
       return false;
     }
 
+    // Handle transfer update via RPC
+    if (data._isTransfer && data._transferGroupId) {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const { error: rpcErr } = await supabase.rpc('update_transfer', {
+          p_workspace_id: workspaceId,
+          p_transfer_group_id: data._transferGroupId,
+          p_from_account_id: data.from_account_id || null,
+          p_to_account_id: data.to_account_id || null,
+          p_amount: data.amount !== undefined ? Number(data.amount) || 0 : null,
+          p_description: data.description !== undefined ? data.description : null,
+          p_operation_date: data.operation_date || null,
+        });
+
+        if (rpcErr) throw rpcErr;
+        await loadOperations();
+        return true;
+      } catch (e) {
+        console.error('useOperations: update transfer error', e);
+        setError(e.message || 'Ошибка обновления перевода');
+        return false;
+      } finally {
+        setLoading(false);
+      }
+    }
+
     const payload = {};
     if (data.amount !== undefined) payload.amount = Number(data.amount) || 0;
     if (data.description !== undefined) payload.description = data.description;
     if (data.operation_date !== undefined) payload.operation_date = data.operation_date;
     if (data.category_id !== undefined) payload.category_id = data.category_id || null;
+    if (data.account_id !== undefined) payload.account_id = data.account_id;
 
     try {
       setLoading(true);
@@ -370,7 +430,7 @@ export function useOperations(workspaceId, options = {}) {
     }
   }, [loadOperations, workspaceId]);
 
-  const deleteOperation = useCallback(async (id) => {
+  const deleteOperation = useCallback(async (id, transferGroupId = null) => {
     if (!workspaceId) {
       setError('Рабочее пространство не выбрано');
       return false;
@@ -383,25 +443,35 @@ export function useOperations(workspaceId, options = {}) {
 
     // Optimistic: remove from list immediately
     const previousOperations = operations;
-    setOperations(prev => prev.filter(op => op.id !== id));
+    if (transferGroupId) {
+      setOperations(prev => prev.filter(op => op.transfer_group_id !== transferGroupId));
+    } else {
+      setOperations(prev => prev.filter(op => op.id !== id));
+    }
 
     try {
       setError(null);
 
-      const { error: deleteError } = await supabase
-        .from('operations')
-        .delete()
-        .eq('id', id)
-        .eq('workspace_id', workspaceId);
-
-      if (deleteError) {
-        throw deleteError;
+      if (transferGroupId) {
+        // Delete both operations in the transfer pair
+        const { error: deleteError } = await supabase
+          .from('operations')
+          .delete()
+          .eq('transfer_group_id', transferGroupId)
+          .eq('workspace_id', workspaceId);
+        if (deleteError) throw deleteError;
+      } else {
+        const { error: deleteError } = await supabase
+          .from('operations')
+          .delete()
+          .eq('id', id)
+          .eq('workspace_id', workspaceId);
+        if (deleteError) throw deleteError;
       }
 
       return true;
     } catch (deleteException) {
       console.error('useOperations: delete error', deleteException);
-      // Rollback on error
       setOperations(previousOperations);
       setError(deleteException.message || 'Ошибка удаления операции');
       return false;

@@ -103,6 +103,8 @@ async function handleStart(chatId: number) {
       `/addcat тип название [цвет] — создать категорию\n` +
       `/tags — список тегов\n` +
       `/addtag название [цвет] — создать тег\n` +
+      `/accounts — список счетов и балансы\n` +
+      `/transfer от на сумма [описание] — перевод\n` +
       `/recent — последние 10 операций`,
   );
 }
@@ -249,6 +251,14 @@ async function handleAdd(
 
   const description = args.slice(1).join(' ') || null;
 
+  // Get default account
+  const { data: defaultAcc } = await supabaseAdmin
+    .from('accounts')
+    .select('id')
+    .eq('workspace_id', workspaceId)
+    .eq('is_default', true)
+    .single();
+
   const { data, error } = await supabaseAdmin
     .from('operations')
     .insert({
@@ -258,6 +268,7 @@ async function handleAdd(
       type,
       description,
       operation_date: todayStr(),
+      account_id: defaultAcc?.id || null,
     })
     .select()
     .single();
@@ -366,22 +377,105 @@ async function handleAddTag(
 async function handleRecent(chatId: number, workspaceId: string) {
   const { data, error } = await supabaseAdmin
     .from('operations')
-    .select('amount, type, description, operation_date')
+    .select('amount, type, description, operation_date, transfer_direction')
     .eq('workspace_id', workspaceId)
     .order('operation_date', { ascending: false })
     .order('created_at', { ascending: false })
-    .limit(10);
+    .limit(15);
 
   if (error) return await sendMessage(chatId, `Ошибка: ${error.message}`);
   if (!data || data.length === 0) return await sendMessage(chatId, 'Нет операций.');
 
-  const lines = data.map((op: any) => {
-    const sign = op.type === 'expense' ? '-' : '+';
+  // Filter out 'in' transfers to avoid duplicates
+  const filtered = data.filter((op: any) => !(op.type === 'transfer' && op.transfer_direction === 'in')).slice(0, 10);
+
+  const lines = filtered.map((op: any) => {
+    const sign = op.type === 'transfer' ? '⇄' : op.type === 'expense' || op.type === 'salary' ? '-' : '+';
     const desc = op.description ? ` ${op.description}` : '';
     return `${op.operation_date} ${sign}${formatMoney(Number(op.amount))}${desc}`;
   });
 
   await sendMessage(chatId, `<b>Последние операции:</b>\n${lines.join('\n')}`);
+}
+
+async function handleAccounts(chatId: number, workspaceId: string) {
+  const { data: accounts, error } = await supabaseAdmin
+    .from('accounts')
+    .select('id, name, color, is_default, is_archived')
+    .eq('workspace_id', workspaceId)
+    .eq('is_archived', false)
+    .order('is_default', { ascending: false })
+    .order('name');
+
+  if (error) return await sendMessage(chatId, `Ошибка: ${error.message}`);
+  if (!accounts || accounts.length === 0) return await sendMessage(chatId, 'Нет счетов.');
+
+  // Get balances
+  const { data: balances } = await supabaseAdmin.rpc('get_account_balances', { p_workspace_id: workspaceId });
+  const balMap: Record<string, number> = {};
+  (balances || []).forEach((b: any) => { balMap[b.account_id] = Number(b.balance); });
+
+  const lines = accounts.map((a: any, i: number) => {
+    const bal = balMap[a.id] || 0;
+    const def = a.is_default ? ' (основной)' : '';
+    return `${i + 1}. ${a.name}${def}: ${formatMoney(bal)}`;
+  });
+
+  await sendMessage(chatId, `<b>Счета:</b>\n${lines.join('\n')}`);
+}
+
+async function handleTransfer(
+  chatId: number,
+  userId: string,
+  workspaceId: string,
+  args: string[],
+) {
+  // /transfer from_num to_num amount [description]
+  if (args.length < 3) {
+    return await sendMessage(chatId, 'Использование: /transfer от_номер на_номер сумма [описание]\nНомера счетов из /accounts');
+  }
+
+  const fromNum = parseInt(args[0], 10);
+  const toNum = parseInt(args[1], 10);
+  const amount = parseFloat(args[2].replace(',', '.'));
+  const description = args.slice(3).join(' ') || null;
+
+  if (!fromNum || !toNum || isNaN(amount) || amount <= 0) {
+    return await sendMessage(chatId, 'Некорректные параметры. Пример: /transfer 1 2 1000');
+  }
+
+  // Get active accounts
+  const { data: accounts } = await supabaseAdmin
+    .from('accounts')
+    .select('id, name')
+    .eq('workspace_id', workspaceId)
+    .eq('is_archived', false)
+    .order('is_default', { ascending: false })
+    .order('name');
+
+  if (!accounts || fromNum > accounts.length || toNum > accounts.length) {
+    return await sendMessage(chatId, `Неверный номер счёта. Всего счетов: ${accounts?.length || 0}`);
+  }
+
+  const fromAcc = accounts[fromNum - 1];
+  const toAcc = accounts[toNum - 1];
+
+  if (fromAcc.id === toAcc.id) {
+    return await sendMessage(chatId, 'Счета должны отличаться.');
+  }
+
+  const { error } = await supabaseAdmin.rpc('create_transfer', {
+    p_workspace_id: workspaceId,
+    p_user_id: userId,
+    p_from_account_id: fromAcc.id,
+    p_to_account_id: toAcc.id,
+    p_amount: amount,
+    p_description: description,
+    p_operation_date: todayStr(),
+  });
+
+  if (error) return await sendMessage(chatId, `Ошибка: ${error.message}`);
+  await sendMessage(chatId, `Перевод: ${fromAcc.name} → ${toAcc.name}: ${formatMoney(amount)}${description ? ` — ${description}` : ''}`);
 }
 
 // --- Main Handler ---
@@ -477,6 +571,12 @@ Deno.serve(async (req) => {
         break;
       case '/recent':
         await handleRecent(chatId, workspaceId);
+        break;
+      case '/accounts':
+        await handleAccounts(chatId, workspaceId);
+        break;
+      case '/transfer':
+        await handleTransfer(chatId, userId, workspaceId, args);
         break;
       default:
         await sendMessage(chatId, 'Неизвестная команда. Используйте /start для списка команд.');

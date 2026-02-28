@@ -3,12 +3,14 @@ import { X, Plus } from 'lucide-react';
 import { parseAmount, normalizeAmountInput, formatAmountInput } from '../utils/formatters';
 import useCategories from '../hooks/useCategories';
 import useTags from '../hooks/useTags';
+import useAccounts from '../hooks/useAccounts';
 import TagInput from './TagInput';
 
 const OPERATION_TYPES = {
-  income:  { label: 'Доход',    color: 'text-green-600', bg: 'bg-green-600 hover:bg-green-700' },
-  expense: { label: 'Расход',   color: 'text-red-600',   bg: 'bg-red-600 hover:bg-red-700'   },
-  salary:  { label: 'Зарплата', color: 'text-blue-600',  bg: 'bg-blue-600 hover:bg-blue-700'  },
+  income:   { label: 'Доход',    color: 'text-green-600',  bg: 'bg-green-600 hover:bg-green-700' },
+  expense:  { label: 'Расход',   color: 'text-red-600',    bg: 'bg-red-600 hover:bg-red-700'   },
+  salary:   { label: 'Зарплата', color: 'text-blue-600',   bg: 'bg-blue-600 hover:bg-blue-700'  },
+  transfer: { label: 'Перевод',  color: 'text-purple-600', bg: 'bg-purple-600 hover:bg-purple-700' },
 };
 
 export default function EditOperationModal({ operation, workspaceId, onClose, onSave }) {
@@ -20,14 +22,33 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
 
   const { categories, addCategory } = useCategories(workspaceId);
   const { tags } = useTags(workspaceId);
+  const { accounts } = useAccounts(workspaceId);
 
+  const activeAccounts = accounts.filter(a => !a.is_archived);
+  const isTransfer = operation.type === 'transfer';
+
+  // For transfers, find the linked 'in' operation to get toAccountId
   const [form, setForm] = useState({
     amount:        String(operation.amount || ''),
     description:   operation.description || '',
     operationDate: operation.operation_date || '',
     categoryId:    operation.category_id || '',
     selectedTags:  operation.tags || [],
+    accountId:     operation.account_id || '',
+    fromAccountId: isTransfer && operation.transfer_direction === 'out' ? (operation.account_id || '') : '',
+    toAccountId:   isTransfer && operation.transfer_direction === 'in' ? (operation.account_id || '') : '',
   });
+
+  // For transfer 'out' operations, find the linked 'in' op to fill toAccountId
+  useEffect(() => {
+    if (isTransfer && operation._linkedAccountId) {
+      if (operation.transfer_direction === 'out') {
+        setForm(prev => ({ ...prev, toAccountId: prev.toAccountId || operation._linkedAccountId }));
+      } else {
+        setForm(prev => ({ ...prev, fromAccountId: prev.fromAccountId || operation._linkedAccountId }));
+      }
+    }
+  }, [isTransfer, operation._linkedAccountId, operation.transfer_direction]);
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
   const [amountFocused, setAmountFocused] = useState(false);
@@ -67,13 +88,25 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
     setLoading(true);
     setError('');
     try {
-      await onSave(operation.id, {
-        amount,
-        description:    form.description,
-        operation_date: form.operationDate,
-        category_id:    form.categoryId || null,
-        tagNames:       (tagInputRef.current?.getAllTags() ?? form.selectedTags).map((t) => t.name),
-      });
+      const payload = isTransfer
+        ? {
+            _isTransfer: true,
+            _transferGroupId: operation.transfer_group_id,
+            amount,
+            description:     form.description,
+            operation_date:  form.operationDate,
+            from_account_id: form.fromAccountId || undefined,
+            to_account_id:   form.toAccountId || undefined,
+          }
+        : {
+            amount,
+            description:    form.description,
+            operation_date: form.operationDate,
+            category_id:    form.categoryId || null,
+            account_id:     form.accountId || undefined,
+            tagNames:       (tagInputRef.current?.getAllTags() ?? form.selectedTags).map((t) => t.name),
+          };
+      await onSave(operation.id, payload);
       onClose();
     } catch (err) {
       setError(err.message || 'Ошибка сохранения');
@@ -97,8 +130,56 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          {/* Категория */}
-          <div>
+          {/* Transfer accounts */}
+          {isTransfer && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Со счёта</label>
+                <select
+                  value={form.fromAccountId}
+                  onChange={(e) => setForm(prev => ({ ...prev, fromAccountId: e.target.value }))}
+                  className="input-field"
+                >
+                  <option value="">Выберите счёт</option>
+                  {activeAccounts.map(a => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">На счёт</label>
+                <select
+                  value={form.toAccountId}
+                  onChange={(e) => setForm(prev => ({ ...prev, toAccountId: e.target.value }))}
+                  className="input-field"
+                >
+                  <option value="">Выберите счёт</option>
+                  {activeAccounts.filter(a => a.id !== form.fromAccountId).map(a => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
+
+          {/* Счёт (for non-transfer) */}
+          {!isTransfer && activeAccounts.length > 1 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Счёт</label>
+              <select
+                value={form.accountId}
+                onChange={(e) => setForm(prev => ({ ...prev, accountId: e.target.value }))}
+                className="input-field"
+              >
+                {activeAccounts.map(a => (
+                  <option key={a.id} value={a.id}>{a.name}{a.is_default ? ' (основной)' : ''}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Категория (hidden for transfers) */}
+          {!isTransfer && <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Категория</label>
               <div className="flex gap-2">
                 <select
@@ -141,7 +222,7 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
                   </button>
                 </div>
               )}
-            </div>
+            </div>}
 
           {/* Сумма */}
           <div>
@@ -175,17 +256,19 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
             />
           </div>
 
-          {/* Теги */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Теги</label>
-            <TagInput
-              ref={tagInputRef}
-              allTags={tags}
-              selected={form.selectedTags}
-              onChange={(newTags) => setForm((prev) => ({ ...prev, selectedTags: newTags }))}
-              placeholder="Добавить тег..."
-            />
-          </div>
+          {/* Теги (hidden for transfers) */}
+          {!isTransfer && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Теги</label>
+              <TagInput
+                ref={tagInputRef}
+                allTags={tags}
+                selected={form.selectedTags}
+                onChange={(newTags) => setForm((prev) => ({ ...prev, selectedTags: newTags }))}
+                placeholder="Добавить тег..."
+              />
+            </div>
+          )}
 
           {/* Дата */}
           <div>

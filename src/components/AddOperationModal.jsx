@@ -3,12 +3,14 @@ import { X, Plus } from 'lucide-react';
 import { parseAmount, normalizeAmountInput, formatAmountInput } from '../utils/formatters';
 import useCategories from '../hooks/useCategories';
 import useTags from '../hooks/useTags';
+import useAccounts from '../hooks/useAccounts';
 import TagInput from './TagInput';
 
 const OPERATION_TYPES = {
-  income:  { label: 'Доход',    color: 'text-green-600', bg: 'bg-green-600 hover:bg-green-700' },
-  expense: { label: 'Расход',   color: 'text-red-600',   bg: 'bg-red-600 hover:bg-red-700'   },
-  salary:  { label: 'Зарплата', color: 'text-blue-600',  bg: 'bg-blue-600 hover:bg-blue-700'  },
+  income:   { label: 'Доход',    color: 'text-green-600',  bg: 'bg-green-600 hover:bg-green-700' },
+  expense:  { label: 'Расход',   color: 'text-red-600',    bg: 'bg-red-600 hover:bg-red-700'   },
+  salary:   { label: 'Зарплата', color: 'text-blue-600',   bg: 'bg-blue-600 hover:bg-blue-700'  },
+  transfer: { label: 'Перевод',  color: 'text-purple-600', bg: 'bg-purple-600 hover:bg-purple-700' },
 };
 
 function todayDateString() {
@@ -28,6 +30,10 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
   }, [onClose]);
   const { categories, addCategory } = useCategories(workspaceId);
   const { tags } = useTags(workspaceId);
+  const { accounts } = useAccounts(workspaceId);
+
+  const defaultAccount = accounts.find(a => a.is_default);
+  const activeAccounts = accounts.filter(a => !a.is_archived);
 
   const [form, setForm] = useState(() => {
     const type = initialType || 'income';
@@ -38,8 +44,18 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
       operationDate: todayDateString(),
       categoryId:    '',
       selectedTags:  [],
+      accountId:     '',
+      fromAccountId: '',
+      toAccountId:   '',
     };
   });
+
+  // Set default account when accounts load
+  useEffect(() => {
+    if (defaultAccount && !form.accountId) {
+      setForm(prev => ({ ...prev, accountId: defaultAccount.id }));
+    }
+  }, [defaultAccount, form.accountId]);
 
   // Pre-fill category when categories load and defaultCategory is provided
   useEffect(() => {
@@ -89,17 +105,38 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
       setError('Введите корректную сумму');
       return;
     }
+    if (form.type === 'transfer') {
+      if (!form.fromAccountId || !form.toAccountId) {
+        setError('Выберите счета списания и зачисления');
+        return;
+      }
+      if (form.fromAccountId === form.toAccountId) {
+        setError('Счета должны отличаться');
+        return;
+      }
+    }
     setLoading(true);
     setError('');
     try {
-      await onSave({
-        type:           form.type,
-        amount,
-        description:    form.description,
-        operation_date: form.operationDate,
-        category_id:    form.categoryId || null,
-        tagNames:       (tagInputRef.current?.getAllTags() ?? form.selectedTags).map((t) => t.name),
-      });
+      const payload = form.type === 'transfer'
+        ? {
+            type:            'transfer',
+            amount,
+            description:     form.description,
+            operation_date:  form.operationDate,
+            from_account_id: form.fromAccountId,
+            to_account_id:   form.toAccountId,
+          }
+        : {
+            type:           form.type,
+            amount,
+            description:    form.description,
+            operation_date: form.operationDate,
+            category_id:    form.categoryId || null,
+            account_id:     form.accountId || defaultAccount?.id || null,
+            tagNames:       (tagInputRef.current?.getAllTags() ?? form.selectedTags).map((t) => t.name),
+          };
+      await onSave(payload);
       onClose();
     } catch (err) {
       setError(err.message || 'Ошибка сохранения');
@@ -138,11 +175,60 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
               <option value="income">Доход</option>
               <option value="expense">Расход</option>
               <option value="salary">Зарплата</option>
+              <option value="transfer">Перевод</option>
             </select>
           </div>
 
-          {/* Категория */}
-          <div>
+          {/* Счёт (for non-transfer) */}
+          {form.type !== 'transfer' && activeAccounts.length > 1 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Счёт</label>
+              <select
+                value={form.accountId}
+                onChange={(e) => setForm(prev => ({ ...prev, accountId: e.target.value }))}
+                className="input-field"
+              >
+                {activeAccounts.map(a => (
+                  <option key={a.id} value={a.id}>{a.name}{a.is_default ? ' (основной)' : ''}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Transfer accounts */}
+          {form.type === 'transfer' && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Со счёта</label>
+                <select
+                  value={form.fromAccountId}
+                  onChange={(e) => setForm(prev => ({ ...prev, fromAccountId: e.target.value }))}
+                  className="input-field"
+                >
+                  <option value="">Выберите счёт</option>
+                  {activeAccounts.map(a => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">На счёт</label>
+                <select
+                  value={form.toAccountId}
+                  onChange={(e) => setForm(prev => ({ ...prev, toAccountId: e.target.value }))}
+                  className="input-field"
+                >
+                  <option value="">Выберите счёт</option>
+                  {activeAccounts.filter(a => a.id !== form.fromAccountId).map(a => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
+
+          {/* Категория (hidden for transfers) */}
+          {form.type !== 'transfer' && <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Категория</label>
               <div className="flex gap-2">
                 <select
@@ -191,7 +277,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
                   </button>
                 </div>
               )}
-            </div>
+            </div>}
 
           {/* Сумма */}
           <div>
@@ -225,17 +311,19 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
             />
           </div>
 
-          {/* Теги */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Теги</label>
-            <TagInput
-              ref={tagInputRef}
-              allTags={tags}
-              selected={form.selectedTags}
-              onChange={(newTags) => setForm((prev) => ({ ...prev, selectedTags: newTags }))}
-              placeholder="Добавить тег..."
-            />
-          </div>
+          {/* Теги (hidden for transfers) */}
+          {form.type !== 'transfer' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Теги</label>
+              <TagInput
+                ref={tagInputRef}
+                allTags={tags}
+                selected={form.selectedTags}
+                onChange={(newTags) => setForm((prev) => ({ ...prev, selectedTags: newTags }))}
+                placeholder="Добавить тег..."
+              />
+            </div>
+          )}
 
           {/* Дата */}
           <div>

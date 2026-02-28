@@ -4,10 +4,12 @@ import { useWorkspace } from '../contexts/WorkspaceContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { useCategories } from '../hooks/useCategories';
 import { useTags } from '../hooks/useTags';
+import { useAccounts } from '../hooks/useAccounts';
 
 const TABS = [
   { key: 'categories', label: 'Категории' },
   { key: 'tags', label: 'Теги' },
+  { key: 'accounts', label: 'Счета' },
 ];
 
 function DeleteAlert({ message, onClose }) {
@@ -54,8 +56,10 @@ export default function DictionariesPage() {
 
       {activeTab === 'categories' ? (
         <CategoriesTab workspaceId={workspaceId} canEdit={hasManagementRights} />
-      ) : (
+      ) : activeTab === 'tags' ? (
         <TagsTab workspaceId={workspaceId} canEdit={hasManagementRights} />
+      ) : (
+        <AccountsTab workspaceId={workspaceId} canEdit={hasManagementRights} />
       )}
     </div>
   );
@@ -447,6 +451,204 @@ function InlineTagForm({ form, setForm, onSave, onCancel, saving }) {
       <input
         type="text"
         placeholder="Название"
+        value={form.name}
+        onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+        className="flex-1 min-w-[120px] text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary-500"
+        autoFocus
+      />
+      <input
+        type="color"
+        value={form.color}
+        onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
+        className="w-8 h-8 p-0 border border-gray-300 dark:border-gray-600 rounded cursor-pointer"
+      />
+      <button
+        onClick={onSave}
+        disabled={saving || !form.name.trim()}
+        className="p-1 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 disabled:opacity-40"
+      >
+        <Check size={18} />
+      </button>
+      <button onClick={onCancel} className="p-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300">
+        <X size={18} />
+      </button>
+    </div>
+  );
+}
+
+/* ─── Accounts Tab ─── */
+function AccountsTab({ workspaceId, canEdit }) {
+  const { accounts, loading, error, addAccount, updateAccount, deleteAccount, archiveAccount, unarchiveAccount } = useAccounts(workspaceId);
+  const [editingId, setEditingId] = useState(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const [form, setForm] = useState({ name: '', color: '#6B7280' });
+  const [saving, setSaving] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
+
+  const clearDeleteError = useCallback(() => setDeleteError(null), []);
+
+  const resetForm = () => {
+    setForm({ name: '', color: '#6B7280' });
+    setEditingId(null);
+    setShowAdd(false);
+  };
+
+  const startEdit = (acc) => {
+    if (acc.is_default) return; // Cannot edit default account name
+    setEditingId(acc.id);
+    setForm({ name: acc.name, color: acc.color || '#6B7280' });
+    setShowAdd(false);
+  };
+
+  const handleSave = async () => {
+    if (!form.name.trim()) return;
+    setSaving(true);
+    if (editingId) {
+      await updateAccount(editingId, form);
+    } else {
+      await addAccount(form);
+    }
+    setSaving(false);
+    resetForm();
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Удалить счёт?')) return;
+    const result = await deleteAccount(id);
+    if (result?.error) {
+      setDeleteError(result.error);
+    }
+  };
+
+  const handleArchive = async (id) => {
+    const result = await archiveAccount(id);
+    if (result?.error) {
+      setDeleteError(result.error);
+    }
+  };
+
+  const handleUnarchive = async (id) => {
+    const result = await unarchiveAccount(id);
+    if (result?.error) {
+      setDeleteError(result.error);
+    }
+  };
+
+  if (loading) return <p className="text-sm text-gray-500 dark:text-gray-400">Загрузка...</p>;
+  if (error) return <p className="text-sm text-red-500 dark:text-red-400">{error}</p>;
+
+  const visibleAccounts = showArchived ? accounts : accounts.filter((a) => !a.is_archived);
+
+  return (
+    <div className="space-y-2">
+      {deleteError && <DeleteAlert message={deleteError} onClose={clearDeleteError} />}
+
+      <div className="flex justify-end mb-1">
+        <button
+          onClick={() => setShowArchived((v) => !v)}
+          className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 border border-gray-200 dark:border-gray-700 rounded px-2 py-1"
+        >
+          {showArchived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+          {showArchived ? 'Скрыть архивные' : 'Показать архивные'}
+        </button>
+      </div>
+
+      {visibleAccounts.map((acc) =>
+        editingId === acc.id ? (
+          <InlineAccountForm
+            key={acc.id}
+            form={form}
+            setForm={setForm}
+            onSave={handleSave}
+            onCancel={resetForm}
+            saving={saving}
+          />
+        ) : (
+          <div
+            key={acc.id}
+            className={`flex items-center justify-between bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2${acc.is_archived ? ' opacity-60' : ''}`}
+          >
+            <div className="flex items-center gap-2">
+              <span
+                className="w-3 h-3 rounded-full flex-shrink-0"
+                style={{ backgroundColor: acc.color || '#6B7280' }}
+              />
+              <span className="text-sm text-gray-900 dark:text-gray-100">{acc.name}</span>
+              {acc.is_default && (
+                <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-400">основной</span>
+              )}
+              {acc.is_archived && (
+                <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">архив</span>
+              )}
+            </div>
+            {canEdit && !acc.is_default && (
+              <div className="flex items-center gap-1">
+                {!acc.is_archived && (
+                  <button onClick={() => startEdit(acc)} className="p-1 text-gray-400 dark:text-gray-500 hover:text-primary-600 dark:hover:text-primary-400">
+                    <Pencil size={16} />
+                  </button>
+                )}
+                {!acc.is_archived ? (
+                  <button
+                    onClick={() => handleArchive(acc.id)}
+                    className="p-1 text-gray-400 dark:text-gray-500 hover:text-orange-500 dark:hover:text-orange-400"
+                    title="Архивировать"
+                  >
+                    <Archive size={16} />
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => handleUnarchive(acc.id)}
+                      className="p-1 text-gray-400 dark:text-gray-500 hover:text-primary-600 dark:hover:text-primary-400"
+                      title="Разархивировать"
+                    >
+                      <ArchiveRestore size={16} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(acc.id)}
+                      className="p-1 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400"
+                      title="Удалить"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      )}
+
+      {showAdd && (
+        <InlineAccountForm
+          form={form}
+          setForm={setForm}
+          onSave={handleSave}
+          onCancel={resetForm}
+          saving={saving}
+        />
+      )}
+
+      {canEdit && !showAdd && !editingId && (
+        <button
+          onClick={() => { resetForm(); setShowAdd(true); }}
+          className="flex items-center gap-1 text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 mt-2"
+        >
+          <Plus size={16} /> Добавить счёт
+        </button>
+      )}
+    </div>
+  );
+}
+
+function InlineAccountForm({ form, setForm, onSave, onCancel, saving }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 bg-white dark:bg-gray-800 border border-primary-200 dark:border-primary-700 rounded-xl px-4 py-2">
+      <input
+        type="text"
+        placeholder="Название счёта"
         value={form.name}
         onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
         className="flex-1 min-w-[120px] text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary-500"
