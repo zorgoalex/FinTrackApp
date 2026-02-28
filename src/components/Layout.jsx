@@ -129,6 +129,7 @@ export default function Layout() {
               <WorkspaceSwitcher />
             </div>
             <div className="flex items-center gap-2">
+              <div id="page-header-actions" className="flex items-center gap-1"></div>
               <button
                 onClick={toggleTheme}
                 className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"

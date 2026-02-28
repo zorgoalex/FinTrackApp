@@ -1,4 +1,5 @@
 import { useMemo, useState, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import useOperations from '../hooks/useOperations';
@@ -427,19 +428,18 @@ export default function WorkspacePage() {
             )}
           </div>
 
-          {/* Dashboard visibility settings */}
-          <div className="flex justify-end">
+          {/* Dashboard visibility settings — desktop-only toggle (mobile uses header portal) */}
+          <div className="hidden lg:flex justify-end">
             <button
               onClick={() => setDashboardSettingsOpen(v => !v)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${
+              className={`p-1.5 rounded-lg transition-colors ${
                 dashboardSettingsOpen
-                  ? 'text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 border-primary-200 dark:border-primary-800'
-                  : 'text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                  ? 'text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20'
+                  : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
               }`}
               title="Настройка виджетов"
             >
-              {dashboardSettingsOpen ? <EyeOff size={14} /> : <Eye size={14} />}
-              Виджеты
+              {dashboardSettingsOpen ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           </div>
           {dashboardSettingsOpen && (
@@ -685,6 +685,24 @@ export default function WorkspacePage() {
           onClose={() => setShowQuickSettings(false)}
         />
       )}
+
+      {/* Eye icon in header via portal */}
+      {typeof document !== 'undefined' && document.getElementById('page-header-actions') &&
+        createPortal(
+          <button
+            onClick={() => setDashboardSettingsOpen(v => !v)}
+            className={`p-1.5 rounded-lg transition-colors ${
+              dashboardSettingsOpen
+                ? 'text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20'
+                : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
+            }`}
+            title="Настройка виджетов"
+          >
+            {dashboardSettingsOpen ? <EyeOff size={18} /> : <Eye size={18} />}
+          </button>,
+          document.getElementById('page-header-actions')
+        )
+      }
 
     </div>
   );
