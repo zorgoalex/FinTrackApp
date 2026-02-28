@@ -415,16 +415,17 @@ export function OperationPage() {
       {/* Фильтр + Сортировка */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
         {[
-          { key: null,       label: 'Все' },
-          { key: 'income',   label: '+ Доход' },
-          { key: 'expense',  label: '− Расход' },
-          { key: 'transfer', label: '⇄ Перевод' },
-        ].map(({ key, label }) => (
+          { key: null,       label: 'Все', title: 'Все типы' },
+          { key: 'income',   label: '+', title: 'Доходы' },
+          { key: 'expense',  label: '−', title: 'Расходы' },
+          { key: 'transfer', label: '⇄', title: 'Переводы' },
+        ].map(({ key, label, title }) => (
           <button
             key={String(key)}
             onClick={() => setFilterType(key)}
+            title={title}
             data-testid={`type-filter-${key ?? 'all'}`}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+            className={`px-3 py-1.5 rounded-full text-sm font-bold border transition-colors ${
               filterType === key
                 ? 'bg-primary-600 dark:bg-primary-500 text-white border-primary-600 dark:border-primary-500'
                 : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:border-primary-400 hover:text-primary-600 dark:hover:text-primary-400'
@@ -659,8 +660,8 @@ export function OperationPage() {
                         <span className="text-sm text-gray-500 dark:text-gray-400 shrink-0">
                           {formatOperationDate(operation.operation_date || operation.created_at)}
                         </span>
-                        <span className={`text-sm font-bold shrink-0 ${typeInfo.color}`} title={typeInfo.label}>
-                          {typeInfo.sign}
+                        <span className={`text-sm font-medium shrink-0 ${typeInfo.color}`}>
+                          {typeInfo.label}
                         </span>
                         <span className="text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100 truncate">
                           {formatSignedAmount(operation.type, operation.amount)}
@@ -704,8 +705,8 @@ export function OperationPage() {
                         <span className="text-sm text-gray-500 dark:text-gray-400">
                           {formatOperationDate(operation.operation_date || operation.created_at)}
                         </span>
-                        <span className={`text-sm font-bold ${typeInfo.color}`} title={typeInfo.label}>
-                          {typeInfo.sign}
+                        <span className={`text-sm font-medium ${typeInfo.color}`}>
+                          {typeInfo.label}
                         </span>
                       </div>
                       <div className="text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100">

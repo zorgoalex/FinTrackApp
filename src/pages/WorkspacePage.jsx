@@ -486,7 +486,6 @@ export default function WorkspacePage() {
                     salary: 'text-primary-600 dark:text-primary-400',
                     transfer: 'text-purple-600 dark:text-purple-400',
                   };
-                  const typeSigns = { income: '+', expense: '−', salary: '−', transfer: '⇄' };
                   const typeLabels = { income: 'Доход', expense: 'Расход', salary: 'Зарплата', transfer: 'Перевод' };
                   const color = typeColors[op.type] || 'text-gray-600 dark:text-gray-400';
                   // Skip 'in' transfers (show only 'out' to avoid duplicates)
@@ -494,7 +493,7 @@ export default function WorkspacePage() {
                   return (
                     <div key={op.id} className="py-2 flex items-center justify-between">
                       <div className="min-w-0">
-                        <span className={`text-xs font-bold ${color}`} title={typeLabels[op.type]}>{typeSigns[op.type]}</span>
+                        <span className={`text-xs font-medium ${color}`}>{typeLabels[op.type]}</span>
                         {op.description && (
                           <p className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[180px]">{op.description}</p>
                         )}
