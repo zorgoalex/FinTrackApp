@@ -8,15 +8,15 @@
 export function computeAnalytics(operations, categories = [], tags = []) {
   const totalIncome = operations
     .filter(op => op.type === 'income')
-    .reduce((sum, op) => sum + Number(op.amount || 0), 0);
+    .reduce((sum, op) => sum + Number(op.base_amount ?? op.amount ?? 0), 0);
 
   const totalExpense = operations
     .filter(op => op.type === 'expense')
-    .reduce((sum, op) => sum + Number(op.amount || 0), 0);
+    .reduce((sum, op) => sum + Number(op.base_amount ?? op.amount ?? 0), 0);
 
   const totalSalary = operations
     .filter(op => op.type === 'salary')
-    .reduce((sum, op) => sum + Number(op.amount || 0), 0);
+    .reduce((sum, op) => sum + Number(op.base_amount ?? op.amount ?? 0), 0);
 
   const balance = totalIncome - totalExpense - totalSalary;
 
@@ -25,7 +25,7 @@ export function computeAnalytics(operations, categories = [], tags = []) {
   operations.forEach(op => {
     if (!op.category_id) return;
     const existing = categoryMap.get(op.category_id) || { amount: 0, count: 0 };
-    existing.amount += Number(op.amount || 0);
+    existing.amount += Number(op.base_amount ?? op.amount ?? 0);
     existing.count += 1;
     categoryMap.set(op.category_id, existing);
   });
@@ -49,7 +49,7 @@ export function computeAnalytics(operations, categories = [], tags = []) {
   operations.forEach(op => {
     (op.tags || []).forEach(t => {
       const existing = tagMap.get(t.id) || { amount: 0, count: 0 };
-      existing.amount += Number(op.amount || 0);
+      existing.amount += Number(op.base_amount ?? op.amount ?? 0);
       existing.count += 1;
       tagMap.set(t.id, existing);
     });

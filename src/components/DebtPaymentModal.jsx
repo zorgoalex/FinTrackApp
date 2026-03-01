@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Plus } from 'lucide-react';
 import { parseAmount, normalizeAmountInput, formatAmountInput, formatUnsignedAmount } from '../utils/formatters';
+import { useWorkspace } from '../contexts/WorkspaceContext';
 import { useOperations } from '../hooks/useOperations';
 import useAccounts from '../hooks/useAccounts';
 import useCategories from '../hooks/useCategories';
@@ -15,6 +16,7 @@ function todayDateString() {
 export default function DebtPaymentModal({ debt, workspaceId, onClose, onDone }) {
   const isIOwe = debt.direction === 'i_owe';
   const operationType = isIOwe ? 'expense' : 'income';
+  const { currencySymbol } = useWorkspace();
 
   const { addOperation } = useOperations(workspaceId);
   const { accounts } = useAccounts(workspaceId);
@@ -73,7 +75,7 @@ export default function DebtPaymentModal({ debt, workspaceId, onClose, onDone })
       return;
     }
     if (parsedAmount > debt.remaining_amount) {
-      setError(`Сумма не может превышать остаток долга (${formatUnsignedAmount(debt.remaining_amount)})`);
+      setError(`Сумма не может превышать остаток долга (${formatUnsignedAmount(debt.remaining_amount, currencySymbol)})`);
       return;
     }
 
@@ -121,7 +123,7 @@ export default function DebtPaymentModal({ debt, workspaceId, onClose, onDone })
           <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{debt.title}</p>
           <p className="text-xs text-gray-500 dark:text-gray-400">{debt.counterparty}</p>
           <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-            Остаток: <span className="font-semibold text-gray-700 dark:text-gray-300">{formatUnsignedAmount(debt.remaining_amount)}</span> из {formatUnsignedAmount(debt.initial_amount)}
+            Остаток: <span className="font-semibold text-gray-700 dark:text-gray-300">{formatUnsignedAmount(debt.remaining_amount, currencySymbol)}</span> из {formatUnsignedAmount(debt.initial_amount, currencySymbol)}
           </p>
         </div>
 
@@ -129,7 +131,7 @@ export default function DebtPaymentModal({ debt, workspaceId, onClose, onDone })
         <form onSubmit={handleSubmit} className="px-5 pb-5 space-y-4">
           {/* Amount */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Сумма платежа, ₽</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Сумма платежа, {currencySymbol}</label>
             <input
               type="text"
               inputMode="decimal"
@@ -138,7 +140,7 @@ export default function DebtPaymentModal({ debt, workspaceId, onClose, onDone })
               onBlur={() => setAmountFocused(false)}
               onChange={(e) => setAmount(normalizeAmountInput(e.target.value))}
               className="input-field"
-              placeholder={`макс. ${formatUnsignedAmount(debt.remaining_amount)}`}
+              placeholder={`макс. ${formatUnsignedAmount(debt.remaining_amount, currencySymbol)}`}
               required
               autoFocus
             />

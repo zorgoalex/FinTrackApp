@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { normalizeAmountInput, formatAmountInput } from '../utils/formatters';
+import { useWorkspace } from '../contexts/WorkspaceContext';
 
 const DIRECTIONS = [
   { value: 'i_owe', label: 'Я должен' },
@@ -12,6 +13,7 @@ function todayDateString() {
 }
 
 export default function DebtFormModal({ debt, onClose, onSave }) {
+  const { currencySymbol } = useWorkspace();
   const isEdit = !!debt;
 
   const [form, setForm] = useState({
@@ -133,7 +135,7 @@ export default function DebtFormModal({ debt, onClose, onSave }) {
 
           {/* Amount */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Сумма, ₽</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Сумма, {currencySymbol}</label>
             <input
               type="text"
               inputMode="decimal"

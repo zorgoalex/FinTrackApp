@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Mail, Settings, Trash2, UserPlus, Shield, Crown, Eye, User, MinusCircle } from 'lucide-react';
+import { Users, Mail, Settings, Trash2, UserPlus, Shield, Crown, Eye, User, MinusCircle, Coins } from 'lucide-react';
 import { useWorkspace } from '../contexts/WorkspaceContext';
+import { supabase } from '../contexts/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
+import ExchangeRateManager from '../components/ExchangeRateManager';
 
 const roleIcons = {
   owner: Crown,
@@ -53,6 +55,7 @@ export default function WorkspaceSettingsPage() {
     leaveWorkspace,
     cancelInvitation,
     renameWorkspace,
+    updateBaseCurrency,
     canInviteUsers: canInviteUsersFromWorkspace,
     canManageRoles: canManageRolesFromWorkspace,
     canDeleteWorkspace: canDeleteWorkspaceFromWorkspace
@@ -73,11 +76,21 @@ export default function WorkspaceSettingsPage() {
   const [renameLoading, setRenameLoading] = useState(false);
   const [renameError, setRenameError] = useState('');
   const [renameSuccess, setRenameSuccess] = useState(false);
+  const [currencies, setCurrencies] = useState([]);
+  const [currencyLoading, setCurrencyLoading] = useState(false);
+  const [currencySuccess, setCurrencySuccess] = useState(false);
 
   // Синхронизировать локальное название с загруженным workspace
   useEffect(() => {
     if (currentWorkspace?.name) setWorkspaceName(currentWorkspace.name);
   }, [currentWorkspace?.name]);
+
+  // Загрузить список валют
+  useEffect(() => {
+    supabase.from('currencies').select('code, name_ru, symbol').eq('is_active', true)
+      .order('name_ru')
+      .then(({ data }) => setCurrencies(data || []));
+  }, []);
 
   const handleRename = async (e) => {
     e.preventDefault();
@@ -93,6 +106,21 @@ export default function WorkspaceSettingsPage() {
       setRenameError(err.message || 'Ошибка переименования');
     } finally {
       setRenameLoading(false);
+    }
+  };
+
+  const handleCurrencyChange = async (e) => {
+    const newCode = e.target.value;
+    setCurrencyLoading(true);
+    setCurrencySuccess(false);
+    try {
+      await updateBaseCurrency(newCode);
+      setCurrencySuccess(true);
+      setTimeout(() => setCurrencySuccess(false), 2500);
+    } catch (err) {
+      alert(err.message || 'Ошибка при изменении валюты');
+    } finally {
+      setCurrencyLoading(false);
     }
   };
 
@@ -246,6 +274,7 @@ export default function WorkspaceSettingsPage() {
 
   const tabs = [
     { id: 'general', label: 'Общие', icon: Settings },
+    { id: 'currency', label: 'Валюта', icon: Coins },
     { id: 'members', label: 'Участники', icon: Users },
     ...(shouldShowInvitesTab ? [{ id: 'invites', label: 'Приглашения', icon: Mail }] : [])
   ];
@@ -351,6 +380,33 @@ export default function WorkspaceSettingsPage() {
                     })()}
                   </div>
                 </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Валюта
+                  </label>
+                  {userRole?.toLowerCase() === 'owner' ? (
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={currentWorkspace.base_currency || 'KZT'}
+                        onChange={handleCurrencyChange}
+                        disabled={currencyLoading}
+                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
+                      >
+                        {currencies.map(c => (
+                          <option key={c.code} value={c.code}>{c.symbol} {c.name_ru} ({c.code})</option>
+                        ))}
+                      </select>
+                      {currencySuccess && <span className="text-sm text-green-600">&#10003;</span>}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {currencies.find(c => c.code === (currentWorkspace.base_currency || 'KZT'))
+                        ? `${currencies.find(c => c.code === currentWorkspace.base_currency).symbol} ${currencies.find(c => c.code === currentWorkspace.base_currency).name_ru}`
+                        : currentWorkspace.base_currency || 'KZT'}
+                    </p>
+                  )}
+                </div>
               </div>
 
               {/* Опасная зона */}
@@ -378,6 +434,46 @@ export default function WorkspaceSettingsPage() {
                   )}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Валюта и курсы */}
+          {activeTab === 'currency' && (
+            <div className="bg-white dark:bg-gray-800 shadow-md rounded-xl p-6 space-y-6">
+              <div>
+                <h2 className="text-lg font-medium mb-4 text-gray-900 dark:text-gray-100">Базовая валюта</h2>
+                {userRole?.toLowerCase() === 'owner' ? (
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={currentWorkspace.base_currency || 'KZT'}
+                      onChange={handleCurrencyChange}
+                      disabled={currencyLoading}
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
+                    >
+                      {currencies.map(c => (
+                        <option key={c.code} value={c.code}>{c.symbol} {c.name_ru} ({c.code})</option>
+                      ))}
+                    </select>
+                    {currencySuccess && <span className="text-sm text-green-600">&#10003;</span>}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {currencies.find(c => c.code === (currentWorkspace.base_currency || 'KZT'))
+                      ? `${currencies.find(c => c.code === currentWorkspace.base_currency).symbol} ${currencies.find(c => c.code === currentWorkspace.base_currency).name_ru}`
+                      : currentWorkspace.base_currency || 'KZT'}
+                  </p>
+                )}
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Все суммы в аналитике и сводке пересчитываются в базовую валюту.
+                </p>
+              </div>
+
+              <hr className="border-gray-200 dark:border-gray-700" />
+
+              <ExchangeRateManager
+                workspaceId={currentWorkspace.id}
+                baseCurrency={currentWorkspace.base_currency || 'KZT'}
+              />
             </div>
           )}
 

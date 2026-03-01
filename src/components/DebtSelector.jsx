@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { formatUnsignedAmount } from '../utils/formatters';
+import { useWorkspace } from '../contexts/WorkspaceContext';
 
 /**
  * Dropdown selector for linking operation to a debt.
@@ -8,6 +9,7 @@ import { formatUnsignedAmount } from '../utils/formatters';
  *   income  → owed_to_me debts
  */
 export default function DebtSelector({ debts, operationType, selectedDebtId, onDebtChange, appliedAmount, onAppliedAmountChange, operationAmount }) {
+  const { currencySymbol } = useWorkspace();
   const directionForType = operationType === 'expense' ? 'i_owe' : operationType === 'income' ? 'owed_to_me' : null;
 
   const filteredDebts = useMemo(() => {
@@ -45,7 +47,7 @@ export default function DebtSelector({ debts, operationType, selectedDebtId, onD
           <option value="">Без привязки к долгу</option>
           {filteredDebts.map(d => (
             <option key={d.id} value={d.id}>
-              {d.title} — {d.counterparty} (ост. {formatUnsignedAmount(d.remaining_amount)})
+              {d.title} — {d.counterparty} (ост. {formatUnsignedAmount(d.remaining_amount, currencySymbol)})
             </option>
           ))}
         </select>
@@ -54,7 +56,7 @@ export default function DebtSelector({ debts, operationType, selectedDebtId, onD
       {selectedDebtId && (
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Сумма погашения долга, ₽
+            Сумма погашения долга, {currencySymbol}
           </label>
           <input
             type="text"
@@ -66,7 +68,7 @@ export default function DebtSelector({ debts, operationType, selectedDebtId, onD
           />
           {selectedDebt && (
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Остаток долга: {formatUnsignedAmount(selectedDebt.remaining_amount)} из {formatUnsignedAmount(selectedDebt.initial_amount)}
+              Остаток долга: {formatUnsignedAmount(selectedDebt.remaining_amount, currencySymbol)} из {formatUnsignedAmount(selectedDebt.initial_amount, currencySymbol)}
             </p>
           )}
         </div>

@@ -16,7 +16,7 @@ export function useScheduledOperations(workspaceId) {
       setError(null);
       const { data, error: err } = await supabase
         .from('scheduled_operations')
-        .select('id, workspace_id, user_id, amount, type, description, category_id, frequency, next_date, is_active, created_at')
+        .select('id, workspace_id, user_id, amount, type, description, category_id, frequency, next_date, is_active, created_at, currency')
         .eq('workspace_id', workspaceId)
         .order('next_date', { ascending: true });
       if (err) throw err;

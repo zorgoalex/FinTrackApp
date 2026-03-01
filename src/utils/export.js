@@ -49,21 +49,21 @@ export function exportToCSV(analytics, dateFrom, dateTo) {
 /**
  * Build a text report for clipboard copying.
  */
-export function buildTextReport(analytics, dateFrom, dateTo) {
+export function buildTextReport(analytics, dateFrom, dateTo, currencySymbol = '₸') {
   const lines = [];
   lines.push(`📊 Аналитика за ${dateFrom} — ${dateTo}`);
   lines.push('');
-  lines.push(`Доходы:    ${formatNum(analytics.totalIncome)} ₽`);
-  lines.push(`Расходы:   ${formatNum(analytics.totalExpense)} ₽`);
-  lines.push(`Зарплаты:  ${formatNum(analytics.totalSalary)} ₽`);
-  lines.push(`Баланс:    ${formatNum(analytics.balance)} ₽`);
+  lines.push(`Доходы:    ${formatNum(analytics.totalIncome)} ${currencySymbol}`);
+  lines.push(`Расходы:   ${formatNum(analytics.totalExpense)} ${currencySymbol}`);
+  lines.push(`Зарплаты:  ${formatNum(analytics.totalSalary)} ${currencySymbol}`);
+  lines.push(`Баланс:    ${formatNum(analytics.balance)} ${currencySymbol}`);
   lines.push(`Операций:  ${analytics.operationCount}`);
 
   if (analytics.categoryBreakdown.length > 0) {
     lines.push('');
     lines.push('По категориям:');
     analytics.categoryBreakdown.forEach(cat => {
-      lines.push(`  ${cat.name}: ${formatNum(cat.amount)} ₽ (${cat.count} оп.)`);
+      lines.push(`  ${cat.name}: ${formatNum(cat.amount)} ${currencySymbol} (${cat.count} оп.)`);
     });
   }
 
@@ -71,7 +71,7 @@ export function buildTextReport(analytics, dateFrom, dateTo) {
     lines.push('');
     lines.push('По тегам:');
     analytics.tagBreakdown.forEach(tag => {
-      lines.push(`  #${tag.name}: ${formatNum(tag.amount)} ₽ (${tag.count} оп.)`);
+      lines.push(`  #${tag.name}: ${formatNum(tag.amount)} ${currencySymbol} (${tag.count} оп.)`);
     });
   }
 

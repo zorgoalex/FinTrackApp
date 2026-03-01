@@ -34,7 +34,7 @@ export function useDebts(workspaceId) {
     [debts]
   );
 
-  const createDebt = useCallback(async ({ title, counterparty, direction, initial_amount, opened_on, due_on, notes }) => {
+  const createDebt = useCallback(async ({ title, counterparty, direction, initial_amount, opened_on, due_on, notes, currency }) => {
     if (!workspaceId || !user) return null;
     try {
       const { data, error: insertErr } = await supabase
@@ -49,6 +49,7 @@ export function useDebts(workspaceId) {
           opened_on: opened_on || new Date().toISOString().slice(0, 10),
           due_on: due_on || null,
           notes: notes || null,
+          currency: currency || 'KZT',
         }])
         .select()
         .single();

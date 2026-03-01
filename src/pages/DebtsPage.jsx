@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import useDebts from '../hooks/useDebts';
 import { useAuth } from '../contexts/AuthContext';
+import { useWorkspace } from '../contexts/WorkspaceContext';
 import DebtFormModal from '../components/DebtFormModal';
 import DebtPaymentModal from '../components/DebtPaymentModal';
 import { formatUnsignedAmount } from '../utils/formatters';
@@ -18,6 +19,7 @@ export function DebtsPage() {
   const workspaceId = searchParams.get('workspaceId');
   const { workspaces } = useAuth();
   const currentWorkspace = workspaces?.find(w => w.id === workspaceId);
+  const { currencySymbol } = useWorkspace();
 
   const { debts, loading, error, createDebt, updateDebt, archiveDebt, unarchiveDebt, deleteDebt, getDebtHistory, refresh } = useDebts(workspaceId);
 
@@ -171,10 +173,10 @@ export function DebtsPage() {
                   </div>
                   <div className="text-right shrink-0">
                     <div className="text-lg font-bold tabular-nums text-gray-900 dark:text-gray-100">
-                      {formatUnsignedAmount(debt.remaining_amount)}
+                      {formatUnsignedAmount(debt.remaining_amount, debt.currency || currencySymbol)}
                     </div>
                     <div className="text-xs text-gray-400 dark:text-gray-500">
-                      из {formatUnsignedAmount(debt.initial_amount)}
+                      из {formatUnsignedAmount(debt.initial_amount, debt.currency || currencySymbol)}
                     </div>
                   </div>
                 </div>
@@ -260,7 +262,7 @@ export function DebtsPage() {
                             )}
                           </div>
                           <span className="text-sm font-semibold tabular-nums text-gray-900 dark:text-gray-100 shrink-0 ml-2">
-                            −{formatUnsignedAmount(op.debt_applied_amount)}
+                            −{formatUnsignedAmount(op.debt_applied_amount, currencySymbol)}
                           </span>
                         </div>
                       ))}

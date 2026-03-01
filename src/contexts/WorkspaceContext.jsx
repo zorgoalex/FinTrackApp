@@ -5,6 +5,14 @@ import { useAuth } from './AuthContext';
 
 const WorkspaceContext = createContext({});
 
+const CURRENCY_SYMBOLS = {
+  RUB: '₽', USD: '$', EUR: '€', GBP: '£', CNY: '¥', JPY: '¥',
+  TRY: '₺', GEL: '₾', KZT: '₸', BYN: 'Br', UAH: '₴', AED: 'د.إ',
+  THB: '฿', ILS: '₪', AMD: '֏', UZS: 'сўм', AZN: '₼', KGS: 'сом',
+  TJS: 'SM', MDL: 'L', PLN: 'zł', CZK: 'Kč', CHF: 'CHF', CAD: 'C$',
+  AUD: 'A$', SGD: 'S$', HKD: 'HK$', INR: '₹', BRL: 'R$', KRW: '₩',
+};
+
 export function WorkspaceProvider({ children }) {
   const { workspaceId: workspaceIdFromParams } = useParams();
   const [searchParams] = useSearchParams();
@@ -480,6 +488,31 @@ export function WorkspaceProvider({ children }) {
     setCurrentWorkspace((prev) => ({ ...prev, quick_buttons: buttons }));
   };
 
+  const updateBaseCurrency = async (newCurrency) => {
+    if (!workspaceId || userRole?.toLowerCase() !== 'owner') {
+      throw new Error('Только владелец может изменять валюту');
+    }
+    const { error } = await supabase
+      .from('workspaces')
+      .update({ base_currency: newCurrency })
+      .eq('id', workspaceId);
+    if (error) throw error;
+    setCurrentWorkspace((prev) => ({ ...prev, base_currency: newCurrency }));
+  };
+
+  const toggleAutoFetchRates = async () => {
+    if (!workspaceId || !['owner', 'admin'].includes(userRole?.toLowerCase())) {
+      throw new Error('Недостаточно прав для изменения настроек');
+    }
+    const newValue = !currentWorkspace?.auto_fetch_rates;
+    const { error } = await supabase
+      .from('workspaces')
+      .update({ auto_fetch_rates: newValue })
+      .eq('id', workspaceId);
+    if (error) throw error;
+    setCurrentWorkspace((prev) => ({ ...prev, auto_fetch_rates: newValue }));
+  };
+
   const renameWorkspace = async (newName) => {
     if (!workspaceId || userRole?.toLowerCase() !== 'owner') {
       throw new Error('Только владелец может переименовывать пространство');
@@ -498,6 +531,10 @@ export function WorkspaceProvider({ children }) {
     setCurrentWorkspace((prev) => ({ ...prev, name: trimmed }));
     await loadAllWorkspaces();
   };
+
+  // Валюта workspace
+  const currencyCode = currentWorkspace?.base_currency || 'KZT';
+  const currencySymbol = CURRENCY_SYMBOLS[currencyCode] || currencyCode;
 
   // Проверки прав
   const canInviteUsers = ['owner', 'admin'].includes(userRole?.toLowerCase());
@@ -527,6 +564,10 @@ export function WorkspaceProvider({ children }) {
     canEditOperations,
     canViewOperations,
 
+    // Валюта
+    currencyCode,
+    currencySymbol,
+
     // Функции
     refreshWorkspace: loadWorkspace,
     refreshAllWorkspaces: loadAllWorkspaces,
@@ -538,7 +579,9 @@ export function WorkspaceProvider({ children }) {
     deleteWorkspace,
     leaveWorkspace,
     cancelInvitation,
-    updateQuickButtons
+    updateQuickButtons,
+    updateBaseCurrency,
+    toggleAutoFetchRates
   }), [
     currentWorkspace,
     loading,
@@ -562,8 +605,12 @@ export function WorkspaceProvider({ children }) {
     changeUserRole,
     deleteWorkspace,
     leaveWorkspace,
+    currencyCode,
+    currencySymbol,
     cancelInvitation,
-    updateQuickButtons
+    updateQuickButtons,
+    updateBaseCurrency,
+    toggleAutoFetchRates
   ]);
 
   return (

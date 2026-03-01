@@ -69,7 +69,7 @@ function calculateSummary(operations) {
       return;
     }
 
-    const amount = Math.abs(Number(operation?.amount) || 0);
+    const amount = Math.abs(Number(operation?.base_amount ?? operation?.amount) || 0);
     const operationDate = toOperationDate(operation?.operation_date || operation?.created_at);
     if (!operationDate) {
       return;
@@ -122,7 +122,7 @@ export function useOperations(workspaceId, options = {}) {
         (async () => {
           let query = supabase
             .from('operations')
-            .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id, account_id, transfer_group_id, transfer_direction, linked_operation_id, debt_id, debt_applied_amount')
+            .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id, account_id, transfer_group_id, transfer_direction, linked_operation_id, debt_id, debt_applied_amount, currency, exchange_rate, base_amount')
             .eq('workspace_id', workspaceId);
           if (dateFrom) query = query.gte('operation_date', dateFrom);
           if (dateTo) query = query.lte('operation_date', dateTo);
@@ -281,6 +281,9 @@ export function useOperations(workspaceId, options = {}) {
       account_id: data?.account_id || null,
       debt_id: data?.debt_id || null,
       debt_applied_amount: data?.debt_applied_amount ? Number(data.debt_applied_amount) : null,
+      currency: data?.currency || 'KZT',
+      exchange_rate: data?.exchange_rate ? Number(data.exchange_rate) : null,
+      base_amount: data?.base_amount ? Number(data.base_amount) : Number(data?.amount) || 0,
     };
 
     const tagNames = data?.tagNames || [];
@@ -292,7 +295,7 @@ export function useOperations(workspaceId, options = {}) {
       const { data: insertedData, error: insertError } = await supabase
         .from('operations')
         .insert([payload])
-        .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id, account_id, transfer_group_id, transfer_direction, linked_operation_id, debt_id, debt_applied_amount')
+        .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id, account_id, transfer_group_id, transfer_direction, linked_operation_id, debt_id, debt_applied_amount, currency, exchange_rate, base_amount')
         .single();
 
       if (insertError) {
@@ -416,6 +419,9 @@ export function useOperations(workspaceId, options = {}) {
     if (data.account_id !== undefined) payload.account_id = data.account_id;
     if (data.debt_id !== undefined) payload.debt_id = data.debt_id || null;
     if (data.debt_applied_amount !== undefined) payload.debt_applied_amount = data.debt_applied_amount ? Number(data.debt_applied_amount) : null;
+    if (data.currency !== undefined) payload.currency = data.currency;
+    if (data.exchange_rate !== undefined) payload.exchange_rate = data.exchange_rate ? Number(data.exchange_rate) : null;
+    if (data.base_amount !== undefined) payload.base_amount = data.base_amount ? Number(data.base_amount) : null;
 
     try {
       setLoading(true);

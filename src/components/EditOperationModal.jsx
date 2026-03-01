@@ -1,10 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { X, Plus } from 'lucide-react';
-import { parseAmount, normalizeAmountInput, formatAmountInput } from '../utils/formatters';
+import { parseAmount, normalizeAmountInput, formatAmountInput, getCurrencySymbol } from '../utils/formatters';
 import useCategories from '../hooks/useCategories';
 import useTags from '../hooks/useTags';
 import useAccounts from '../hooks/useAccounts';
 import useDebts from '../hooks/useDebts';
+import { useCurrencies } from '../hooks/useCurrencies';
+import { useWorkspace } from '../contexts/WorkspaceContext';
 import TagInput from './TagInput';
 import DebtSelector from './DebtSelector';
 
@@ -26,6 +28,8 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
   const { tags } = useTags(workspaceId);
   const { accounts } = useAccounts(workspaceId);
   const { activeDebts } = useDebts(workspaceId);
+  const { currencyCode: baseCurrency, currencySymbol: baseSymbol } = useWorkspace();
+  const { getRate } = useCurrencies(workspaceId);
 
   const activeAccounts = accounts.filter(a => !a.is_archived);
   const isTransfer = operation.type === 'transfer';
@@ -42,7 +46,12 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
     toAccountId:   isTransfer && operation.transfer_direction === 'in' ? (operation.account_id || '') : '',
     debtId:            operation.debt_id || '',
     debtAppliedAmount: operation.debt_applied_amount ? String(operation.debt_applied_amount) : '',
+    exchangeRate:      operation.exchange_rate ? String(operation.exchange_rate) : '',
   });
+
+  const operationCurrency = operation.currency || baseCurrency || 'KZT';
+  const needsExchangeRate = operationCurrency !== baseCurrency;
+  const opCurrencySymbol = getCurrencySymbol(operationCurrency) || operationCurrency;
 
   // For transfer 'out' operations, find the linked 'in' op to fill toAccountId
   useEffect(() => {
@@ -104,16 +113,23 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
             to_account_id:   form.toAccountId || undefined,
             tagNames:        (tagInputRef.current?.getAllTags() ?? form.selectedTags).map((t) => t.name),
           }
-        : {
-            amount,
-            description:    form.description,
-            operation_date: form.operationDate,
-            category_id:    form.categoryId || null,
-            account_id:     form.accountId || undefined,
-            tagNames:       (tagInputRef.current?.getAllTags() ?? form.selectedTags).map((t) => t.name),
-            debt_id:        form.debtId || null,
-            debt_applied_amount: form.debtId ? (Number(form.debtAppliedAmount?.replace(',', '.')) || amount) : null,
-          };
+        : (() => {
+            const exchangeRate = needsExchangeRate ? parseAmount(form.exchangeRate) : 1;
+            const baseAmount = needsExchangeRate && Number.isFinite(exchangeRate) ? amount * exchangeRate : amount;
+            return {
+              amount,
+              description:    form.description,
+              operation_date: form.operationDate,
+              category_id:    form.categoryId || null,
+              account_id:     form.accountId || undefined,
+              tagNames:       (tagInputRef.current?.getAllTags() ?? form.selectedTags).map((t) => t.name),
+              debt_id:        form.debtId || null,
+              debt_applied_amount: form.debtId ? (Number(form.debtAppliedAmount?.replace(',', '.')) || amount) : null,
+              currency:       operationCurrency,
+              exchange_rate:  needsExchangeRate ? exchangeRate : null,
+              base_amount:    Math.round(baseAmount * 100) / 100,
+            };
+          })();
       await onSave(operation.id, payload);
       onClose();
     } catch (err) {
@@ -234,7 +250,7 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
 
           {/* Сумма */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Сумма, ₽</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Сумма, {opCurrencySymbol}</label>
             <input
               type="text"
               inputMode="decimal"
@@ -251,6 +267,31 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
               autoFocus
             />
           </div>
+
+          {/* Курс обмена (если валюта ≠ базовой) */}
+          {needsExchangeRate && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Курс {operationCurrency} → {baseCurrency}
+              </label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={form.exchangeRate}
+                onChange={(e) => setForm((prev) => ({
+                  ...prev,
+                  exchangeRate: normalizeAmountInput(e.target.value)
+                }))}
+                className="input-field"
+                placeholder="0"
+              />
+              {form.amount && form.exchangeRate && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  = {formatAmountInput(String(Math.round(parseAmount(form.amount) * parseAmount(form.exchangeRate) * 100) / 100))} {baseSymbol}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Описание */}
           <div>

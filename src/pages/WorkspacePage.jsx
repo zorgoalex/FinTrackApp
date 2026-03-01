@@ -8,13 +8,9 @@ import useAccounts from '../hooks/useAccounts';
 import AddOperationModal from '../components/AddOperationModal';
 import QuickButtonsSettings from '../components/QuickButtonsSettings';
 import { Plus, BarChart3, TrendingUp, FileText, Pin, Minimize2, Maximize2, Wallet, Settings, Receipt, Eye, EyeOff } from 'lucide-react';
-import { formatUnsignedAmount, formatSignedAmount as formatBalance } from '../utils/formatters';
+import { formatUnsignedAmount, formatSignedAmount as formatBalanceFn } from '../utils/formatters';
 import useCategories from '../hooks/useCategories';
 import useDebts from '../hooks/useDebts';
-
-function formatSignedAmount(value) {
-  return formatBalance(value >= 0 ? 'income' : 'expense', value);
-}
 
 function WidgetSettingsDropdown({ dashboardBlocks, setDashboardBlocks, workspaceId }) {
   return (
@@ -43,7 +39,8 @@ function WidgetSettingsDropdown({ dashboardBlocks, setDashboardBlocks, workspace
 export default function WorkspacePage() {
   const navigate = useNavigate();
   const params = useParams();
-  const { currentWorkspace, workspaceId: workspaceIdFromContext, loading, error, updateQuickButtons } = useWorkspace();
+  const { currentWorkspace, workspaceId: workspaceIdFromContext, loading, error, updateQuickButtons, currencySymbol } = useWorkspace();
+  const formatSignedAmount = (value) => formatBalanceFn(value >= 0 ? 'income' : 'expense', value, currencySymbol);
   const workspaceId = params.workspaceId || workspaceIdFromContext;
 
   const {
@@ -189,7 +186,7 @@ export default function WorkspacePage() {
     operations.forEach(op => {
       if ((op.type === 'expense' || op.type === 'salary') && op.category_id) {
         const existing = catMap.get(op.category_id) || 0;
-        catMap.set(op.category_id, existing + Number(op.amount || 0));
+        catMap.set(op.category_id, existing + Number(op.base_amount ?? op.amount ?? 0));
       }
     });
 
@@ -350,9 +347,9 @@ export default function WorkspacePage() {
                   {open && (
                     <div className="px-4 pb-3 border-t border-gray-100 dark:border-gray-700">
                       <div className="text-xs text-gray-500 dark:text-gray-400 pt-2 space-y-0.5">
-                        <div>Доходы: <span className="text-green-600 dark:text-green-400 font-medium">+{formatUnsignedAmount(income)}</span></div>
-                        <div>Расходы: <span className="text-red-600 dark:text-red-400 font-medium">−{formatUnsignedAmount(expense)}</span></div>
-                        <div>Зарплаты: <span className="text-primary-600 dark:text-primary-400 font-medium">−{formatUnsignedAmount(salary)}</span></div>
+                        <div>Доходы: <span className="text-green-600 dark:text-green-400 font-medium">+{formatUnsignedAmount(income, currencySymbol)}</span></div>
+                        <div>Расходы: <span className="text-red-600 dark:text-red-400 font-medium">−{formatUnsignedAmount(expense, currencySymbol)}</span></div>
+                        <div>Зарплаты: <span className="text-primary-600 dark:text-primary-400 font-medium">−{formatUnsignedAmount(salary, currencySymbol)}</span></div>
                       </div>
                       {key === 'month' && topExpenseCategories.length > 0 && (
                         <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700" data-testid="top-categories">
@@ -363,7 +360,7 @@ export default function WorkspacePage() {
                               <div key={cat.id} className="flex items-center gap-2 mb-1">
                                 <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
                                 <span className="text-xs text-gray-600 dark:text-gray-400 truncate flex-1">{cat.name}</span>
-                                <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{formatUnsignedAmount(cat.amount)}</span>
+                                <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{formatUnsignedAmount(cat.amount, currencySymbol)}</span>
                                 <div className="w-16 bg-gray-100 dark:bg-gray-700 rounded-full h-1.5">
                                   <div className="h-1.5 rounded-full" style={{ width: `${Math.round((cat.amount / maxAmt) * 100)}%`, backgroundColor: cat.color }} />
                                 </div>
@@ -537,11 +534,14 @@ export default function WorkspacePage() {
               )}
 
               {accountsSummaryOnly ? (() => {
-                const total = displayedAccounts.reduce((sum, acc) => sum + (balances[acc.id] || 0), 0);
+                const total = displayedAccounts.reduce((sum, acc) => {
+                  const b = balances[acc.id];
+                  return sum + (typeof b === 'object' ? (b?.base_balance ?? b?.balance ?? 0) : (b || 0));
+                }, 0);
                 const totalColor = total >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
                 return (
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-700 dark:text-gray-300">Итого</span>
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Итого ({currencySymbol})</span>
                     <span className={`text-sm font-semibold tabular-nums ${totalColor}`}>
                       {formatSignedAmount(total)}
                     </span>
@@ -550,16 +550,22 @@ export default function WorkspacePage() {
               })() : (
                 <div className="space-y-1.5">
                   {displayedAccounts.map(acc => {
-                    const bal = balances[acc.id] || 0;
+                    const b = balances[acc.id];
+                    const bal = typeof b === 'object' ? (b?.balance ?? 0) : (b || 0);
+                    const accCurrency = acc.currency || 'KZT';
+                    const accSymbol = accCurrency === (currentWorkspace?.base_currency || 'KZT') ? currencySymbol : accCurrency;
                     const balColor = bal >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
                     return (
                       <div key={acc.id} className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: acc.color || '#6B7280' }} />
                           <span className="text-sm text-gray-700 dark:text-gray-300">{acc.name}</span>
+                          {accCurrency !== (currentWorkspace?.base_currency || 'KZT') && (
+                            <span className="text-xs text-gray-400 dark:text-gray-500">{accCurrency}</span>
+                          )}
                         </div>
                         <span className={`text-sm font-semibold tabular-nums ${balColor}`}>
-                          {formatSignedAmount(bal)}
+                          {formatUnsignedAmount(Math.abs(bal), accSymbol)}
                         </span>
                       </div>
                     );
@@ -601,7 +607,7 @@ export default function WorkspacePage() {
                         <div className="text-right ml-2 flex-shrink-0">
                           <span className={`text-xs font-medium ${dirColor}`}>{dirLabel}</span>
                           <div className="text-sm font-semibold text-gray-800 dark:text-gray-200 tabular-nums">
-                            {formatUnsignedAmount(Number(debt.remaining_amount))} <span className="text-xs text-gray-400 font-normal">/ {formatUnsignedAmount(Number(debt.initial_amount))}</span>
+                            {formatUnsignedAmount(Number(debt.remaining_amount), debt.currency || currencySymbol)} <span className="text-xs text-gray-400 font-normal">/ {formatUnsignedAmount(Number(debt.initial_amount), debt.currency || currencySymbol)}</span>
                           </div>
                         </div>
                       </div>
@@ -647,7 +653,7 @@ export default function WorkspacePage() {
                       </div>
                       <span className={`text-sm font-semibold ${color} ml-2 whitespace-nowrap`}>
                         {op.type === 'transfer'
-                          ? formatUnsignedAmount(op.amount)
+                          ? formatUnsignedAmount(op.amount, currencySymbol)
                           : formatSignedAmount(op.type === 'income' ? op.amount : -Math.abs(op.amount))}
                       </span>
                     </div>

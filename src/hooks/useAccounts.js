@@ -16,7 +16,7 @@ export function useAccounts(workspaceId) {
       setError(null);
       const { data, error: loadErr } = await supabase
         .from('accounts')
-        .select('id, workspace_id, name, color, is_default, is_archived, created_at, updated_at')
+        .select('id, workspace_id, name, color, currency, is_default, is_archived, created_at, updated_at')
         .eq('workspace_id', workspaceId)
         .order('is_default', { ascending: false })
         .order('name', { ascending: true });
@@ -32,13 +32,13 @@ export function useAccounts(workspaceId) {
     }
   }, [workspaceId]);
 
-  const addAccount = useCallback(async ({ name, color }) => {
+  const addAccount = useCallback(async ({ name, color, currency }) => {
     if (!workspaceId) return null;
     try {
       const { data, error: insertErr } = await supabase
         .from('accounts')
-        .insert([{ workspace_id: workspaceId, name: name.trim(), color: color || '#6B7280' }])
-        .select('id, workspace_id, name, color, is_default, is_archived, created_at, updated_at')
+        .insert([{ workspace_id: workspaceId, name: name.trim(), color: color || '#6B7280', currency: currency || 'KZT' }])
+        .select('id, workspace_id, name, color, currency, is_default, is_archived, created_at, updated_at')
         .single();
 
       if (insertErr) throw insertErr;
@@ -63,7 +63,7 @@ export function useAccounts(workspaceId) {
         .update(updates)
         .eq('id', id)
         .eq('workspace_id', workspaceId)
-        .select('id, workspace_id, name, color, is_default, is_archived, created_at, updated_at')
+        .select('id, workspace_id, name, color, currency, is_default, is_archived, created_at, updated_at')
         .single();
 
       if (updateErr) throw updateErr;
@@ -154,7 +154,13 @@ export function useAccounts(workspaceId) {
 
       if (rpcErr) throw rpcErr;
       const map = {};
-      (data || []).forEach(row => { map[row.account_id] = Number(row.balance); });
+      (data || []).forEach(row => {
+        map[row.account_id] = {
+          balance: Number(row.balance),
+          currency: row.currency || 'KZT',
+          base_balance: Number(row.base_balance ?? row.balance),
+        };
+      });
       return map;
     } catch (e) {
       console.error('useAccounts: loadBalances error', e);

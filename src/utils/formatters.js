@@ -13,24 +13,24 @@ const ruFormatter = new Intl.NumberFormat('ru-RU', {
 });
 
 /** Форматирует абсолютное значение: «1 234,56 ₽» */
-export function formatUnsignedAmount(value) {
+export function formatUnsignedAmount(value, symbol = '₸') {
   const n = parseAmount(value);
-  return `${ruFormatter.format(Number.isFinite(n) ? Math.abs(n) : 0)} ₽`;
+  return `${ruFormatter.format(Number.isFinite(n) ? Math.abs(n) : 0)} ${symbol}`;
 }
 
 /** Форматирует со знаком типа операции: «+1 234,56 ₽» */
-export function formatSignedAmount(type, value) {
+export function formatSignedAmount(type, value, symbol = '₸') {
   const signs = { income: '+', expense: '−', salary: '−' };
   const sign = signs[type] ?? '';
-  return `${sign}${formatUnsignedAmount(value)}`;
+  return `${sign}${formatUnsignedAmount(value, symbol)}`;
 }
 
 /** Форматирует баланс со знаком: «+1 234,56 ₽» или «−1 234,56 ₽» */
-export function formatBalance(value) {
+export function formatBalance(value, symbol = '₸') {
   const n = parseAmount(value);
   const abs = Number.isFinite(n) ? Math.abs(n) : 0;
   const sign = n >= 0 ? '+' : '−';
-  return `${sign}${ruFormatter.format(abs)} ₽`;
+  return `${sign}${ruFormatter.format(abs)} ${symbol}`;
 }
 
 /**
@@ -79,4 +79,54 @@ export function formatAmountInput(str) {
   // разбиваем целую часть на группы по 3 (неразрывный пробел)
   const formatted = (intPart || '').replace(/\B(?=(\d{3})+(?!\d))/g, '\u00A0');
   return decPart !== undefined ? `${formatted},${decPart}` : formatted;
+}
+
+/* ===== Мультивалютные форматтеры ===== */
+
+let _currencyMeta = {};
+
+/** Инициализирует метаданные валют из справочника currencies */
+export function setCurrencyMeta(currencies) {
+  _currencyMeta = {};
+  (currencies || []).forEach(c => {
+    _currencyMeta[c.code] = { symbol: c.symbol, decimal_digits: c.decimal_digits ?? 2 };
+  });
+}
+
+/** Возвращает символ валюты по коду */
+export function getCurrencySymbol(code) {
+  return _currencyMeta[code]?.symbol || code;
+}
+
+/** Форматирует сумму с символом валюты: «1 234,56 $» */
+export function formatMoney(value, currencyCode = 'KZT') {
+  const n = parseAmount(value);
+  const digits = _currencyMeta[currencyCode]?.decimal_digits ?? 2;
+  const sym = getCurrencySymbol(currencyCode);
+  const fmt = new Intl.NumberFormat('ru-RU', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: digits,
+  });
+  return `${fmt.format(Number.isFinite(n) ? Math.abs(n) : 0)} ${sym}`;
+}
+
+/** Форматирует со знаком типа операции: «+1 234,56 $» */
+export function formatSignedMoney(type, value, currencyCode = 'KZT') {
+  const signs = { income: '+', expense: '−', salary: '−' };
+  const sign = signs[type] ?? '';
+  return `${sign}${formatMoney(value, currencyCode)}`;
+}
+
+/** Форматирует баланс со знаком: «+1 234,56 $» или «−1 234,56 $» */
+export function formatMoneyBalance(value, currencyCode = 'KZT') {
+  const n = parseAmount(value);
+  const digits = _currencyMeta[currencyCode]?.decimal_digits ?? 2;
+  const sym = getCurrencySymbol(currencyCode);
+  const abs = Number.isFinite(n) ? Math.abs(n) : 0;
+  const sign = n >= 0 ? '+' : '−';
+  const fmt = new Intl.NumberFormat('ru-RU', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: digits,
+  });
+  return `${sign}${fmt.format(abs)} ${sym}`;
 }

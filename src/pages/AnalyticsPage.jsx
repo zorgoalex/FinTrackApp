@@ -49,7 +49,7 @@ function getPeriodDates(periodKey, offset) {
 
 export default function AnalyticsPage() {
   const [searchParams] = useSearchParams();
-  const { workspaceId: wsFromCtx, allWorkspaces } = useWorkspace();
+  const { workspaceId: wsFromCtx, allWorkspaces, currencySymbol } = useWorkspace();
   const workspaceId = searchParams.get('workspaceId') || wsFromCtx;
 
   const [selectedWsIds, setSelectedWsIds] = useState([workspaceId]);
@@ -139,7 +139,7 @@ export default function AnalyticsPage() {
   };
 
   const handleCopyReport = async () => {
-    const text = buildTextReport(analytics, dateFrom, dateTo);
+    const text = buildTextReport(analytics, dateFrom, dateTo, currencySymbol);
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -278,9 +278,9 @@ export default function AnalyticsPage() {
         <>
           {/* Summary cards — 3 in one row */}
           <div className="grid grid-cols-3 gap-2 mb-6" data-testid="summary-cards">
-            <SummaryCard label="Доходы" amount={totalIncome} color="text-green-600" bg="bg-green-50 dark:bg-green-900/30" />
-            <SummaryCard label="Расходы" amount={totalExpense} color="text-red-600" bg="bg-red-50 dark:bg-red-900/30" />
-            <SummaryCard label="Баланс" amount={balance} color={balance >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'} bg="bg-gray-50 dark:bg-gray-800" />
+            <SummaryCard label="Доходы" amount={totalIncome} color="text-green-600" bg="bg-green-50 dark:bg-green-900/30" currencySymbol={currencySymbol} />
+            <SummaryCard label="Расходы" amount={totalExpense} color="text-red-600" bg="bg-red-50 dark:bg-red-900/30" currencySymbol={currencySymbol} />
+            <SummaryCard label="Баланс" amount={balance} color={balance >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'} bg="bg-gray-50 dark:bg-gray-800" currencySymbol={currencySymbol} />
           </div>
 
           {/* Breakdown tabs (mobile) */}
@@ -304,9 +304,9 @@ export default function AnalyticsPage() {
           </div>
 
           {breakdownTab === 'categories' ? (
-            <BreakdownTable items={categoryBreakdown} maxAmount={maxCategoryAmount} emptyText="Нет данных по категориям" />
+            <BreakdownTable items={categoryBreakdown} maxAmount={maxCategoryAmount} emptyText="Нет данных по категориям" currencySymbol={currencySymbol} />
           ) : (
-            <BreakdownTable items={tagBreakdown} maxAmount={maxTagAmount} emptyText="Нет данных по тегам" />
+            <BreakdownTable items={tagBreakdown} maxAmount={maxTagAmount} emptyText="Нет данных по тегам" currencySymbol={currencySymbol} />
           )}
 
           {/* Export buttons */}
@@ -334,16 +334,16 @@ export default function AnalyticsPage() {
   );
 }
 
-function SummaryCard({ label, amount, color, bg }) {
+function SummaryCard({ label, amount, color, bg, currencySymbol }) {
   return (
     <div className={`${bg} rounded-xl px-2 py-1.5 sm:px-3 sm:py-2 border border-gray-100 dark:border-gray-700 text-center`}>
       <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 leading-tight">{label}</p>
-      <p className={`text-[11px] sm:text-sm font-semibold tabular-nums leading-tight break-all ${color}`}>{formatUnsignedAmount(amount)}</p>
+      <p className={`text-[11px] sm:text-sm font-semibold tabular-nums leading-tight break-all ${color}`}>{formatUnsignedAmount(amount, currencySymbol)}</p>
     </div>
   );
 }
 
-function BreakdownTable({ items, maxAmount, emptyText }) {
+function BreakdownTable({ items, maxAmount, emptyText, currencySymbol }) {
   if (items.length === 0) {
     return <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">{emptyText}</p>;
   }
@@ -358,7 +358,7 @@ function BreakdownTable({ items, maxAmount, emptyText }) {
               <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.name}</span>
               <span className="text-xs text-gray-400 dark:text-gray-500">{item.count} оп.</span>
             </div>
-            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatUnsignedAmount(item.amount)}</span>
+            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatUnsignedAmount(item.amount, currencySymbol)}</span>
           </div>
           <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2">
             <div

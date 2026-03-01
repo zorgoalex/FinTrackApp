@@ -40,7 +40,7 @@ export function OperationPage() {
   const params = useParams();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
-  const { workspaceId: workspaceIdFromContext, currentWorkspace, updateQuickButtons } = useWorkspace();
+  const { workspaceId: workspaceIdFromContext, currentWorkspace, updateQuickButtons, currencySymbol } = useWorkspace();
   const permissions = usePermissions();
 
   const workspaceId = params.workspaceId || searchParams.get('workspaceId') || workspaceIdFromContext;
@@ -639,9 +639,9 @@ export function OperationPage() {
               <div className="sticky top-0 bg-gray-50 dark:bg-gray-900 px-4 py-2 flex items-center justify-between border-b border-gray-200 dark:border-gray-700" data-testid="date-group-header">
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{group.label}</span>
                 <span className="text-xs text-gray-400 dark:text-gray-500">
-                  {group.dayIncome > 0 && <span className="text-green-600">+{formatUnsignedAmount(group.dayIncome)}</span>}
+                  {group.dayIncome > 0 && <span className="text-green-600">+{formatUnsignedAmount(group.dayIncome, currencySymbol)}</span>}
                   {group.dayIncome > 0 && group.dayExpense > 0 && ' / '}
-                  {group.dayExpense > 0 && <span className="text-red-600">−{formatUnsignedAmount(group.dayExpense)}</span>}
+                  {group.dayExpense > 0 && <span className="text-red-600">−{formatUnsignedAmount(group.dayExpense, currencySymbol)}</span>}
                 </span>
               </div>
               {/* Operations in this group */}
@@ -666,7 +666,7 @@ export function OperationPage() {
                           {typeInfo.label}
                         </span>
                         <span className="text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100 truncate">
-                          {formatSignedAmount(operation.type, operation.amount)}
+                          {formatSignedAmount(operation.type, operation.amount, operation.currency || currencySymbol)}
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
@@ -712,7 +712,7 @@ export function OperationPage() {
                         </span>
                       </div>
                       <div className="text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100">
-                        {formatSignedAmount(operation.type, operation.amount)}
+                        {formatSignedAmount(operation.type, operation.amount, operation.currency || currencySymbol)}
                       </div>
                       <div className="flex flex-wrap gap-x-2 gap-y-0.5 items-center text-sm text-gray-500 dark:text-gray-400">
                         {(() => {

@@ -22,7 +22,7 @@ const TYPE_COLORS = {
 
 export default function ScheduledPage() {
   const [searchParams] = useSearchParams();
-  const { workspaceId: wsFromCtx } = useWorkspace();
+  const { workspaceId: wsFromCtx, currencySymbol } = useWorkspace();
   const workspaceId = searchParams.get('workspaceId') || wsFromCtx;
 
   const { items, loading, error, add, update, remove, toggle } = useScheduledOperations(workspaceId);
@@ -239,7 +239,7 @@ export default function ScheduledPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span className={`text-sm font-semibold tabular-nums ${TYPE_COLORS[item.type]?.split(' ')[0] || ''}`}>
-                        {formatUnsignedAmount(item.amount)}
+                        {formatUnsignedAmount(item.amount, currencySymbol)}
                       </span>
                       <span className={`text-xs px-1.5 py-0.5 rounded-full ${TYPE_COLORS[item.type] || 'text-gray-600 bg-gray-50'}`}>
                         {TYPE_LABELS[item.type] || item.type}
