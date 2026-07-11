@@ -5,6 +5,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import { useCategories } from '../hooks/useCategories';
 import { useTags } from '../hooks/useTags';
 import { useAccounts } from '../hooks/useAccounts';
+import { useCurrencies } from '../hooks/useCurrencies';
 
 const TABS = [
   { key: 'categories', label: 'Категории' },
@@ -479,17 +480,18 @@ function InlineTagForm({ form, setForm, onSave, onCancel, saving }) {
 /* ─── Accounts Tab ─── */
 function AccountsTab({ workspaceId, canEdit }) {
   const { accounts, loading, error, addAccount, updateAccount, deleteAccount, archiveAccount, unarchiveAccount } = useAccounts(workspaceId);
+  const { currencies } = useCurrencies(workspaceId);
   const [editingId, setEditingId] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
-  const [form, setForm] = useState({ name: '', color: '#6B7280' });
+  const [form, setForm] = useState({ name: '', color: '#6B7280', currency: 'KZT' });
   const [saving, setSaving] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
 
   const clearDeleteError = useCallback(() => setDeleteError(null), []);
 
   const resetForm = () => {
-    setForm({ name: '', color: '#6B7280' });
+    setForm({ name: '', color: '#6B7280', currency: 'KZT' });
     setEditingId(null);
     setShowAdd(false);
   };
@@ -497,7 +499,7 @@ function AccountsTab({ workspaceId, canEdit }) {
   const startEdit = (acc) => {
     if (acc.is_default) return; // Cannot edit default account name
     setEditingId(acc.id);
-    setForm({ name: acc.name, color: acc.color || '#6B7280' });
+    setForm({ name: acc.name, color: acc.color || '#6B7280', currency: acc.currency || 'KZT' });
     setShowAdd(false);
   };
 
@@ -563,6 +565,7 @@ function AccountsTab({ workspaceId, canEdit }) {
             onSave={handleSave}
             onCancel={resetForm}
             saving={saving}
+            currencies={currencies}
           />
         ) : (
           <div
@@ -575,6 +578,7 @@ function AccountsTab({ workspaceId, canEdit }) {
                 style={{ backgroundColor: acc.color || '#6B7280' }}
               />
               <span className="text-sm text-gray-900 dark:text-gray-100">{acc.name}</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">{acc.currency || 'KZT'}</span>
               {acc.is_default && (
                 <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-400">основной</span>
               )}
@@ -628,6 +632,7 @@ function AccountsTab({ workspaceId, canEdit }) {
           onSave={handleSave}
           onCancel={resetForm}
           saving={saving}
+          currencies={currencies}
         />
       )}
 
@@ -643,7 +648,7 @@ function AccountsTab({ workspaceId, canEdit }) {
   );
 }
 
-function InlineAccountForm({ form, setForm, onSave, onCancel, saving }) {
+function InlineAccountForm({ form, setForm, onSave, onCancel, saving, currencies }) {
   return (
     <div className="flex flex-wrap items-center gap-2 bg-white dark:bg-gray-800 border border-primary-200 dark:border-primary-700 rounded-xl px-4 py-2">
       <input
@@ -654,6 +659,18 @@ function InlineAccountForm({ form, setForm, onSave, onCancel, saving }) {
         className="flex-1 min-w-[120px] text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary-500"
         autoFocus
       />
+      <select
+        value={form.currency || 'KZT'}
+        onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}
+        className="text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary-500"
+        aria-label="Валюта счёта"
+      >
+        {(currencies || []).map((currency) => (
+          <option key={currency.code} value={currency.code}>
+            {currency.symbol} {currency.code}
+          </option>
+        ))}
+      </select>
       <input
         type="color"
         value={form.color}
