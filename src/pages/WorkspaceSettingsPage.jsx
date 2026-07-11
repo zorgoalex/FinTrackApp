@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Mail, Settings, Trash2, UserPlus, Shield, Crown, Eye, User, Coins, Download } from 'lucide-react';
+import { Users, Mail, Settings, Trash2, UserPlus, Shield, Crown, Eye, User, Coins, Download, Sparkles } from 'lucide-react';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { supabase } from '../contexts/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
@@ -62,7 +62,7 @@ export default function WorkspaceSettingsPage() {
     canDeleteWorkspace: canDeleteWorkspaceFromWorkspace
   } = useWorkspace();
   
-  const { canLeaveWorkspace } = usePermissions();
+  const { canLeaveWorkspace, canEditWorkspaceSettings } = usePermissions();
 
   // Используем значение из WorkspaceContext, так как там правильная логика
   const shouldShowInvitesTab = canInviteUsersFromWorkspace;
@@ -77,6 +77,10 @@ export default function WorkspaceSettingsPage() {
   const [currencySuccess, setCurrencySuccess] = useState(false);
   const [backupLoading, setBackupLoading] = useState(false);
   const [backupError, setBackupError] = useState('');
+  const [aiPolicies, setAiPolicies] = useState([]);
+  const [aiPoliciesLoading, setAiPoliciesLoading] = useState(false);
+  const [aiPoliciesError, setAiPoliciesError] = useState('');
+  const [aiPoliciesSaved, setAiPoliciesSaved] = useState(false);
 
   // Синхронизировать локальное название с загруженным workspace
   useEffect(() => {
@@ -89,6 +93,44 @@ export default function WorkspaceSettingsPage() {
       .order('name_ru')
       .then(({ data }) => setCurrencies(data || []));
   }, []);
+
+  useEffect(() => {
+    if (!currentWorkspace?.id) return;
+    setAiPoliciesLoading(true);
+    supabase.from('ai_access_policies')
+      .select('workspace_id, role, enabled, data_scope, include_accounts, include_categories, include_descriptions')
+      .eq('workspace_id', currentWorkspace.id)
+      .order('role')
+      .then(({ data, error: policyError }) => {
+        if (policyError) setAiPoliciesError(policyError.message);
+        else setAiPolicies(data || []);
+        setAiPoliciesLoading(false);
+      });
+  }, [currentWorkspace?.id]);
+
+  const updateAiPolicy = (role, changes) => {
+    setAiPoliciesSaved(false);
+    setAiPolicies((current) => current.map((policy) => policy.role === role ? { ...policy, ...changes } : policy));
+  };
+
+  const saveAiPolicies = async () => {
+    setAiPoliciesLoading(true);
+    setAiPoliciesError('');
+    setAiPoliciesSaved(false);
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      const { error: saveError } = await supabase.from('ai_access_policies').upsert(
+        aiPolicies.map((policy) => ({ ...policy, updated_at: new Date().toISOString(), updated_by: authData?.user?.id || null })),
+        { onConflict: 'workspace_id,role' },
+      );
+      if (saveError) throw saveError;
+      setAiPoliciesSaved(true);
+    } catch (policyError) {
+      setAiPoliciesError(policyError.message || 'Не удалось сохранить правила AI');
+    } finally {
+      setAiPoliciesLoading(false);
+    }
+  };
 
   const handleRename = async (e) => {
     e.preventDefault();
@@ -288,6 +330,7 @@ export default function WorkspaceSettingsPage() {
     { id: 'general', label: 'Общие', icon: Settings },
     { id: 'currency', label: 'Валюта', icon: Coins },
     { id: 'members', label: 'Участники', icon: Users },
+    ...(canEditWorkspaceSettings ? [{ id: 'ai', label: 'AI-доступ', icon: Sparkles }] : []),
     ...(shouldShowInvitesTab ? [{ id: 'invites', label: 'Приглашения', icon: Mail }] : [])
   ];
 
@@ -304,7 +347,7 @@ export default function WorkspaceSettingsPage() {
 
         {/* Табы */}
         <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
-          <nav className="-mb-px flex space-x-8" data-testid="settings-tabs">
+          <nav className="-mb-px flex gap-6 overflow-x-auto" data-testid="settings-tabs">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (
@@ -505,6 +548,54 @@ export default function WorkspaceSettingsPage() {
                 workspaceId={currentWorkspace.id}
                 baseCurrency={currentWorkspace.base_currency || 'KZT'}
               />
+            </div>
+          )}
+
+          {activeTab === 'ai' && (
+            <div className="space-y-4 rounded-xl bg-white p-4 shadow-md dark:bg-gray-800 sm:p-6">
+              <div>
+                <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">Доступ AI-ассистента по ролям</h2>
+                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Эти правила применяются в базе до передачи данных модели. Ассистент всегда работает только на чтение.</p>
+              </div>
+              {aiPoliciesError && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-400">{aiPoliciesError}</p>}
+              {aiPoliciesLoading && aiPolicies.length === 0 ? (
+                <p className="py-6 text-center text-sm text-gray-500">Загрузка правил…</p>
+              ) : (
+                <div className="space-y-3">
+                  {aiPolicies.map((policy) => (
+                    <div key={policy.role} className="rounded-xl border border-gray-200 p-4 dark:border-gray-700">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="font-medium text-gray-900 dark:text-gray-100">{roleLabels[policy.role] || policy.role}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Правило действует для всех пользователей этой роли</p>
+                        </div>
+                        <label className="flex min-h-11 items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                          <input type="checkbox" checked={policy.enabled} onChange={(event) => updateAiPolicy(policy.role, { enabled: event.target.checked })} className="h-5 w-5 rounded border-gray-300 text-primary-600" />
+                          Разрешить
+                        </label>
+                      </div>
+                      <div className={`mt-3 grid gap-3 sm:grid-cols-2 ${policy.enabled ? '' : 'pointer-events-none opacity-50'}`}>
+                        <label className="text-xs text-gray-600 dark:text-gray-400">Какие операции доступны
+                          <select value={policy.data_scope} onChange={(event) => updateAiPolicy(policy.role, { data_scope: event.target.value })} className="input-field mt-1 min-h-11 w-full">
+                            <option value="aggregate">Только общие суммы</option>
+                            <option value="own_detail">Сводка и свои операции</option>
+                            <option value="workspace_detail">Все операции пространства</option>
+                          </select>
+                        </label>
+                        <div className="grid grid-cols-1 gap-1 text-sm text-gray-700 dark:text-gray-300">
+                          <label className="flex min-h-8 items-center gap-2"><input type="checkbox" checked={policy.include_categories} onChange={(event) => updateAiPolicy(policy.role, { include_categories: event.target.checked })} /> Категории</label>
+                          <label className="flex min-h-8 items-center gap-2"><input type="checkbox" checked={policy.include_accounts} onChange={(event) => updateAiPolicy(policy.role, { include_accounts: event.target.checked })} /> Счета и остатки</label>
+                          <label className={`flex min-h-8 items-center gap-2 ${policy.data_scope === 'aggregate' ? 'opacity-50' : ''}`}><input type="checkbox" disabled={policy.data_scope === 'aggregate'} checked={policy.include_descriptions} onChange={(event) => updateAiPolicy(policy.role, { include_descriptions: event.target.checked })} /> Описания операций</label>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-center justify-end gap-3">
+                {aiPoliciesSaved && <span className="text-sm text-green-600 dark:text-green-400">Правила сохранены</span>}
+                <button type="button" onClick={saveAiPolicies} disabled={aiPoliciesLoading || aiPolicies.length === 0} className="btn-primary min-h-11 disabled:opacity-50">Сохранить правила</button>
+              </div>
             </div>
           )}
 
