@@ -12,7 +12,7 @@ import AddOperationModal from '../components/AddOperationModal';
 import EditOperationModal from '../components/EditOperationModal';
 import QuickButtonsSettings from '../components/QuickButtonsSettings';
 import MonthPicker from '../components/MonthPicker';
-import { Pencil, Trash2, ChevronDown, X, Plus, Settings, Wallet, Download } from 'lucide-react';
+import { Pencil, Trash2, ChevronDown, X, Plus, Settings, Wallet, Download, Search, SlidersHorizontal } from 'lucide-react';
 import { formatSignedAmount, formatUnsignedAmount, formatGroupDate } from '../utils/formatters';
 import { getMonthRange } from '../utils/dateRange';
 import { buildOperationsCSV, downloadOperationsCSV } from '../utils/export';
@@ -34,7 +34,7 @@ function formatOperationDate(value) {
 export function OperationPage() {
   const navigate = useNavigate();
   const params = useParams();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const { workspaceId: workspaceIdFromContext, currentWorkspace, updateQuickButtons, currencySymbol } = useWorkspace();
   const permissions = usePermissions();
@@ -92,6 +92,20 @@ export function OperationPage() {
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  useEffect(() => {
+    const requestedType = searchParams.get('new');
+    if (!requestedType || !permissions.canCreateOperations) return;
+    if (!['income', 'expense', 'transfer'].includes(requestedType)) return;
+    setModalType(requestedType);
+    setModalCategory('');
+    setIsModalOpen(true);
+    const nextParams = new globalThis.URLSearchParams(searchParams);
+    nextParams.delete('new');
+    setSearchParams(nextParams, { replace: true });
+  }, [permissions.canCreateOperations, searchParams, setSearchParams]);
 
   // Visible accounts filter (null = all visible)
   const [visibleAccountIds, setVisibleAccountIds] = useState(() => {
@@ -186,6 +200,20 @@ export function OperationPage() {
         filterTags.some((tagId) => op.tags?.some((t) => t.id === tagId))
       );
 
+    const normalizedSearch = searchQuery.trim().toLocaleLowerCase('ru-RU');
+    if (normalizedSearch) {
+      filtered = filtered.filter((operation) => {
+        const categoryName = operation.category_id
+          ? categoryMap.get(operation.category_id)?.name
+          : '';
+        const accountName = accountMap.get(operation.account_id)?.name || '';
+        const tagNames = (operation.tags || []).map((tag) => tag.name).join(' ');
+        return [operation.description, categoryName, accountName, tagNames]
+          .filter(Boolean)
+          .some((value) => String(value).toLocaleLowerCase('ru-RU').includes(normalizedSearch));
+      });
+    }
+
     // Filter by visible accounts
     if (visibleAccountIds) {
       filtered = filtered.filter((op) => visibleAccountIds.includes(op.account_id));
@@ -202,7 +230,7 @@ export function OperationPage() {
       }
       return sortDir === 'asc' ? valA - valB : valB - valA;
     });
-  }, [operations, filterType, filterCategory, filterTags, sortField, sortDir, visibleAccountIds]);
+  }, [operations, filterType, filterCategory, filterTags, sortField, sortDir, visibleAccountIds, searchQuery, categoryMap, accountMap]);
 
   const groupedOperations = useMemo(() => {
     const groups = new Map();
@@ -301,8 +329,8 @@ export function OperationPage() {
       return 'Удалённый пользователь';
     }
 
-    return authorEmails[operation.user_id]
-      || (operation.user_id === user?.id ? user?.email : null)
+    return (operation.user_id === user?.id ? 'Вы' : null)
+      || authorEmails[operation.user_id]
       || operation.displayName
       || 'Пользователь';
   };
@@ -331,14 +359,6 @@ export function OperationPage() {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [showTagDropdown]);
-
-  const goBack = () => {
-    if (workspaceId) {
-      navigate(`/workspace/${workspaceId}`);
-      return;
-    }
-    navigate('/workspaces');
-  };
 
   const handleExportOperations = async () => {
     const pageSize = 1000;
@@ -422,10 +442,7 @@ export function OperationPage() {
         <div className="flex gap-2">
           <button onClick={handleExportOperations} className="btn-secondary" disabled={exporting || loading}>
             <Download size={16} className="mr-2" />
-            {exporting ? 'Экспорт...' : 'CSV'}
-          </button>
-          <button onClick={goBack} className="btn-secondary">
-            Назад
+            <span className="hidden sm:inline">{exporting ? 'Экспорт...' : 'CSV'}</span>
           </button>
         </div>
       </header>
@@ -494,6 +511,35 @@ export function OperationPage() {
         </div>
       )}
 
+      <div className="mb-3 flex items-center gap-2">
+        <label className="relative min-w-0 flex-1">
+          <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <span className="sr-only">Поиск операций</span>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Поиск операций"
+            className="input-field min-h-11 pl-9"
+          />
+        </label>
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((open) => !open)}
+          className={`inline-flex min-h-11 items-center gap-2 rounded-lg border px-3 text-sm font-medium md:hidden ${
+            filtersOpen || filterType || filterCategory || filterTags.length > 0 || visibleAccountIds
+              ? 'border-primary-400 bg-primary-50 text-primary-700'
+              : 'border-gray-300 bg-white text-gray-600'
+          }`}
+          aria-expanded={filtersOpen}
+          aria-controls="operation-filters"
+        >
+          <SlidersHorizontal size={16} />
+          Фильтры
+        </button>
+      </div>
+
+      <div id="operation-filters" className={`${filtersOpen ? 'block' : 'hidden'} mb-3 rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800 md:block md:border-0 md:bg-transparent md:p-0 dark:md:bg-transparent`}>
       {/* Фильтр + Сортировка */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
         {[
@@ -700,6 +746,7 @@ export function OperationPage() {
             Компактный
           </button>
         </div>
+      </div>
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">

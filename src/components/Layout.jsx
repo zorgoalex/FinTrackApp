@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Menu, X, Home, Settings, BarChart3, Calendar, CreditCard, LogOut, BookOpen, Sun, Moon, Receipt, Target } from 'lucide-react'
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
+import { Menu, X, Home, Settings, BarChart3, Calendar, CreditCard, LogOut, BookOpen, Sun, Moon, Receipt, Target, PlusCircle, MoreHorizontal } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useWorkspace } from '../contexts/WorkspaceContext'
 import { usePermissions } from '../hooks/usePermissions'
@@ -11,9 +11,10 @@ export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { user, logout } = useAuth()
   const { currentWorkspace, workspaceId } = useWorkspace()
-  const { canViewWorkspaceSettings } = usePermissions()
+  const { canViewWorkspaceSettings, canCreateOperations } = usePermissions()
   const { theme, toggleTheme } = useTheme()
   const location = useLocation()
+  const navigate = useNavigate()
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen)
 
@@ -148,10 +149,52 @@ export default function Layout() {
         </header>
 
         {/* Main Content */}
-        <main className="flex-1">
+        <main className="flex-1 pb-20 lg:pb-0">
           <Outlet />
         </main>
+
+        {workspaceId && (
+          <nav className="fixed inset-x-0 bottom-0 z-40 grid h-16 grid-cols-5 border-t border-gray-200 bg-white/95 px-2 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur-xl dark:border-gray-700 dark:bg-gray-900/95 lg:hidden" aria-label="Основная навигация">
+            <MobileNavLink to={`/workspace/${workspaceId}`} active={location.pathname === `/workspace/${workspaceId}`} icon={Home} label="Главная" />
+            <MobileNavLink to={`/operations?workspaceId=${workspaceId}`} active={location.pathname.startsWith('/operations')} icon={CreditCard} label="Операции" />
+            <button
+              type="button"
+              onClick={() => navigate(`/operations?workspaceId=${workspaceId}&new=expense`)}
+              disabled={!canCreateOperations}
+              className="flex min-h-12 flex-col items-center justify-center gap-0.5 text-primary-600 disabled:opacity-40 dark:text-primary-400"
+              aria-label="Добавить расход"
+            >
+              <PlusCircle size={30} strokeWidth={2.2} />
+              <span className="text-[10px] font-medium">Добавить</span>
+            </button>
+            <MobileNavLink to={`/budgets?workspaceId=${workspaceId}`} active={location.pathname.startsWith('/budgets')} icon={Target} label="Бюджеты" />
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              className="flex min-h-12 flex-col items-center justify-center gap-0.5 text-gray-500 dark:text-gray-400"
+              aria-label="Открыть остальные разделы"
+            >
+              <MoreHorizontal size={21} />
+              <span className="text-[10px] font-medium">Ещё</span>
+            </button>
+          </nav>
+        )}
       </div>
     </div>
+  )
+}
+
+function MobileNavLink({ to, active, icon: Icon, label }) {
+  return (
+    <Link
+      to={to}
+      className={`flex min-h-12 flex-col items-center justify-center gap-0.5 ${
+        active ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400'
+      }`}
+      aria-current={active ? 'page' : undefined}
+    >
+      <Icon size={20} />
+      <span className="text-[10px] font-medium">{label}</span>
+    </Link>
   )
 }
