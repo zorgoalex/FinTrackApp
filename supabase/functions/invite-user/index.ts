@@ -1,7 +1,40 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders } from '../_shared/cors.ts';
-import { emailConfig } from '../_shared/email-config.ts';
-import emailTemplate from '../_shared/invite-email.html.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+const FROM_EMAIL = 'onboarding@resend.dev';
+const FROM_NAME = 'FinTrackApp (Test)';
+
+function escapeHtml(value: unknown) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function invitationEmailHtml({ inviterEmail, workspaceName, role, acceptUrl, expiresAt }: {
+  inviterEmail: string;
+  workspaceName: string;
+  role: string;
+  acceptUrl: string;
+  expiresAt: string;
+}) {
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Приглашение в FinTrackApp</title></head>
+  <body style="font-family:Arial,sans-serif;background:#f4f4f4;margin:0;padding:20px">
+    <div style="background:#fff;max-width:600px;margin:0 auto;padding:24px;border-radius:8px">
+      <h1 style="color:#333">Вас пригласили в рабочее пространство</h1>
+      <p style="color:#555;line-height:1.6">Пользователь <strong>${escapeHtml(inviterEmail)}</strong> приглашает вас в пространство «<strong>${escapeHtml(workspaceName)}</strong>» с ролью <strong>${escapeHtml(role)}</strong>.</p>
+      <a href="${escapeHtml(acceptUrl)}" style="display:inline-block;background:#0066cc;color:#fff;padding:12px 25px;text-decoration:none;border-radius:5px;font-weight:bold">Принять приглашение</a>
+      <p style="margin-top:20px;font-size:12px;color:#888">Приглашение действительно до ${escapeHtml(expiresAt)}.</p>
+      <p style="font-size:12px;color:#888">Если вы не ожидали этого приглашения, его можно проигнорировать.</p>
+    </div>
+  </body></html>`;
+}
 
 Deno.serve(async (req) => {
   // Handle CORS preflight request
@@ -19,8 +52,8 @@ Deno.serve(async (req) => {
   try {
     const resendApiKey = Deno.env.get('RESEND_API_KEY');
     const appBaseUrl = Deno.env.get('APP_BASE_URL');
-    if (!resendApiKey || !appBaseUrl) {
-      return new Response(JSON.stringify({ error: 'Server misconfiguration: RESEND_API_KEY and APP_BASE_URL are required.' }), {
+    if (!appBaseUrl) {
+      return new Response(JSON.stringify({ error: 'Server misconfiguration: APP_BASE_URL is required.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 500,
       });
@@ -113,45 +146,50 @@ Deno.serve(async (req) => {
     // The HTML template is now imported directly as a string constant.
 
     // Populate the template with dynamic data
-    const emailHtml = emailTemplate
-      .replace('{{inviter_email}}', invitingUser.email)
-      .replace('{{workspace_name}}', workspace?.name || 'a workspace')
-      .replace('{{role}}', normalizedRole)
-      .replace('{{accept_url}}', acceptUrl)
-      .replace('{{expires_at}}', new Date(invitation.expires_at).toLocaleString('ru-RU'));
-
-    // Send the email using Resend
-    const resendResponse = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${resendApiKey}`,
-      },
-      body: JSON.stringify({
-        from: `${emailConfig.fromName} <${emailConfig.fromEmail}>`,
-        to: [normalizedEmail],
-        subject: `Invitation to join workspace: ${workspace?.name}`,
-        html: emailHtml,
-      }),
+    const emailHtml = invitationEmailHtml({
+      inviterEmail: invitingUser.email || '',
+      workspaceName: workspace?.name || 'рабочее пространство',
+      role: normalizedRole,
+      acceptUrl,
+      expiresAt: new Date(invitation.expires_at).toLocaleString('ru-RU'),
     });
 
+    // Send the email using Resend
     // Update invitation record and track email delivery
     let emailSent = false;
     let emailError = '';
-    if (resendResponse.ok) {
-      emailSent = true;
-      await supabaseAdmin
-        .from('workspace_invitations')
-        .update({
-          email_sent_at: new Date().toISOString(),
-          email_sent_count: (invitation.email_sent_count ?? 0) + 1,
-        })
-        .eq('id', invitation.id);
+    if (!resendApiKey) {
+      emailError = 'Email delivery is not configured yet';
     } else {
-      const errorBody = await resendResponse.text();
-      console.error('Resend API Error:', errorBody);
-      emailError = errorBody || 'Unknown Resend error';
-      // Invitation saved — don't fail, return the link so sender can share manually
+      const resendResponse = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${resendApiKey}`,
+        },
+        body: JSON.stringify({
+          from: `${FROM_NAME} <${FROM_EMAIL}>`,
+          to: [normalizedEmail],
+          subject: `Invitation to join workspace: ${workspace?.name}`,
+          html: emailHtml,
+        }),
+      });
+
+      if (resendResponse.ok) {
+        emailSent = true;
+        await supabaseAdmin
+          .from('workspace_invitations')
+          .update({
+            email_sent_at: new Date().toISOString(),
+            email_sent_count: (invitation.email_sent_count ?? 0) + 1,
+          })
+          .eq('id', invitation.id);
+      } else {
+        const errorBody = await resendResponse.text();
+        console.error('Resend API Error:', errorBody);
+        emailError = errorBody || 'Unknown Resend error';
+        // Invitation saved — don't fail, return the link so sender can share manually
+      }
     }
 
     return new Response(JSON.stringify({
