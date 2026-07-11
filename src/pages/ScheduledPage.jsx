@@ -3,7 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { useScheduledOperations } from '../hooks/useScheduledOperations';
 import { useCategories } from '../hooks/useCategories';
-import { formatUnsignedAmount } from '../utils/formatters';
+import { useAccounts } from '../hooks/useAccounts';
+import { formatMoney } from '../utils/formatters';
 import { Plus, Trash2, Pause, Play, Pencil, X } from 'lucide-react';
 
 const FREQ_LABELS = {
@@ -22,15 +23,18 @@ const TYPE_COLORS = {
 
 export default function ScheduledPage() {
   const [searchParams] = useSearchParams();
-  const { workspaceId: wsFromCtx, currencySymbol } = useWorkspace();
+  const { workspaceId: wsFromCtx } = useWorkspace();
   const workspaceId = searchParams.get('workspaceId') || wsFromCtx;
 
   const { items, loading, error, add, update, remove, toggle } = useScheduledOperations(workspaceId);
   const { categories } = useCategories(workspaceId);
+  const { accounts } = useAccounts(workspaceId);
+  const activeAccounts = accounts.filter(account => !account.is_archived);
+  const defaultAccount = activeAccounts.find(account => account.is_default);
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState({ amount: '', type: 'expense', description: '', category_id: '', frequency: 'monthly', next_date: '' });
+  const [form, setForm] = useState({ amount: '', type: 'expense', description: '', category_id: '', account_id: '', frequency: 'monthly', next_date: '' });
   const [deleting, setDeleting] = useState(null);
 
   const activeCategories = useMemo(
@@ -44,25 +48,32 @@ export default function ScheduledPage() {
     return m;
   }, [categories]);
 
+  const accountMap = useMemo(() => {
+    const map = {};
+    accounts.forEach(account => { map[account.id] = account; });
+    return map;
+  }, [accounts]);
+
   if (!workspaceId) {
     return <div className="max-w-2xl mx-auto p-4 text-center text-gray-500 dark:text-gray-400">Выберите рабочее пространство.</div>;
   }
 
   const resetForm = () => {
-    setForm({ amount: '', type: 'expense', description: '', category_id: '', frequency: 'monthly', next_date: '' });
+    setForm({ amount: '', type: 'expense', description: '', category_id: '', account_id: defaultAccount?.id || '', frequency: 'monthly', next_date: '' });
     setShowForm(false);
     setEditingId(null);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.amount || !form.next_date) return;
+    if (!form.amount || !form.next_date || !form.account_id) return;
+    let saved;
     if (editingId) {
-      await update(editingId, form);
+      saved = await update(editingId, form);
     } else {
-      await add(form);
+      saved = await add(form);
     }
-    resetForm();
+    if (saved) resetForm();
   };
 
   const startEdit = (item) => {
@@ -71,6 +82,7 @@ export default function ScheduledPage() {
       type: item.type,
       description: item.description || '',
       category_id: item.category_id || '',
+      account_id: item.account_id || '',
       frequency: item.frequency,
       next_date: item.next_date,
     });
@@ -155,6 +167,22 @@ export default function ScheduledPage() {
             />
           </div>
 
+          <div>
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Счёт</label>
+            <select
+              value={form.account_id}
+              onChange={e => setForm(f => ({ ...f, account_id: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              required
+              data-testid="scheduled-account"
+            >
+              <option value="">Выберите счёт</option>
+              {activeAccounts.map(account => (
+                <option key={account.id} value={account.id}>{account.name} · {account.currency}</option>
+              ))}
+            </select>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Категория</label>
@@ -229,6 +257,7 @@ export default function ScheduledPage() {
         <div className="space-y-2" data-testid="scheduled-list">
           {items.map(item => {
             const cat = categoryMap[item.category_id];
+            const account = accountMap[item.account_id];
             return (
               <div
                 key={item.id}
@@ -239,7 +268,7 @@ export default function ScheduledPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span className={`text-sm font-semibold tabular-nums ${TYPE_COLORS[item.type]?.split(' ')[0] || ''}`}>
-                        {formatUnsignedAmount(item.amount, currencySymbol)}
+                        {formatMoney(item.amount, account?.currency || item.currency || 'KZT')}
                       </span>
                       <span className={`text-xs px-1.5 py-0.5 rounded-full ${TYPE_COLORS[item.type] || 'text-gray-600 bg-gray-50'}`}>
                         {TYPE_LABELS[item.type] || item.type}
@@ -251,12 +280,18 @@ export default function ScheduledPage() {
                     )}
                     <div className="flex items-center gap-2 mt-1">
                       <span className="text-xs text-gray-400 dark:text-gray-500">Следующая: {item.next_date}</span>
+                      {account && (
+                        <span className="text-xs text-gray-400 dark:text-gray-500">{account.name}</span>
+                      )}
                       {cat && (
                         <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
                           {cat.name}
                         </span>
                       )}
                     </div>
+                    {item.last_error && (
+                      <p className="mt-1 text-xs text-red-600 dark:text-red-400">Не выполнено: {item.last_error}</p>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <button

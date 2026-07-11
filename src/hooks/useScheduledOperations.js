@@ -16,7 +16,7 @@ export function useScheduledOperations(workspaceId) {
       setError(null);
       const { data, error: err } = await supabase
         .from('scheduled_operations')
-        .select('id, workspace_id, user_id, amount, type, description, category_id, frequency, next_date, is_active, created_at, currency')
+        .select('id, workspace_id, user_id, amount, type, description, category_id, account_id, frequency, next_date, is_active, created_at, currency, last_error, last_error_at')
         .eq('workspace_id', workspaceId)
         .order('next_date', { ascending: true });
       if (err) throw err;
@@ -46,8 +46,11 @@ export function useScheduledOperations(workspaceId) {
           type: data.type,
           description: data.description || '',
           category_id: data.category_id || null,
+          account_id: data.account_id,
           frequency: data.frequency,
           next_date: data.next_date,
+          anchor_month: Number(data.next_date.slice(5, 7)),
+          anchor_day: Number(data.next_date.slice(8, 10)),
           is_active: true,
         }])
         .select()
@@ -68,8 +71,13 @@ export function useScheduledOperations(workspaceId) {
       if (data.amount !== undefined) payload.amount = Number(data.amount);
       if (data.description !== undefined) payload.description = data.description;
       if (data.category_id !== undefined) payload.category_id = data.category_id || null;
+      if (data.account_id !== undefined) payload.account_id = data.account_id;
       if (data.frequency !== undefined) payload.frequency = data.frequency;
-      if (data.next_date !== undefined) payload.next_date = data.next_date;
+      if (data.next_date !== undefined) {
+        payload.next_date = data.next_date;
+        payload.anchor_month = Number(data.next_date.slice(5, 7));
+        payload.anchor_day = Number(data.next_date.slice(8, 10));
+      }
       if (data.is_active !== undefined) payload.is_active = data.is_active;
       const { error: err } = await supabase
         .from('scheduled_operations')
