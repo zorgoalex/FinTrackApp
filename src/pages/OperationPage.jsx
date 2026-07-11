@@ -30,11 +30,6 @@ function formatOperationDate(value) {
   return date.toLocaleDateString('ru-RU');
 }
 
-function getDefaultType(searchParams) {
-  const type = (searchParams.get('type') || '').toLowerCase();
-  return Object.keys(OPERATION_TYPES).includes(type) ? type : 'income';
-}
-
 export function OperationPage() {
   const navigate = useNavigate();
   const params = useParams();
@@ -161,7 +156,13 @@ export function OperationPage() {
     base = base.map(op => {
       if (op.type === 'transfer' && op.transfer_group_id) {
         const linked = inByGroup.get(op.transfer_group_id);
-        return { ...op, _linkedAccountId: linked?.account_id || null };
+        return {
+          ...op,
+          _linkedAccountId: linked?.account_id || null,
+          _linkedAmount: linked?.amount ?? null,
+          _linkedCurrency: linked?.currency || null,
+          _linkedExchangeRate: linked?.exchange_rate ?? null,
+        };
       }
       return op;
     });
@@ -209,8 +210,12 @@ export function OperationPage() {
       dateKey,
       label: formatGroupDate(dateKey === 'no-date' ? null : dateKey),
       operations: ops,
-      dayIncome: ops.filter(o => o.type === 'income').reduce((s, o) => s + Number(o.amount || 0), 0),
-      dayExpense: ops.filter(o => o.type === 'expense' || o.type === 'salary').reduce((s, o) => s + Number(o.amount || 0), 0),
+      dayIncome: ops
+        .filter(o => o.type === 'income')
+        .reduce((s, o) => s + Number(o.base_amount ?? o.amount ?? 0), 0),
+      dayExpense: ops
+        .filter(o => o.type === 'expense' || o.type === 'salary')
+        .reduce((s, o) => s + Number(o.base_amount ?? o.amount ?? 0), 0),
     }));
   }, [visibleOperations]);
 

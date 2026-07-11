@@ -45,7 +45,6 @@ export function WorkspaceProvider({ children }) {
         setUserRole(null);
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId, userId]);
 
   // Fallback: sync userRole from allWorkspaces if loadWorkspace didn't set it
@@ -73,7 +72,7 @@ export function WorkspaceProvider({ children }) {
           is_active,
           joined_at,
           last_accessed_at,
-          workspaces(id, name, is_personal, created_at)
+          workspaces(id, name, is_personal, created_at, base_currency)
         `)
         .eq('user_id', user.id)
         .eq('is_active', true);
@@ -122,7 +121,7 @@ export function WorkspaceProvider({ children }) {
       // Filter out soft-deleted workspaces (they won't be in ownersByWorkspaceId
       // because that query has .is('deleted_at', null))
       const workspaces = (data || [])
-        .filter(item => ownersByWorkspaceId.hasOwnProperty(item.workspace_id))
+        .filter(item => Object.prototype.hasOwnProperty.call(ownersByWorkspaceId, item.workspace_id))
         .map(item => ({
           ...item.workspaces,
           owner_id: ownersByWorkspaceId[item.workspace_id] || null,

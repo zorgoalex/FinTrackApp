@@ -51,7 +51,7 @@ async function getWorkspaceSummary(
 
   let query = supabase
     .from('operations')
-    .select('amount, type')
+    .select('amount, base_amount, type, transfer_direction')
     .eq('workspace_id', workspaceId);
 
   if (dateFrom) query = query.gte('operation_date', dateFrom);
@@ -62,15 +62,19 @@ async function getWorkspaceSummary(
 
   let income = 0;
   let expense = 0;
+  let salary = 0;
   for (const op of data || []) {
-    if (op.type === 'income' || op.type === 'salary') {
-      income += Number(op.amount);
-    } else {
-      expense += Number(op.amount);
+    const amount = Number(op.base_amount ?? op.amount ?? 0);
+    if (op.type === 'income') {
+      income += amount;
+    } else if (op.type === 'expense') {
+      expense += amount;
+    } else if (op.type === 'salary') {
+      salary += amount;
     }
   }
 
-  return jsonResponse({ income, expense, balance: income - expense });
+  return jsonResponse({ income, expense, salary, balance: income - expense - salary });
 }
 
 async function getOperations(

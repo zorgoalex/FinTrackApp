@@ -47,21 +47,21 @@ async function getOperationsSummary(
 ) {
   const { data } = await supabaseAdmin
     .from('operations')
-    .select('amount, type')
+    .select('amount, base_amount, type, transfer_direction')
     .eq('workspace_id', workspaceId)
     .gte('operation_date', dateFrom)
     .lte('operation_date', dateTo);
 
   let income = 0;
   let expense = 0;
+  let salary = 0;
   for (const op of data || []) {
-    if (op.type === 'income' || op.type === 'salary') {
-      income += Number(op.amount);
-    } else {
-      expense += Number(op.amount);
-    }
+    const amount = Number(op.base_amount ?? op.amount ?? 0);
+    if (op.type === 'income') income += amount;
+    else if (op.type === 'expense') expense += amount;
+    else if (op.type === 'salary') salary += amount;
   }
-  return { income, expense, balance: income - expense };
+  return { income, expense, salary, balance: income - expense - salary };
 }
 
 function todayStr() {
@@ -213,6 +213,7 @@ async function handleBalance(chatId: number, workspaceId: string) {
     `<b>Баланс за месяц:</b>\n` +
       `Доходы: ${formatMoney(summary.income)}\n` +
       `Расходы: ${formatMoney(summary.expense)}\n` +
+      `Зарплаты: ${formatMoney(summary.salary)}\n` +
       `Баланс: ${formatMoney(summary.balance)}`,
   );
 }
@@ -225,6 +226,7 @@ async function handleToday(chatId: number, workspaceId: string) {
     `<b>Сегодня (${today}):</b>\n` +
       `Доходы: ${formatMoney(summary.income)}\n` +
       `Расходы: ${formatMoney(summary.expense)}\n` +
+      `Зарплаты: ${formatMoney(summary.salary)}\n` +
       `Баланс: ${formatMoney(summary.balance)}`,
   );
 }

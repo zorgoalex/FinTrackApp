@@ -66,8 +66,16 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
     [activeAccounts, form.accountId]
   );
   const operationCurrency = selectedAccount?.currency || baseCurrency || 'KZT';
-  const needsExchangeRate = operationCurrency !== baseCurrency;
-  const opCurrencySymbol = getCurrencySymbol(operationCurrency) || operationCurrency;
+  const needsExchangeRate = form.type !== 'transfer' && operationCurrency !== baseCurrency;
+  const transferFromAccount = activeAccounts.find(a => a.id === form.fromAccountId);
+  const transferToAccount = activeAccounts.find(a => a.id === form.toAccountId);
+  const transferFromCurrency = transferFromAccount?.currency || baseCurrency || 'KZT';
+  const transferToCurrency = transferToAccount?.currency || baseCurrency || 'KZT';
+  const isCrossCurrencyTransfer = form.type === 'transfer'
+    && Boolean(transferFromAccount && transferToAccount)
+    && transferFromCurrency !== transferToCurrency;
+  const amountCurrency = form.type === 'transfer' ? transferFromCurrency : operationCurrency;
+  const opCurrencySymbol = getCurrencySymbol(amountCurrency) || amountCurrency;
 
   // Set default account when accounts load
   useEffect(() => {
@@ -82,7 +90,20 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
       const rate = getRate(operationCurrency, baseCurrency, form.operationDate);
       if (rate) setForm(prev => ({ ...prev, exchangeRate: String(rate) }));
     }
-  }, [needsExchangeRate, operationCurrency, baseCurrency, form.operationDate, getRate]);
+  }, [needsExchangeRate, operationCurrency, baseCurrency, form.operationDate, form.exchangeRate, getRate]);
+
+  useEffect(() => {
+    if (!isCrossCurrencyTransfer || form.exchangeRate) return;
+    const rate = getRate(transferFromCurrency, transferToCurrency, form.operationDate);
+    if (rate) setForm(prev => ({ ...prev, exchangeRate: String(rate) }));
+  }, [
+    isCrossCurrencyTransfer,
+    transferFromCurrency,
+    transferToCurrency,
+    form.operationDate,
+    form.exchangeRate,
+    getRate,
+  ]);
 
   // Pre-fill category when categories load and defaultCategory is provided
   useEffect(() => {
@@ -100,7 +121,6 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
   // Inline category creation
   const [showNewCat, setShowNewCat] = useState(false);
   const [newCatName, setNewCatName] = useState('');
-  const [newCatType, setNewCatType] = useState('expense');
   const tagInputRef = useRef(null);
 
   const typeInfo = OPERATION_TYPES[form.type] || OPERATION_TYPES.income;
@@ -141,20 +161,36 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
         setError('Счета должны отличаться');
         return;
       }
+      if (isCrossCurrencyTransfer) {
+        const transferRate = parseAmount(form.exchangeRate);
+        if (!Number.isFinite(transferRate) || transferRate <= 0) {
+          setError(`Укажите курс ${transferFromCurrency} → ${transferToCurrency}`);
+          return;
+        }
+      }
     }
     setLoading(true);
     setError('');
     try {
       const payload = form.type === 'transfer'
-        ? {
+        ? (() => {
+            const transferRate = isCrossCurrencyTransfer ? parseAmount(form.exchangeRate) : 1;
+            const toAmount = Math.round(amount * transferRate * 100) / 100;
+            return {
             type:            'transfer',
             amount,
+            from_amount:     amount,
+            to_amount:       toAmount,
             description:     form.description,
             operation_date:  form.operationDate,
             from_account_id: form.fromAccountId,
             to_account_id:   form.toAccountId,
+            from_currency:   transferFromCurrency,
+            to_currency:     transferToCurrency,
+            exchange_rate:   transferRate,
             tagNames:        (tagInputRef.current?.getAllTags() ?? form.selectedTags).map((t) => t.name),
-          }
+            };
+          })()
         : (() => {
             const exchangeRate = needsExchangeRate ? parseAmount(form.exchangeRate) : 1;
             const baseAmount = needsExchangeRate && Number.isFinite(exchangeRate) ? amount * exchangeRate : amount;
@@ -173,7 +209,8 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
               base_amount:    Math.round(baseAmount * 100) / 100,
             };
           })();
-      await onSave(payload);
+      const saved = await onSave(payload);
+      if (!saved) throw new Error('Операция не была сохранена');
       onClose();
     } catch (err) {
       setError(err.message || 'Ошибка сохранения');
@@ -205,7 +242,6 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
               onChange={(e) => {
                 const newType = e.target.value;
                 setForm((prev) => ({ ...prev, type: newType, categoryId: '' }));
-                setNewCatType(newType === 'salary' ? 'expense' : newType);
               }}
               className="input-field"
             >
@@ -239,12 +275,12 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Со счёта</label>
                 <select
                   value={form.fromAccountId}
-                  onChange={(e) => setForm(prev => ({ ...prev, fromAccountId: e.target.value }))}
+                  onChange={(e) => setForm(prev => ({ ...prev, fromAccountId: e.target.value, exchangeRate: '' }))}
                   className="input-field"
                 >
                   <option value="">Выберите счёт</option>
                   {activeAccounts.map(a => (
-                    <option key={a.id} value={a.id}>{a.name}</option>
+                    <option key={a.id} value={a.id}>{a.name} ({a.currency || baseCurrency})</option>
                   ))}
                 </select>
               </div>
@@ -252,12 +288,12 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">На счёт</label>
                 <select
                   value={form.toAccountId}
-                  onChange={(e) => setForm(prev => ({ ...prev, toAccountId: e.target.value }))}
+                  onChange={(e) => setForm(prev => ({ ...prev, toAccountId: e.target.value, exchangeRate: '' }))}
                   className="input-field"
                 >
                   <option value="">Выберите счёт</option>
                   {activeAccounts.filter(a => a.id !== form.fromAccountId).map(a => (
-                    <option key={a.id} value={a.id}>{a.name}</option>
+                    <option key={a.id} value={a.id}>{a.name} ({a.currency || baseCurrency})</option>
                   ))}
                 </select>
               </div>
@@ -283,7 +319,6 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
                   type="button"
                   onClick={() => {
                     setShowNewCat(!showNewCat);
-                    setNewCatType(form.type);
                   }}
                   className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 hover:border-primary-400 dark:hover:border-primary-500 transition-colors"
                   title="Добавить категорию"
@@ -335,6 +370,33 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
               autoFocus
             />
           </div>
+
+          {isCrossCurrencyTransfer && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Курс {transferFromCurrency} → {transferToCurrency}
+              </label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={form.exchangeRate}
+                onChange={(e) => setForm(prev => ({
+                  ...prev,
+                  exchangeRate: normalizeAmountInput(e.target.value)
+                }))}
+                className="input-field"
+                placeholder="0"
+                required
+              />
+              {form.amount && form.exchangeRate && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  На счёт поступит {formatAmountInput(String(
+                    Math.round(parseAmount(form.amount) * parseAmount(form.exchangeRate) * 100) / 100
+                  ))} {getCurrencySymbol(transferToCurrency) || transferToCurrency}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Курс обмена (если валюта ≠ базовой) */}
           {needsExchangeRate && (

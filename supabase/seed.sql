@@ -1,0 +1,2 @@
+-- Intentionally empty. Application defaults are created by migrations and
+-- per-user workspace triggers.

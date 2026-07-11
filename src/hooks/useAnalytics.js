@@ -21,7 +21,7 @@ export default function useAnalytics(workspaceIds, { dateFrom, dateTo } = {}) {
       // Load operations with tags
       let query = supabase
         .from('operations')
-        .select('id, type, amount, description, operation_date, category_id, user_id, created_at, tags:operation_tags(tag_id, tags(id, name, color))')
+        .select('id, workspace_id, type, amount, currency, exchange_rate, base_amount, description, operation_date, category_id, user_id, created_at, tags:operation_tags(tag_id, tags(id, name, color))')
         .in('workspace_id', ids)
         .gte('operation_date', dateFrom)
         .lte('operation_date', dateTo)

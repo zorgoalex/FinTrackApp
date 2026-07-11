@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import useDebts from '../hooks/useDebts';
-import { useAuth } from '../contexts/AuthContext';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import DebtFormModal from '../components/DebtFormModal';
 import DebtPaymentModal from '../components/DebtPaymentModal';
@@ -17,11 +16,9 @@ const DIRECTION_COLORS = {
 export function DebtsPage() {
   const [searchParams] = useSearchParams();
   const workspaceId = searchParams.get('workspaceId');
-  const { workspaces } = useAuth();
-  const currentWorkspace = workspaces?.find(w => w.id === workspaceId);
   const { currencySymbol } = useWorkspace();
 
-  const { debts, loading, error, createDebt, updateDebt, archiveDebt, unarchiveDebt, deleteDebt, getDebtHistory, refresh } = useDebts(workspaceId);
+  const { debts, loading, createDebt, updateDebt, archiveDebt, unarchiveDebt, deleteDebt, getDebtHistory, refresh } = useDebts(workspaceId);
 
   const [filterDirection, setFilterDirection] = useState(null);
   const [showArchived, setShowArchived] = useState(false);

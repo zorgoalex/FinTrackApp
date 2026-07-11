@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Mail, Settings, Trash2, UserPlus, Shield, Crown, Eye, User, MinusCircle, Coins } from 'lucide-react';
+import { Users, Mail, Settings, Trash2, UserPlus, Shield, Crown, Eye, User, Coins } from 'lucide-react';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { supabase } from '../contexts/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
@@ -61,12 +61,7 @@ export default function WorkspaceSettingsPage() {
     canDeleteWorkspace: canDeleteWorkspaceFromWorkspace
   } = useWorkspace();
   
-  const { 
-    canManageRoles, 
-    canInviteUsers, 
-    canDeleteWorkspace,
-    canLeaveWorkspace 
-  } = usePermissions();
+  const { canLeaveWorkspace } = usePermissions();
 
   // Используем значение из WorkspaceContext, так как там правильная логика
   const shouldShowInvitesTab = canInviteUsersFromWorkspace;
@@ -286,7 +281,7 @@ export default function WorkspaceSettingsPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Настройки рабочего пространства</h1>
           <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-            Управление настройками "{currentWorkspace.name}"
+            Управление настройками «{currentWorkspace.name}»
           </p>
         </div>
 

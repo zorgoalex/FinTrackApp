@@ -3,9 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import useAnalytics from '../hooks/useAnalytics';
 import { formatUnsignedAmount } from '../utils/formatters';
-import { getMonthRange, formatMonthYear } from '../utils/dateRange';
+import { getMonthRange } from '../utils/dateRange';
 import { startOfYear, endOfYear, addMonths, subMonths, addYears, subYears, format } from 'date-fns';
-import { ru } from 'date-fns/locale';
 import { exportToCSV, buildTextReport } from '../utils/export';
 import { Download, Copy, ChevronDown, Check } from 'lucide-react';
 
@@ -49,7 +48,7 @@ function getPeriodDates(periodKey, offset) {
 
 export default function AnalyticsPage() {
   const [searchParams] = useSearchParams();
-  const { workspaceId: wsFromCtx, allWorkspaces, currencySymbol } = useWorkspace();
+  const { workspaceId: wsFromCtx, allWorkspaces, currencyCode, currencySymbol } = useWorkspace();
   const workspaceId = searchParams.get('workspaceId') || wsFromCtx;
 
   const [selectedWsIds, setSelectedWsIds] = useState([workspaceId]);
@@ -84,7 +83,13 @@ export default function AnalyticsPage() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const showMultiselect = allWorkspaces && allWorkspaces.length > 1;
+  // Amounts can only be aggregated across workspaces that share a base
+  // currency. Summing independently converted KZT, USD, etc. is invalid.
+  const compatibleWorkspaces = useMemo(
+    () => (allWorkspaces || []).filter(ws => (ws.base_currency || 'KZT') === currencyCode),
+    [allWorkspaces, currencyCode]
+  );
+  const showMultiselect = compatibleWorkspaces.length > 1;
 
   const toggleWs = (id) => {
     setSelectedWsIds(prev => {
@@ -97,21 +102,21 @@ export default function AnalyticsPage() {
   };
 
   const toggleAll = () => {
-    const allIds = allWorkspaces.map(w => w.id);
+    const allIds = compatibleWorkspaces.map(w => w.id);
     const allSelected = allIds.every(id => selectedWsIds.includes(id));
     setSelectedWsIds(allSelected ? [workspaceId] : allIds);
   };
 
   const wsDropdownLabel = useMemo(() => {
-    if (!allWorkspaces || allWorkspaces.length <= 1) return '';
-    const allIds = allWorkspaces.map(w => w.id);
+    if (compatibleWorkspaces.length <= 1) return '';
+    const allIds = compatibleWorkspaces.map(w => w.id);
     if (allIds.every(id => selectedWsIds.includes(id))) return 'Все пространства';
     if (selectedWsIds.length === 1) {
-      const ws = allWorkspaces.find(w => w.id === selectedWsIds[0]);
+      const ws = compatibleWorkspaces.find(w => w.id === selectedWsIds[0]);
       return ws?.name || 'Пространство';
     }
-    return `${selectedWsIds.length} из ${allWorkspaces.length}`;
-  }, [selectedWsIds, allWorkspaces]);
+    return `${selectedWsIds.length} из ${compatibleWorkspaces.length}`;
+  }, [selectedWsIds, compatibleWorkspaces]);
 
   const { dateFrom, dateTo } = useMemo(() => {
     if (period === 'custom' && customFrom && customTo) {
@@ -180,16 +185,16 @@ export default function AnalyticsPage() {
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
                 >
                   <span className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
-                    allWorkspaces.every(w => selectedWsIds.includes(w.id))
+                    compatibleWorkspaces.every(w => selectedWsIds.includes(w.id))
                       ? 'bg-primary-600 dark:bg-primary-500 border-primary-600 dark:border-primary-500'
                       : 'border-gray-300 dark:border-gray-600'
                   }`}>
-                    {allWorkspaces.every(w => selectedWsIds.includes(w.id)) && <Check size={12} className="text-white" />}
+                    {compatibleWorkspaces.every(w => selectedWsIds.includes(w.id)) && <Check size={12} className="text-white" />}
                   </span>
-                  Все пространства
+                  Все пространства в {currencyCode}
                 </button>
                 <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
-                {allWorkspaces.map(ws => (
+                {compatibleWorkspaces.map(ws => (
                   <button
                     key={ws.id}
                     onClick={() => toggleWs(ws.id)}

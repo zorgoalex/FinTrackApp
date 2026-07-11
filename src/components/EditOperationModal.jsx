@@ -1,11 +1,10 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, Plus } from 'lucide-react';
 import { parseAmount, normalizeAmountInput, formatAmountInput, getCurrencySymbol } from '../utils/formatters';
 import useCategories from '../hooks/useCategories';
 import useTags from '../hooks/useTags';
 import useAccounts from '../hooks/useAccounts';
 import useDebts from '../hooks/useDebts';
-import { useCurrencies } from '../hooks/useCurrencies';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import TagInput from './TagInput';
 import DebtSelector from './DebtSelector';
@@ -29,10 +28,12 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
   const { accounts } = useAccounts(workspaceId);
   const { activeDebts } = useDebts(workspaceId);
   const { currencyCode: baseCurrency, currencySymbol: baseSymbol } = useWorkspace();
-  const { getRate } = useCurrencies(workspaceId);
-
   const activeAccounts = accounts.filter(a => !a.is_archived);
   const isTransfer = operation.type === 'transfer';
+  const isCrossCurrencyTransfer = isTransfer
+    && operation.currency
+    && operation._linkedCurrency
+    && operation.currency !== operation._linkedCurrency;
 
   // For transfers, find the linked 'in' operation to get toAccountId
   const [form, setForm] = useState({
@@ -94,6 +95,10 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isCrossCurrencyTransfer) {
+      setError('Редактирование межвалютного перевода пока недоступно. Удалите его и создайте заново.');
+      return;
+    }
     const amount = parseAmount(form.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
       setError('Введите корректную сумму');

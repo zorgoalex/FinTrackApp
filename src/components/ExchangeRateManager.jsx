@@ -12,7 +12,6 @@ function ExchangeRateManager({ workspaceId, baseCurrency }) {
     setExchangeRate,
     deleteExchangeRate,
     fetchAutoRates,
-    refresh,
   } = useCurrencies(workspaceId);
 
   const [fromCurrency, setFromCurrency] = useState('');

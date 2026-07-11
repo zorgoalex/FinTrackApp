@@ -8,11 +8,6 @@ const EMPTY_PERIOD_SUMMARY = {
   total: 0
 };
 
-const EMPTY_SUMMARY = {
-  today: { ...EMPTY_PERIOD_SUMMARY },
-  month: { ...EMPTY_PERIOD_SUMMARY }
-};
-
 const ALLOWED_TYPES = ['income', 'expense', 'salary', 'transfer'];
 
 function toOperationDate(value) {
@@ -224,16 +219,36 @@ export function useOperations(workspaceId, options = {}) {
         setLoading(true);
         setError(null);
 
+        const isCrossCurrency = data.from_currency
+          && data.to_currency
+          && data.from_currency !== data.to_currency;
+        const rpcName = isCrossCurrency ? 'create_transfer_v2' : 'create_transfer';
+        const rpcParams = isCrossCurrency
+          ? {
+              p_workspace_id: workspaceId,
+              p_user_id: userId,
+              p_from_account_id: data.from_account_id,
+              p_to_account_id: data.to_account_id,
+              p_from_amount: Number(data.from_amount ?? data.amount) || 0,
+              p_to_amount: Number(data.to_amount) || 0,
+              p_from_currency: data.from_currency,
+              p_to_currency: data.to_currency,
+              p_exchange_rate: Number(data.exchange_rate) || 0,
+              p_description: data?.description || null,
+              p_operation_date: data?.operation_date || new Date().toISOString().slice(0, 10),
+            }
+          : {
+              p_workspace_id: workspaceId,
+              p_user_id: userId,
+              p_from_account_id: data.from_account_id,
+              p_to_account_id: data.to_account_id,
+              p_amount: Number(data?.amount) || 0,
+              p_description: data?.description || null,
+              p_operation_date: data?.operation_date || new Date().toISOString().slice(0, 10),
+            };
+
         const { data: transferResult, error: transferErr } = await supabase
-          .rpc('create_transfer', {
-            p_workspace_id: workspaceId,
-            p_user_id: userId,
-            p_from_account_id: data.from_account_id,
-            p_to_account_id: data.to_account_id,
-            p_amount: Number(data?.amount) || 0,
-            p_description: data?.description || null,
-            p_operation_date: data?.operation_date || new Date().toISOString().slice(0, 10),
-          });
+          .rpc(rpcName, rpcParams);
 
         if (transferErr) throw transferErr;
 

@@ -10,7 +10,7 @@ import WorkspaceSwitcher from './WorkspaceSwitcher'
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { user, logout } = useAuth()
-  const { currentWorkspace, loading: workspaceLoading, workspaceId } = useWorkspace()
+  const { currentWorkspace, workspaceId } = useWorkspace()
   const { canViewWorkspaceSettings } = usePermissions()
   const { theme, toggleTheme } = useTheme()
   const location = useLocation()
