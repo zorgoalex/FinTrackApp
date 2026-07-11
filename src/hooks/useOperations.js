@@ -95,10 +95,51 @@ async function getAuthUser() {
 }
 
 export function useOperations(workspaceId, options = {}) {
-  const { dateFrom, dateTo } = options;
+  const { dateFrom, dateTo, pageSize = 100 } = options;
   const [operations, setOperations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [visibleLimit, setVisibleLimit] = useState(pageSize);
+  const [totalCount, setTotalCount] = useState(0);
+  const [serverSummary, setServerSummary] = useState(null);
+
+  const loadSummary = useCallback(async () => {
+    if (!workspaceId) {
+      setServerSummary(null);
+      return;
+    }
+
+    const now = new Date();
+    const today = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getDate()).padStart(2, '0'),
+    ].join('-');
+    const { data, error: summaryError } = await supabase.rpc(
+      'get_workspace_operation_summary',
+      { p_workspace_id: workspaceId, p_today: today }
+    );
+    if (summaryError) {
+      console.error('useOperations: summary error', summaryError);
+      setServerSummary(null);
+      return;
+    }
+
+    const summary = {
+      today: { ...EMPTY_PERIOD_SUMMARY },
+      month: { ...EMPTY_PERIOD_SUMMARY },
+    };
+    (data || []).forEach((row) => {
+      if (!summary[row.period]) return;
+      summary[row.period] = {
+        income: Number(row.income) || 0,
+        expense: Number(row.expense) || 0,
+        salary: Number(row.salary) || 0,
+        total: Number(row.total) || 0,
+      };
+    });
+    setServerSummary(summary);
+  }, [workspaceId]);
 
   const loadOperations = useCallback(async () => {
     if (!workspaceId) {
@@ -112,18 +153,19 @@ export function useOperations(workspaceId, options = {}) {
       setLoading(true);
       setError(null);
 
-      const [authUser, { data, error: loadError }] = await Promise.all([
+      const [authUser, { data, error: loadError, count }] = await Promise.all([
         getAuthUser(),
         (async () => {
           let query = supabase
             .from('operations')
-            .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id, account_id, transfer_group_id, transfer_direction, linked_operation_id, debt_id, debt_applied_amount, currency, exchange_rate, base_amount')
+            .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id, account_id, transfer_group_id, transfer_direction, linked_operation_id, debt_id, debt_applied_amount, currency, exchange_rate, base_amount', { count: 'exact' })
             .eq('workspace_id', workspaceId);
           if (dateFrom) query = query.gte('operation_date', dateFrom);
           if (dateTo) query = query.lte('operation_date', dateTo);
           return query
             .order('operation_date', { ascending: false })
-            .order('created_at', { ascending: false });
+            .order('created_at', { ascending: false })
+            .range(0, visibleLimit - 1);
         })()
       ]);
 
@@ -180,18 +222,25 @@ export function useOperations(workspaceId, options = {}) {
       }));
 
       setOperations(mappedOperations);
+      setTotalCount(count ?? mappedOperations.length);
+      await loadSummary();
     } catch (loadException) {
       console.error('useOperations: load error', loadException);
       setOperations([]);
+      setTotalCount(0);
       setError(loadException.message || 'Ошибка загрузки операций');
     } finally {
       setLoading(false);
     }
-  }, [workspaceId, dateFrom, dateTo]);
+  }, [workspaceId, dateFrom, dateTo, visibleLimit, loadSummary]);
 
   const refresh = useCallback(async () => {
     await loadOperations();
   }, [loadOperations]);
+
+  const loadMore = useCallback(() => {
+    setVisibleLimit((current) => current + pageSize);
+  }, [pageSize]);
 
   const addOperation = useCallback(async (data) => {
     if (!workspaceId) {
@@ -543,6 +592,7 @@ export function useOperations(workspaceId, options = {}) {
         if (deleteError) throw deleteError;
       }
 
+      await loadSummary();
       return true;
     } catch (deleteException) {
       console.error('useOperations: delete error', deleteException);
@@ -550,13 +600,20 @@ export function useOperations(workspaceId, options = {}) {
       setError(deleteException.message || 'Ошибка удаления операции');
       return false;
     }
-  }, [workspaceId, operations]);
+  }, [workspaceId, operations, loadSummary]);
+
+  useEffect(() => {
+    setVisibleLimit(pageSize);
+  }, [workspaceId, dateFrom, dateTo, pageSize]);
 
   useEffect(() => {
     loadOperations();
   }, [loadOperations]);
 
-  const summary = useMemo(() => calculateSummary(operations), [operations]);
+  const summary = useMemo(
+    () => serverSummary || calculateSummary(operations),
+    [serverSummary, operations]
+  );
 
   return {
     operations,
@@ -566,7 +623,11 @@ export function useOperations(workspaceId, options = {}) {
     updateOperation,
     deleteOperation,
     refresh,
-    summary
+    summary,
+    totalCount,
+    hasMore: operations.length < totalCount,
+    loadMore,
+    loadingMore: loading && operations.length > 0,
   };
 }
 

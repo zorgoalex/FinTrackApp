@@ -57,7 +57,11 @@ export function OperationPage() {
     error,
     addOperation,
     updateOperation,
-    deleteOperation
+    deleteOperation,
+    totalCount,
+    hasMore,
+    loadMore,
+    loadingMore,
   } = useOperations(workspaceId, { dateFrom, dateTo });
 
   const { categories } = useCategories(workspaceId);
@@ -803,6 +807,19 @@ export function OperationPage() {
           ))
         )}
       </div>
+
+      {hasMore && (
+        <div className="mt-3 text-center">
+          <button
+            type="button"
+            onClick={loadMore}
+            disabled={loadingMore}
+            className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-300 hover:border-primary-400 disabled:opacity-50"
+          >
+            {loadingMore ? 'Загрузка...' : `Показать ещё (${operations.length} из ${totalCount})`}
+          </button>
+        </div>
+      )}
 
       {isModalOpen && (
         <AddOperationModal
