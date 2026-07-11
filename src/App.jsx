@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import { WorkspaceProvider } from './contexts/WorkspaceContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import AppErrorBoundary from './components/AppErrorBoundary';
 
 // Lazy-loaded pages
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -139,13 +140,15 @@ const router = createBrowserRouter([
 
 function App() {
   return (
-    <ThemeProvider>
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
-        <Suspense fallback={<LoadingFallback />}>
-          <RouterProvider router={router} />
-        </Suspense>
-      </div>
-    </ThemeProvider>
+    <AppErrorBoundary>
+      <ThemeProvider>
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+          <Suspense fallback={<LoadingFallback />}>
+            <RouterProvider router={router} />
+          </Suspense>
+        </div>
+      </ThemeProvider>
+    </AppErrorBoundary>
   )
 }
 
