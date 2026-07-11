@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Save, Trash2 } from 'lucide-react';
+import { Copy, Save, Trash2 } from 'lucide-react';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { usePermissions } from '../hooks/usePermissions';
 import useCategories from '../hooks/useCategories';
@@ -23,7 +23,7 @@ export default function BudgetsPage() {
     [selectedMonth]
   );
   const { categories } = useCategories(workspaceId);
-  const { budgets, loading, error, saveBudget, deleteBudget } = useBudgets(workspaceId, month);
+  const { budgets, loading, error, saveBudget, deleteBudget, copyPreviousMonth } = useBudgets(workspaceId, month);
   const [drafts, setDrafts] = useState({});
   const [savingCategory, setSavingCategory] = useState('');
   const [actionError, setActionError] = useState('');
@@ -35,6 +35,12 @@ export default function BudgetsPage() {
     amount: result.amount + (budget.has_limit ? budget.amount : 0),
     spent: result.spent + budget.spent
   }), { amount: 0, spent: 0 });
+  const now = new Date();
+  const selectedDate = new Date(selectedMonth.year, selectedMonth.month, 1);
+  const isCurrentMonth = selectedDate.getFullYear() === now.getFullYear() && selectedDate.getMonth() === now.getMonth();
+  const daysInMonth = new Date(selectedMonth.year, selectedMonth.month + 1, 0).getDate();
+  const elapsedDays = isCurrentMonth ? now.getDate() : daysInMonth;
+  const forecast = elapsedDays > 0 ? (totals.spent / elapsedDays) * daysInMonth : totals.spent;
   const sortedExpenseCategories = [...expenseCategories].sort((left, right) => {
     const leftBudget = budgetByCategory.get(left.id);
     const rightBudget = budgetByCategory.get(right.id);
@@ -89,6 +95,19 @@ export default function BudgetsPage() {
     }
   };
 
+  const handleCopyPrevious = async () => {
+    setActionError('');
+    setSavingCategory('copy');
+    try {
+      const count = await copyPreviousMonth();
+      if (!count) setActionError('В предыдущем месяце нет лимитов для копирования');
+    } catch (copyException) {
+      setActionError(copyException.message || 'Не удалось скопировать лимиты');
+    } finally {
+      setSavingCategory('');
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6 pb-24">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
@@ -96,8 +115,27 @@ export default function BudgetsPage() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Бюджеты</h1>
           <p className="text-sm text-gray-600 dark:text-gray-400">Месячные лимиты расходов по категориям</p>
         </div>
-        <MonthPicker year={selectedMonth.year} month={selectedMonth.month} onChange={setSelectedMonth} />
+        <div className="flex flex-wrap items-center gap-2">
+          {canManage && (
+            <button type="button" onClick={handleCopyPrevious} disabled={savingCategory === 'copy'} className="btn-secondary min-h-11">
+              <Copy size={16} className="mr-2" />
+              <span className="hidden sm:inline">Из прошлого месяца</span>
+              <span className="sm:hidden">Копировать</span>
+            </button>
+          )}
+          <MonthPicker year={selectedMonth.year} month={selectedMonth.month} onChange={setSelectedMonth} />
+        </div>
       </div>
+
+      {totals.amount > 0 && (
+        <div className={`mb-6 rounded-xl border p-4 ${forecast > totals.amount ? 'border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20' : 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20'}`}>
+          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Прогноз к концу месяца: {formatMoney(forecast, currency)}</p>
+          <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+            По среднему темпу за {elapsedDays} {elapsedDays === 1 ? 'день' : 'дней'}.
+            {forecast > totals.amount ? ` Возможное превышение: ${formatMoney(forecast - totals.amount, currency)}.` : ' Вы укладываетесь в общий лимит.'}
+          </p>
+        </div>
+      )}
 
       {(error || actionError) && (
         <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-400">

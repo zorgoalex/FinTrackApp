@@ -117,5 +117,36 @@ export default function useBudgets(workspaceId, month) {
     await loadBudgets();
   };
 
-  return { budgets, loading, error, saveBudget, deleteBudget };
+  const copyPreviousMonth = async () => {
+    const current = new Date(`${month}T00:00:00`);
+    current.setMonth(current.getMonth() - 1);
+    const previousMonth = [
+      current.getFullYear(),
+      String(current.getMonth() + 1).padStart(2, '0'),
+      '01',
+    ].join('-');
+    const { data: previousBudgets, error: previousError } = await supabase
+      .from('budgets')
+      .select('category_id, amount')
+      .eq('workspace_id', workspaceId)
+      .eq('month', previousMonth);
+    if (previousError) throw previousError;
+    if (!previousBudgets?.length) return 0;
+    const { data: userData } = await supabase.auth.getUser();
+    const { error: copyError } = await supabase.from('budgets').upsert(
+      previousBudgets.map((budget) => ({
+        workspace_id: workspaceId,
+        category_id: budget.category_id,
+        month,
+        amount: budget.amount,
+        created_by: userData?.user?.id || null,
+      })),
+      { onConflict: 'workspace_id,category_id,month', ignoreDuplicates: true },
+    );
+    if (copyError) throw copyError;
+    await loadBudgets();
+    return previousBudgets.length;
+  };
+
+  return { budgets, loading, error, saveBudget, deleteBudget, copyPreviousMonth };
 }
