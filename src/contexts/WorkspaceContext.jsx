@@ -217,18 +217,8 @@ export function WorkspaceProvider({ children }) {
     console.log('WorkspaceContext: Loading members for workspace', workspaceId);
     
     try {
-      // 1. Загружаем данные участников workspace
       const { data: membersData, error: membersError } = await supabase
-        .from('workspace_members')
-        .select(`
-          user_id,
-          role,
-          is_active,
-          joined_at,
-          last_accessed_at
-        `)
-        .eq('workspace_id', workspaceId)
-        .eq('is_active', true);
+        .rpc('get_workspace_member_profiles', { p_workspace_id: workspaceId });
       
       if (membersError) {
         console.error('WorkspaceContext: Error loading members', membersError);
@@ -240,31 +230,10 @@ export function WorkspaceProvider({ children }) {
         return;
       }
 
-      // 2. Загружаем email пользователей с fallback логикой
-      let usersData = [];
-
-      // Для текущего пользователя мы знаем email
-      if (user && user.email) {
-        usersData.push({ id: user.id, email: user.email });
-      }
-
-      // 3. Объединяем данные участников с email
       const membersWithEmails = membersData.map(member => {
-        const userEmail = usersData?.find(user => user.id === member.user_id)?.email;
-        const isCurrentUser = member.user_id === user?.id;
-        
-        let displayEmail;
-        if (userEmail) {
-          displayEmail = userEmail;
-        } else if (isCurrentUser) {
-          displayEmail = user?.email || 'Вы';
-        } else {
-          displayEmail = `Участник (${member.user_id.slice(0, 8)})`;
-        }
-        
         return {
           ...member,
-          email: displayEmail
+          email: member.email || (member.user_id === user?.id ? user?.email : null) || `Участник (${member.user_id.slice(0, 8)})`
         };
       });
 

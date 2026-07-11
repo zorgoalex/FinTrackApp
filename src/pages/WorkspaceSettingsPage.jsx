@@ -542,7 +542,7 @@ export default function WorkspaceSettingsPage() {
                       {canManageThisMember && (
                         <div className="flex items-center space-x-2">
                           <select
-                            value={member.role}
+                            value={member.role.toLowerCase()}
                             onChange={(e) => handleChangeRole(member.user_id, e.target.value, member.email)}
                             className="text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                           >
