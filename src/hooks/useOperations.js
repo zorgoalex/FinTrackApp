@@ -186,14 +186,6 @@ export function useOperations(workspaceId, options = {}) {
           console.error('useOperations: operation_tags query failed:', tagLinksErr.message, tagLinksErr);
         }
 
-        if (!tagLinksErr && tagLinks && tagLinks.length === 0 && opIds.length > 0) {
-          console.warn(
-            'useOperations: operation_tags returned 0 rows for', opIds.length, 'operations.',
-            'This may indicate RLS on operation_tags is blocking SELECT.',
-            'Check that operation_tags has a SELECT policy allowing workspace members to read.'
-          );
-        }
-
         if (tagLinks && tagLinks.length > 0) {
           const tagIds = [...new Set(tagLinks.map((l) => l.tag_id))];
           const { data: tagData, error: tagDataErr } = await supabase
@@ -328,7 +320,7 @@ export function useOperations(workspaceId, options = {}) {
       } catch (transferException) {
         console.error('useOperations: transfer error', transferException);
         setError(transferException.message || 'Ошибка создания перевода');
-        return null;
+        throw transferException;
       } finally {
         setLoading(false);
       }
@@ -403,7 +395,7 @@ export function useOperations(workspaceId, options = {}) {
     } catch (insertException) {
       console.error('useOperations: add error', insertException);
       setError(insertException.message || 'Ошибка добавления операции');
-      return null;
+      throw insertException;
     } finally {
       setLoading(false);
     }
