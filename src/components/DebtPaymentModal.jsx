@@ -6,6 +6,7 @@ import { useOperations } from '../hooks/useOperations';
 import useAccounts from '../hooks/useAccounts';
 import useCategories from '../hooks/useCategories';
 import useTags from '../hooks/useTags';
+import { useCurrencies } from '../hooks/useCurrencies';
 import TagInput from './TagInput';
 
 function todayDateString() {
@@ -16,15 +17,17 @@ function todayDateString() {
 export default function DebtPaymentModal({ debt, workspaceId, onClose, onDone }) {
   const isIOwe = debt.direction === 'i_owe';
   const operationType = isIOwe ? 'expense' : 'income';
-  const { currencySymbol } = useWorkspace();
-  const debtCurrency = debt.currency || currencySymbol;
+  const { currencyCode: baseCurrency } = useWorkspace();
+  const debtCurrency = debt.currency || baseCurrency;
 
   const { addOperation } = useOperations(workspaceId);
   const { accounts } = useAccounts(workspaceId);
   const { categories, addCategory } = useCategories(workspaceId);
   const { tags } = useTags(workspaceId);
+  const { getRate } = useCurrencies(workspaceId);
   const activeAccounts = accounts.filter(a => !a.is_archived);
-  const defaultAccount = accounts.find(a => a.is_default);
+  const compatibleAccounts = activeAccounts.filter(account => (account.currency || baseCurrency) === debtCurrency);
+  const defaultAccount = compatibleAccounts.find(account => account.is_default) || compatibleAccounts[0];
   const tagInputRef = useRef(null);
 
   const filteredCategories = categories
@@ -80,6 +83,17 @@ export default function DebtPaymentModal({ debt, workspaceId, onClose, onDone })
       return;
     }
 
+    const selectedAccount = compatibleAccounts.find(account => account.id === accountId) || defaultAccount;
+    if (!selectedAccount) {
+      setError(`Добавьте активный счёт в валюте ${debtCurrency}, чтобы провести платёж`);
+      return;
+    }
+    const exchangeRate = debtCurrency === baseCurrency ? 1 : getRate(debtCurrency, baseCurrency, operationDate);
+    if (!exchangeRate) {
+      setError(`Укажите курс ${debtCurrency} → ${baseCurrency} в настройках валют`);
+      return;
+    }
+
     setLoading(true);
     setError('');
     try {
@@ -88,11 +102,14 @@ export default function DebtPaymentModal({ debt, workspaceId, onClose, onDone })
         amount: parsedAmount,
         description,
         operation_date: operationDate,
-        account_id: accountId || defaultAccount?.id || null,
+        account_id: selectedAccount.id,
         category_id: categoryId || null,
         tagNames: (tagInputRef.current?.getAllTags() ?? selectedTags).map((t) => t.name),
         debt_id: debt.id,
         debt_applied_amount: parsedAmount,
+        currency: debtCurrency,
+        exchange_rate: debtCurrency === baseCurrency ? null : exchangeRate,
+        base_amount: Math.round(parsedAmount * exchangeRate * 100) / 100,
       });
       if (onDone) await onDone();
       onClose();
@@ -197,7 +214,7 @@ export default function DebtPaymentModal({ debt, workspaceId, onClose, onDone })
           </div>
 
           {/* Account */}
-          {activeAccounts.length > 1 && (
+          {compatibleAccounts.length > 0 ? (
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Счёт</label>
               <select
@@ -206,10 +223,14 @@ export default function DebtPaymentModal({ debt, workspaceId, onClose, onDone })
                 className="input-field"
                 aria-label="Счёт"
               >
-                {activeAccounts.map(a => (
+                {compatibleAccounts.map(a => (
                   <option key={a.id} value={a.id}>{a.name}{a.is_default ? ' (основной)' : ''}</option>
                 ))}
               </select>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+              Для платежа нужен активный счёт в валюте {debtCurrency}.
             </div>
           )}
 

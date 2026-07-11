@@ -12,7 +12,7 @@ import AddOperationModal from '../components/AddOperationModal';
 import EditOperationModal from '../components/EditOperationModal';
 import QuickButtonsSettings from '../components/QuickButtonsSettings';
 import MonthPicker from '../components/MonthPicker';
-import { Pencil, Trash2, ChevronDown, X, Plus, Settings, Wallet, Download, Search, SlidersHorizontal } from 'lucide-react';
+import { Pencil, Trash2, ChevronDown, X, Plus, Settings, Wallet, Download, Search, SlidersHorizontal, MoreHorizontal } from 'lucide-react';
 import { formatSignedAmount, formatUnsignedAmount, formatGroupDate } from '../utils/formatters';
 import { getMonthRange } from '../utils/dateRange';
 import { buildOperationsCSV, downloadOperationsCSV } from '../utils/export';
@@ -94,6 +94,14 @@ export function OperationPage() {
   const [exportError, setExportError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [actionMenuId, setActionMenuId] = useState(null);
+
+  useEffect(() => {
+    if (!actionMenuId) return undefined;
+    const closeMenu = () => setActionMenuId(null);
+    document.addEventListener('click', closeMenu);
+    return () => document.removeEventListener('click', closeMenu);
+  }, [actionMenuId]);
 
   useEffect(() => {
     const requestedType = searchParams.get('new');
@@ -727,7 +735,7 @@ export function OperationPage() {
         <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={() => handleViewMode('detailed')}
-            className={`py-1 px-2 rounded text-xs transition-colors ${
+            className={`min-h-11 px-3 py-2 rounded-lg text-xs transition-colors ${
               viewMode === 'detailed'
                 ? 'bg-primary-600 dark:bg-primary-500 text-white'
                 : 'text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-300'
@@ -737,7 +745,7 @@ export function OperationPage() {
           </button>
           <button
             onClick={() => handleViewMode('compact')}
-            className={`py-1 px-2 rounded text-xs transition-colors ${
+            className={`min-h-11 px-3 py-2 rounded-lg text-xs transition-colors ${
               viewMode === 'compact'
                 ? 'bg-primary-600 dark:bg-primary-500 text-white'
                 : 'text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-300'
@@ -798,28 +806,23 @@ export function OperationPage() {
                           {formatSignedAmount(operation.type, operation.amount, operation.currency || currencySymbol)}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {canEditRecord(operation) && (
+                      {(canEditRecord(operation) || canDeleteRecord(operation)) && (
+                        <div className="relative shrink-0" onTouchEnd={(event) => event.stopPropagation()}>
                           <button
-                            onClick={() => setEditingOperation(operation)}
-                            disabled={loading}
-                            className="text-xs px-2 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-indigo-600 hover:border-indigo-200 disabled:opacity-50"
-                            title="Редактировать"
-                          >
-                            <Pencil size={14} />
-                          </button>
-                        )}
-                        {canDeleteRecord(operation) && (
-                          <button
-                            onClick={() => handleDelete(operation)}
-                            disabled={loading}
-                            className="text-xs px-2 py-1.5 rounded-md border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-50"
-                            title="Удалить"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        )}
-                      </div>
+                            type="button"
+                            onClick={(event) => { event.stopPropagation(); setActionMenuId(id => id === operation.id ? null : operation.id); }}
+                            className="grid min-h-11 min-w-11 place-items-center rounded-xl text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+                            aria-label="Действия с операцией"
+                            aria-expanded={actionMenuId === operation.id}
+                          ><MoreHorizontal size={20} /></button>
+                          {actionMenuId === operation.id && (
+                            <div className="absolute right-0 top-12 z-20 min-w-44 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl dark:border-gray-700 dark:bg-gray-800">
+                              {canEditRecord(operation) && <button type="button" onClick={(event) => { event.stopPropagation(); setActionMenuId(null); setEditingOperation(operation); }} className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-700"><Pencil size={16} />Редактировать</button>}
+                              {canDeleteRecord(operation) && <button type="button" onClick={(event) => { event.stopPropagation(); setActionMenuId(null); handleDelete(operation); }} className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"><Trash2 size={16} />Удалить</button>}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 }
@@ -899,27 +902,23 @@ export function OperationPage() {
                       )}
                     </div>
 
-                    <div className="flex flex-col gap-1.5 shrink-0">
-                      {canEditRecord(operation) && (
+                    {(canEditRecord(operation) || canDeleteRecord(operation)) && (
+                      <div className="relative shrink-0" onTouchEnd={(event) => event.stopPropagation()}>
                         <button
-                          onClick={() => setEditingOperation(operation)}
-                          disabled={loading}
-                          className="text-xs px-2.5 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-indigo-600 hover:border-indigo-200 disabled:opacity-50"
-                          title="Редактировать"
-                        >
-                          <Pencil size={14} />
-                        </button>
-                      )}
-                      {canDeleteRecord(operation) && (
-                        <button
-                          onClick={() => handleDelete(operation)}
-                          disabled={loading}
-                          className="text-xs px-2.5 py-1.5 rounded-md border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-50"
-                        >
-                          Удалить
-                        </button>
-                      )}
-                    </div>
+                          type="button"
+                          onClick={(event) => { event.stopPropagation(); setActionMenuId(id => id === operation.id ? null : operation.id); }}
+                          className="grid min-h-11 min-w-11 place-items-center rounded-xl text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+                          aria-label="Действия с операцией"
+                          aria-expanded={actionMenuId === operation.id}
+                        ><MoreHorizontal size={20} /></button>
+                        {actionMenuId === operation.id && (
+                          <div className="absolute right-0 top-12 z-20 min-w-44 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl dark:border-gray-700 dark:bg-gray-800">
+                            {canEditRecord(operation) && <button type="button" onClick={(event) => { event.stopPropagation(); setActionMenuId(null); setEditingOperation(operation); }} className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-700"><Pencil size={16} />Редактировать</button>}
+                            {canDeleteRecord(operation) && <button type="button" onClick={(event) => { event.stopPropagation(); setActionMenuId(null); handleDelete(operation); }} className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"><Trash2 size={16} />Удалить</button>}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}

@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { X, Plus } from 'lucide-react';
 import { parseAmount, normalizeAmountInput, formatAmountInput, getCurrencySymbol } from '../utils/formatters';
 import useCategories from '../hooks/useCategories';
 import useTags from '../hooks/useTags';
 import useAccounts from '../hooks/useAccounts';
 import useDebts from '../hooks/useDebts';
+import { useCurrencies } from '../hooks/useCurrencies';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { usePermissions } from '../hooks/usePermissions';
 import TagInput from './TagInput';
@@ -29,6 +30,7 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
   const { accounts } = useAccounts(workspaceId);
   const { activeDebts } = useDebts(workspaceId);
   const { currencyCode: baseCurrency, currencySymbol: baseSymbol } = useWorkspace();
+  const { getRate } = useCurrencies(workspaceId);
   const { canEditDirectories } = usePermissions();
   const activeAccounts = accounts.filter(a => !a.is_archived);
   const isTransfer = operation.type === 'transfer';
@@ -52,7 +54,11 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
     exchangeRate:      operation.exchange_rate ? String(operation.exchange_rate) : '',
   });
 
-  const operationCurrency = operation.currency || baseCurrency || 'KZT';
+  const selectedAccount = useMemo(
+    () => activeAccounts.find(account => account.id === form.accountId),
+    [activeAccounts, form.accountId]
+  );
+  const operationCurrency = selectedAccount?.currency || operation.currency || baseCurrency || 'KZT';
   const needsExchangeRate = operationCurrency !== baseCurrency;
   const opCurrencySymbol = getCurrencySymbol(operationCurrency) || operationCurrency;
 
@@ -66,6 +72,12 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
       }
     }
   }, [isTransfer, operation._linkedAccountId, operation.transfer_direction]);
+
+  useEffect(() => {
+    if (!needsExchangeRate || form.exchangeRate) return;
+    const rate = getRate(operationCurrency, baseCurrency, form.operationDate);
+    if (rate) setForm(prev => ({ ...prev, exchangeRate: String(rate) }));
+  }, [baseCurrency, form.exchangeRate, form.operationDate, getRate, needsExchangeRate, operationCurrency]);
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
   const [amountFocused, setAmountFocused] = useState(false);
@@ -80,6 +92,14 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
     const value = e.currentTarget.value;
     setForm((prev) => ({ ...prev, [field]: value }));
   };
+
+  useEffect(() => {
+    if (!form.debtId) return;
+    const debt = activeDebts.find(item => item.id === form.debtId);
+    if (debt && (debt.currency || baseCurrency) !== operationCurrency) {
+      setForm(prev => ({ ...prev, debtId: '', debtAppliedAmount: '' }));
+    }
+  }, [activeDebts, baseCurrency, form.debtId, operationCurrency]);
 
   const filteredCategories = (operation.type === 'salary'
     ? categories.filter((c) => c.type === 'expense')
@@ -333,6 +353,7 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
             <DebtSelector
               debts={activeDebts}
               operationType={operation.type}
+              operationCurrency={operationCurrency}
               selectedDebtId={form.debtId}
               onDebtChange={(debtId) => setForm(prev => ({ ...prev, debtId: debtId || '' }))}
               appliedAmount={form.debtAppliedAmount}

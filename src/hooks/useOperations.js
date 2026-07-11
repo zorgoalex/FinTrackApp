@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../contexts/AuthContext';
 
 const EMPTY_PERIOD_SUMMARY = {
@@ -102,6 +102,7 @@ export function useOperations(workspaceId, options = {}) {
   const [visibleLimit, setVisibleLimit] = useState(pageSize);
   const [totalCount, setTotalCount] = useState(0);
   const [serverSummary, setServerSummary] = useState(null);
+  const loadRequestRef = useRef(0);
 
   const loadSummary = useCallback(async () => {
     if (!workspaceId) {
@@ -142,6 +143,7 @@ export function useOperations(workspaceId, options = {}) {
   }, [workspaceId]);
 
   const loadOperations = useCallback(async () => {
+    const requestId = ++loadRequestRef.current;
     if (!workspaceId) {
       setOperations([]);
       setError(null);
@@ -213,16 +215,18 @@ export function useOperations(workspaceId, options = {}) {
         tags: tagsByOpId[operation.id] || []
       }));
 
+      if (requestId !== loadRequestRef.current) return;
       setOperations(mappedOperations);
       setTotalCount(count ?? mappedOperations.length);
       await loadSummary();
     } catch (loadException) {
+      if (requestId !== loadRequestRef.current) return;
       console.error('useOperations: load error', loadException);
       setOperations([]);
       setTotalCount(0);
       setError(loadException.message || 'Ошибка загрузки операций');
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestRef.current) setLoading(false);
     }
   }, [workspaceId, dateFrom, dateTo, visibleLimit, loadSummary]);
 

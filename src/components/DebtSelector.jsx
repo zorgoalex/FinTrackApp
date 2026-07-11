@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 import { formatUnsignedAmount } from '../utils/formatters';
-import { useWorkspace } from '../contexts/WorkspaceContext';
 
 /**
  * Dropdown selector for linking operation to a debt.
@@ -8,14 +7,16 @@ import { useWorkspace } from '../contexts/WorkspaceContext';
  *   expense → i_owe debts
  *   income  → owed_to_me debts
  */
-export default function DebtSelector({ debts, operationType, selectedDebtId, onDebtChange, appliedAmount, onAppliedAmountChange, operationAmount }) {
-  const { currencySymbol } = useWorkspace();
+export default function DebtSelector({ debts, operationType, operationCurrency, selectedDebtId, onDebtChange, appliedAmount, onAppliedAmountChange, operationAmount }) {
   const directionForType = operationType === 'expense' ? 'i_owe' : operationType === 'income' ? 'owed_to_me' : null;
 
   const filteredDebts = useMemo(() => {
     if (!directionForType) return [];
-    return (debts || []).filter(d => !d.is_archived && d.remaining_amount > 0 && d.direction === directionForType);
-  }, [debts, directionForType]);
+    return (debts || []).filter(d => !d.is_archived
+      && d.remaining_amount > 0
+      && d.direction === directionForType
+      && (d.currency || 'KZT') === operationCurrency);
+  }, [debts, directionForType, operationCurrency]);
 
   if (!directionForType || filteredDebts.length === 0) return null;
 
@@ -43,11 +44,12 @@ export default function DebtSelector({ debts, operationType, selectedDebtId, onD
             if (!debtId) onAppliedAmountChange('');
           }}
           className="input-field"
+          aria-label="Привязка к долгу"
         >
           <option value="">Без привязки к долгу</option>
           {filteredDebts.map(d => (
             <option key={d.id} value={d.id}>
-              {d.title} — {d.counterparty} (ост. {formatUnsignedAmount(d.remaining_amount, currencySymbol)})
+              {d.title} — {d.counterparty} (ост. {formatUnsignedAmount(d.remaining_amount, d.currency || operationCurrency)})
             </option>
           ))}
         </select>
@@ -56,7 +58,7 @@ export default function DebtSelector({ debts, operationType, selectedDebtId, onD
       {selectedDebtId && (
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Сумма погашения долга, {currencySymbol}
+            Сумма погашения долга, {selectedDebt?.currency || operationCurrency}
           </label>
           <input
             type="text"
@@ -65,10 +67,11 @@ export default function DebtSelector({ debts, operationType, selectedDebtId, onD
             onChange={(e) => onAppliedAmountChange(e.target.value)}
             className="input-field"
             placeholder={maxApplied > 0 ? `макс. ${maxApplied}` : '0'}
+            aria-label="Сумма погашения долга"
           />
           {selectedDebt && (
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Остаток долга: {formatUnsignedAmount(selectedDebt.remaining_amount, currencySymbol)} из {formatUnsignedAmount(selectedDebt.initial_amount, currencySymbol)}
+              Остаток долга: {formatUnsignedAmount(selectedDebt.remaining_amount, selectedDebt.currency || operationCurrency)} из {formatUnsignedAmount(selectedDebt.initial_amount, selectedDebt.currency || operationCurrency)}
             </p>
           )}
         </div>

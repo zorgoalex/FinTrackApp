@@ -107,6 +107,14 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
     getRate,
   ]);
 
+  useEffect(() => {
+    if (!form.debtId) return;
+    const debt = activeDebts.find(item => item.id === form.debtId);
+    if (debt && (debt.currency || baseCurrency) !== operationCurrency) {
+      setForm(prev => ({ ...prev, debtId: '', debtAppliedAmount: '' }));
+    }
+  }, [activeDebts, baseCurrency, form.debtId, operationCurrency]);
+
   // Pre-fill category when categories load and defaultCategory is provided
   useEffect(() => {
     if (defaultCategory && categories.length > 0 && !form.categoryId) {
@@ -466,6 +474,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
             <DebtSelector
               debts={activeDebts}
               operationType={form.type}
+              operationCurrency={operationCurrency}
               selectedDebtId={form.debtId}
               onDebtChange={(debtId) => setForm(prev => ({ ...prev, debtId: debtId || '' }))}
               appliedAmount={form.debtAppliedAmount}
