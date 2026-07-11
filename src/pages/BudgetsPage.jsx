@@ -32,13 +32,13 @@ export default function BudgetsPage() {
   const budgetByCategory = new Map(budgets.map((budget) => [budget.category_id, budget]));
   const canManage = permissions.hasManagementRights;
   const totals = budgets.reduce((result, budget) => ({
-    amount: result.amount + budget.amount,
+    amount: result.amount + (budget.has_limit ? budget.amount : 0),
     spent: result.spent + budget.spent
   }), { amount: 0, spent: 0 });
 
   const handleSave = async (categoryId) => {
     const existing = budgetByCategory.get(categoryId);
-    const value = drafts[categoryId] ?? existing?.amount ?? '';
+    const value = drafts[categoryId] ?? (existing?.has_limit ? existing.amount : '');
     setSavingCategory(categoryId);
     setActionError('');
     try {
@@ -97,7 +97,8 @@ export default function BudgetsPage() {
       <div className="space-y-3">
         {expenseCategories.map((category) => {
           const budget = budgetByCategory.get(category.id);
-          const progress = budget ? Math.max(0, budget.progress_pct) : 0;
+          const hasLimit = Boolean(budget?.has_limit);
+          const progress = hasLimit ? Math.max(0, budget.progress_pct) : 0;
           const exceeded = progress > 100;
           return (
             <div key={category.id} className="card">
@@ -107,9 +108,11 @@ export default function BudgetsPage() {
                     <span className="h-3 w-3 rounded-full" style={{ backgroundColor: category.color }} />
                     <h2 className="font-medium text-gray-900 dark:text-gray-100">{category.name}</h2>
                   </div>
-                  {budget && (
+                  {budget && (hasLimit || budget.spent > 0) && (
                     <p className={`mt-1 text-sm ${exceeded ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-400'}`}>
-                      {formatMoney(budget.spent, currency)} из {formatMoney(budget.amount, currency)}
+                      {hasLimit
+                        ? `${formatMoney(budget.spent, currency)} из ${formatMoney(budget.amount, currency)}`
+                        : `Потрачено ${formatMoney(budget.spent, currency)} · лимит не задан`}
                       {exceeded ? ` — превышение ${formatMoney(Math.abs(budget.remaining), currency)}` : ''}
                     </p>
                   )}
@@ -118,25 +121,26 @@ export default function BudgetsPage() {
                   <div className="flex items-center gap-2">
                     <input
                       type="number"
+                      aria-label={`Лимит бюджета: ${category.name}`}
                       min="0.01"
                       step="0.01"
                       className="input-field w-36"
                       placeholder="Лимит"
-                      value={drafts[category.id] ?? budget?.amount ?? ''}
+                      value={drafts[category.id] ?? (hasLimit ? budget.amount : '')}
                       onChange={(event) => setDrafts((current) => ({ ...current, [category.id]: event.target.value }))}
                     />
-                    <button type="button" onClick={() => handleSave(category.id)} disabled={savingCategory === category.id} className="btn-primary p-2" title="Сохранить">
+                    <button type="button" onClick={() => handleSave(category.id)} disabled={savingCategory === category.id} className="btn-primary p-2" title="Сохранить" aria-label={`Сохранить лимит: ${category.name}`}>
                       <Save size={16} />
                     </button>
-                    {budget && (
-                      <button type="button" onClick={() => handleDelete(budget)} className="p-2 text-red-600" title="Удалить лимит">
+                    {hasLimit && (
+                      <button type="button" onClick={() => handleDelete(budget)} className="p-2 text-red-600" title="Удалить лимит" aria-label={`Удалить лимит: ${category.name}`}>
                         <Trash2 size={16} />
                       </button>
                     )}
                   </div>
                 )}
               </div>
-              {budget && (
+              {hasLimit && (
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
                   <div
                     className={`h-full rounded-full ${exceeded ? 'bg-red-500' : progress >= 80 ? 'bg-amber-500' : 'bg-green-500'}`}

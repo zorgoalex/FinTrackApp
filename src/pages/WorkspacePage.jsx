@@ -41,6 +41,17 @@ export default function WorkspacePage() {
   const params = useParams();
   const { currentWorkspace, workspaceId: workspaceIdFromContext, loading, error, updateQuickButtons, currencySymbol } = useWorkspace();
   const formatSignedAmount = (value) => formatBalanceFn(value >= 0 ? 'income' : 'expense', value, currencySymbol);
+  const formatRecentOperationAmount = (operation) => {
+    const baseCurrency = currentWorkspace?.base_currency || 'KZT';
+    const symbol = !operation.currency || operation.currency === baseCurrency
+      ? currencySymbol
+      : operation.currency;
+    if (operation.type === 'transfer') {
+      const sign = operation.transfer_direction === 'in' ? '+' : '−';
+      return `${sign}${formatUnsignedAmount(operation.amount, symbol)}`;
+    }
+    return formatBalanceFn(operation.type, operation.amount, symbol);
+  };
   const workspaceId = params.workspaceId || workspaceIdFromContext;
 
   const {
@@ -652,9 +663,7 @@ export default function WorkspacePage() {
                         )}
                       </div>
                       <span className={`text-sm font-semibold ${color} ml-2 whitespace-nowrap`}>
-                        {op.type === 'transfer'
-                          ? formatUnsignedAmount(op.amount, currencySymbol)
-                          : formatSignedAmount(op.type === 'income' ? op.amount : -Math.abs(op.amount))}
+                        {formatRecentOperationAmount(op)}
                       </span>
                     </div>
                   );
@@ -671,7 +680,7 @@ export default function WorkspacePage() {
         </div>
       </div>
 
-      <div className="fixed bottom-6 right-6">
+      <div className="hidden sm:block">
         <button onClick={() => openOperationForm('income')} className="fab btn-press">
           <span className="text-2xl">+</span>
         </button>

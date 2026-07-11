@@ -48,7 +48,7 @@ export default function Layout() {
           <h2 className="text-lg font-bold text-primary-600 dark:text-primary-400 mb-3">ФинУчёт</h2>
           <WorkspaceSwitcher />
         </div>
-        <button onClick={toggleSidebar} className="p-1 lg:hidden">
+        <button onClick={toggleSidebar} className="p-2 lg:hidden" aria-label="Закрыть меню">
           <X size={24} className="text-gray-600 dark:text-gray-400" />
         </button>
       </div>
@@ -90,7 +90,7 @@ export default function Layout() {
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{user ? user.name : 'Гость'}</span>
             <div className="text-xs text-gray-500 dark:text-gray-500">{user ? user.email : ''}</div>
           </div>
-          <button onClick={logout} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" title="Выйти">
+          <button onClick={logout} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" title="Выйти" aria-label="Выйти">
             <LogOut size={20} className="text-gray-500 dark:text-gray-400" />
           </button>
         </div>
@@ -103,7 +103,7 @@ export default function Layout() {
     : 'bg-gray-50 dark:bg-gray-900'
 
   return (
-    <div className={`flex min-h-screen ${pageBg} transition-colors duration-300`}>
+    <div className={`flex min-h-screen overflow-x-hidden ${pageBg} transition-colors duration-300`}>
       {/* Mobile Sidebar */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 flex lg:hidden" role="dialog" aria-modal="true">
@@ -123,17 +123,18 @@ export default function Layout() {
         {/* Mobile Header */}
         <header className="glass border-b border-gray-200 dark:border-gray-700 px-4 py-3 sticky top-0 z-30 lg:hidden shadow-sm">
           <div className="flex items-center justify-between">
-            <button onClick={toggleSidebar} className="p-1">
+            <button onClick={toggleSidebar} className="p-2 -ml-2" aria-label="Открыть меню">
               <Menu size={24} className="text-gray-600 dark:text-gray-400" />
             </button>
-            <div className="flex-1 mx-4">
+            <div className="flex-1 min-w-0 mx-2 sm:mx-4">
               <WorkspaceSwitcher />
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-1 sm:gap-2">
               <div id="page-header-actions" className="flex items-center gap-1"></div>
               <button
                 onClick={toggleTheme}
                 className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                aria-label={theme === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему'}
               >
                 {theme === 'dark' ? <Sun size={18} className="text-gray-400" /> : <Moon size={18} className="text-gray-600" />}
               </button>

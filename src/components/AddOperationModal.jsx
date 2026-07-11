@@ -229,7 +229,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
           <h2 className={`text-base font-semibold ${typeInfo.color}`}>
             Новая операция — {typeInfo.label}
           </h2>
-          <button onClick={onClose} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300">
+          <button type="button" onClick={onClose} aria-label="Закрыть форму операции" className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300">
             <X size={20} />
           </button>
         </div>
@@ -240,6 +240,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Тип</label>
             <select
+              aria-label="Тип операции"
               value={form.type}
               onChange={(e) => {
                 const newType = e.target.value;
@@ -259,6 +260,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Счёт</label>
               <select
+                aria-label="Счёт операции"
                 value={form.accountId}
                 onChange={(e) => setForm(prev => ({ ...prev, accountId: e.target.value }))}
                 className="input-field"
@@ -276,6 +278,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Со счёта</label>
                 <select
+                  aria-label="Счёт списания"
                   value={form.fromAccountId}
                   onChange={(e) => setForm(prev => ({ ...prev, fromAccountId: e.target.value, exchangeRate: '' }))}
                   className="input-field"
@@ -289,6 +292,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">На счёт</label>
                 <select
+                  aria-label="Счёт зачисления"
                   value={form.toAccountId}
                   onChange={(e) => setForm(prev => ({ ...prev, toAccountId: e.target.value, exchangeRate: '' }))}
                   className="input-field"
@@ -307,6 +311,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Категория</label>
               <div className="flex gap-2">
                 <select
+                  aria-label="Категория операции"
                   value={form.categoryId}
                   onChange={set('categoryId')}
                   className="input-field flex-1"
@@ -323,6 +328,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
                     onClick={() => setShowNewCat(!showNewCat)}
                     className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 hover:border-primary-400 dark:hover:border-primary-500 transition-colors"
                     title="Добавить категорию"
+                    aria-label="Добавить категорию"
                     data-testid="add-category-btn"
                   >
                     <Plus size={16} />
@@ -357,6 +363,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Сумма, {opCurrencySymbol}</label>
             <input
+              aria-label={`Сумма операции, ${amountCurrency}`}
               type="text"
               inputMode="decimal"
               value={amountFocused ? form.amount : formatAmountInput(form.amount)}
@@ -379,6 +386,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
                 Курс {transferFromCurrency} → {transferToCurrency}
               </label>
               <input
+                aria-label={`Курс ${transferFromCurrency} в ${transferToCurrency}`}
                 type="text"
                 inputMode="decimal"
                 value={form.exchangeRate}
@@ -407,6 +415,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
                 Курс {operationCurrency} → {baseCurrency}
               </label>
               <input
+                aria-label={`Курс ${operationCurrency} в ${baseCurrency}`}
                 type="text"
                 inputMode="decimal"
                 value={form.exchangeRate}
@@ -429,6 +438,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Описание</label>
             <textarea
+              aria-label="Описание операции"
               value={form.description}
               onChange={set('description')}
               className="input-field"
@@ -466,6 +476,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Дата</label>
             <input
+              aria-label="Дата операции"
               type="date"
               value={form.operationDate}
               onChange={set('operationDate')}

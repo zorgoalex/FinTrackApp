@@ -112,14 +112,16 @@ export default function WorkspaceSwitcher() {
   const RoleIcon = roleIcons[currentWorkspaceRole] || User;
 
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative min-w-0 w-full lg:w-auto" ref={dropdownRef}>
       {/* Кнопка переключателя */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center space-x-2 px-3 py-2 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-750 border border-gray-200 dark:border-gray-700 rounded-xl transition-colors min-w-48"
+        className="flex w-full min-w-0 items-center space-x-2 px-2.5 py-2 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-750 border border-gray-200 dark:border-gray-700 rounded-xl transition-colors lg:min-w-48"
+        aria-label={`Переключить пространство: ${currentWorkspace.name}`}
+        aria-expanded={isOpen}
       >
         <Building2 size={16} className="text-gray-600 dark:text-gray-400" />
-        <div className="flex-1 text-left">
+        <div className="flex-1 min-w-0 text-left">
           <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
             {currentWorkspace.name}
           </div>

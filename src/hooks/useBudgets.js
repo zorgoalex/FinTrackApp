@@ -14,18 +14,69 @@ export default function useBudgets(workspaceId, month) {
     setLoading(true);
     setError('');
     try {
-      const { data, error: loadError } = await supabase.rpc('get_budget_progress', {
-        p_workspace_id: workspaceId,
-        p_month: month
+      const monthEnd = new Date(`${month}T00:00:00`);
+      monthEnd.setMonth(monthEnd.getMonth() + 1);
+      const monthEndString = [
+        monthEnd.getFullYear(),
+        String(monthEnd.getMonth() + 1).padStart(2, '0'),
+        String(monthEnd.getDate()).padStart(2, '0'),
+      ].join('-');
+
+      const [progressResult, operationsResult] = await Promise.all([
+        supabase.rpc('get_budget_progress', {
+          p_workspace_id: workspaceId,
+          p_month: month
+        }),
+        supabase
+          .from('operations')
+          .select('category_id, base_amount, amount')
+          .eq('workspace_id', workspaceId)
+          .in('type', ['expense', 'salary'])
+          .gte('operation_date', month)
+          .lt('operation_date', monthEndString)
+          .not('category_id', 'is', null),
+      ]);
+
+      if (progressResult.error) throw progressResult.error;
+      if (operationsResult.error) throw operationsResult.error;
+
+      const spentByCategory = new Map();
+      (operationsResult.data || []).forEach((operation) => {
+        const amount = Number(operation.base_amount ?? operation.amount) || 0;
+        spentByCategory.set(
+          operation.category_id,
+          (spentByCategory.get(operation.category_id) || 0) + amount,
+        );
       });
-      if (loadError) throw loadError;
-      setBudgets((data || []).map((budget) => ({
-        ...budget,
-        amount: Number(budget.amount) || 0,
-        spent: Number(budget.spent) || 0,
-        remaining: Number(budget.remaining) || 0,
-        progress_pct: Number(budget.progress_pct) || 0
-      })));
+
+      const merged = new Map();
+      (progressResult.data || []).forEach((budget) => {
+        const amount = Number(budget.amount) || 0;
+        const spent = spentByCategory.get(budget.category_id) ?? (Number(budget.spent) || 0);
+        merged.set(budget.category_id, {
+          ...budget,
+          amount,
+          spent,
+          remaining: amount - spent,
+          progress_pct: amount > 0 ? (spent / amount) * 100 : 0,
+          has_limit: true,
+        });
+      });
+
+      spentByCategory.forEach((spent, categoryId) => {
+        if (merged.has(categoryId)) return;
+        merged.set(categoryId, {
+          id: null,
+          category_id: categoryId,
+          amount: 0,
+          spent,
+          remaining: null,
+          progress_pct: 0,
+          has_limit: false,
+        });
+      });
+
+      setBudgets([...merged.values()]);
     } catch (loadException) {
       console.error('useBudgets: load error', loadException);
       setError(loadException.message || 'Не удалось загрузить бюджеты');

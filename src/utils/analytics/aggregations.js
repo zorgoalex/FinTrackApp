@@ -6,6 +6,15 @@
  * @returns {Object} analytics data
  */
 export function computeAnalytics(operations, categories = [], tags = []) {
+  const seenTransferGroups = new Set();
+  const logicalOperations = operations.filter((operation) => {
+    if (operation.type !== 'transfer' || !operation.transfer_group_id) return true;
+    if (operation.transfer_direction === 'in') return false;
+    if (seenTransferGroups.has(operation.transfer_group_id)) return false;
+    seenTransferGroups.add(operation.transfer_group_id);
+    return true;
+  });
+
   const totalIncome = operations
     .filter(op => op.type === 'income')
     .reduce((sum, op) => sum + Number(op.base_amount ?? op.amount ?? 0), 0);
@@ -22,7 +31,7 @@ export function computeAnalytics(operations, categories = [], tags = []) {
 
   // Category breakdown
   const categoryMap = new Map();
-  operations.forEach(op => {
+  logicalOperations.forEach(op => {
     if (!op.category_id) return;
     const existing = categoryMap.get(op.category_id) || { amount: 0, count: 0 };
     existing.amount += Number(op.base_amount ?? op.amount ?? 0);
@@ -46,7 +55,7 @@ export function computeAnalytics(operations, categories = [], tags = []) {
 
   // Tag breakdown
   const tagMap = new Map();
-  operations.forEach(op => {
+  logicalOperations.forEach(op => {
     (op.tags || []).forEach(t => {
       const existing = tagMap.get(t.id) || { amount: 0, count: 0 };
       existing.amount += Number(op.base_amount ?? op.amount ?? 0);
@@ -73,7 +82,7 @@ export function computeAnalytics(operations, categories = [], tags = []) {
     totalExpense,
     totalSalary,
     balance,
-    operationCount: operations.length,
+    operationCount: logicalOperations.length,
     categoryBreakdown,
     tagBreakdown,
   };

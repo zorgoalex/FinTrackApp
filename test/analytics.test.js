@@ -51,3 +51,31 @@ test('falls back to operation amount and aggregates categories and tags', () => 
   assert.equal(result.tagBreakdown[0].amount, 200.5);
   assert.equal(result.tagBreakdown[0].count, 2);
 });
+
+test('counts a transfer pair as one user operation and aggregates its tags once', () => {
+  const transferTag = { id: 'internal' };
+  const result = computeAnalytics(
+    [
+      {
+        type: 'transfer',
+        amount: 100,
+        transfer_group_id: 'transfer-1',
+        transfer_direction: 'out',
+        tags: [transferTag],
+      },
+      {
+        type: 'transfer',
+        amount: 85,
+        transfer_group_id: 'transfer-1',
+        transfer_direction: 'in',
+        tags: [transferTag],
+      },
+    ],
+    [],
+    [{ id: 'internal', name: 'Перевод', color: '#123456' }],
+  );
+
+  assert.equal(result.operationCount, 1);
+  assert.equal(result.tagBreakdown[0].count, 1);
+  assert.equal(result.tagBreakdown[0].amount, 100);
+});
