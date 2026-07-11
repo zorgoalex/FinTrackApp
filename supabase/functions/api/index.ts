@@ -3,6 +3,7 @@ import { corsHeaders } from '../_shared/cors.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+const OPERATION_TYPES = new Set(['income', 'expense', 'salary']);
 
 function jsonResponse(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -29,6 +30,96 @@ async function getAuthenticatedClient(req: Request) {
   return { supabase, user };
 }
 
+function validDate(value: unknown): value is string {
+  return typeof value === 'string'
+    && /^\d{4}-\d{2}-\d{2}$/.test(value)
+    && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
+}
+
+async function resolveOperationMoney(
+  supabase: ReturnType<typeof createClient>,
+  workspaceId: string,
+  requestedAccountId: unknown,
+  amount: number,
+  operationDate: string,
+) {
+  let accountId = typeof requestedAccountId === 'string' ? requestedAccountId : '';
+  if (!accountId) {
+    const { data: defaultAccount, error: defaultError } = await supabase
+      .from('accounts')
+      .select('id')
+      .eq('workspace_id', workspaceId)
+      .eq('is_default', true)
+      .eq('is_archived', false)
+      .maybeSingle();
+    if (defaultError || !defaultAccount) return { error: 'Active account is required' };
+    accountId = defaultAccount.id;
+  }
+
+  const [{ data: account, error: accountError }, { data: workspace, error: workspaceError }] = await Promise.all([
+    supabase.from('accounts').select('id, currency').eq('id', accountId).eq('workspace_id', workspaceId).eq('is_archived', false).maybeSingle(),
+    supabase.from('workspaces').select('base_currency').eq('id', workspaceId).maybeSingle(),
+  ]);
+  if (accountError || !account) return { error: 'Account is unavailable in this workspace' };
+  if (workspaceError || !workspace) return { error: 'Workspace is unavailable' };
+
+  const currency = account.currency;
+  const baseCurrency = workspace.base_currency || 'KZT';
+  let exchangeRate = 1;
+  if (currency !== baseCurrency) {
+    const { data: rate, error: rateError } = await supabase.rpc('get_exchange_rate', {
+      p_workspace_id: workspaceId,
+      p_from_currency: currency,
+      p_to_currency: baseCurrency,
+      p_rate_date: operationDate,
+    });
+    exchangeRate = Number(rate);
+    if (rateError || !Number.isFinite(exchangeRate) || exchangeRate <= 0) {
+      return { error: `Exchange rate ${currency} → ${baseCurrency} is missing for ${operationDate}` };
+    }
+  }
+
+  return {
+    accountId,
+    currency,
+    exchangeRate,
+    baseAmount: Math.round(amount * exchangeRate * 100) / 100,
+  };
+}
+
+async function validateCategory(
+  supabase: ReturnType<typeof createClient>,
+  workspaceId: string,
+  categoryId: unknown,
+) {
+  if (!categoryId) return true;
+  if (typeof categoryId !== 'string') return false;
+  const { data } = await supabase
+    .from('categories')
+    .select('id')
+    .eq('id', categoryId)
+    .eq('workspace_id', workspaceId)
+    .maybeSingle();
+  return Boolean(data);
+}
+
+async function validateTags(
+  supabase: ReturnType<typeof createClient>,
+  workspaceId: string,
+  tagIds: unknown,
+) {
+  if (!Array.isArray(tagIds)) return tagIds === undefined;
+  if (tagIds.length === 0) return true;
+  if (tagIds.some((id) => typeof id !== 'string')) return false;
+  const uniqueIds = [...new Set(tagIds as string[])];
+  const { data } = await supabase
+    .from('tags')
+    .select('id')
+    .eq('workspace_id', workspaceId)
+    .in('id', uniqueIds);
+  return (data || []).length === uniqueIds.length;
+}
+
 // --- Route Handlers ---
 
 async function getWorkspaces(supabase: ReturnType<typeof createClient>) {
@@ -49,32 +140,18 @@ async function getWorkspaceSummary(
   const dateFrom = url.searchParams.get('dateFrom');
   const dateTo = url.searchParams.get('dateTo');
 
-  let query = supabase
-    .from('operations')
-    .select('amount, base_amount, type, transfer_direction')
-    .eq('workspace_id', workspaceId);
-
-  if (dateFrom) query = query.gte('operation_date', dateFrom);
-  if (dateTo) query = query.lte('operation_date', dateTo);
-
-  const { data, error } = await query;
-  if (error) return errorResponse(error.message, 500);
-
-  let income = 0;
-  let expense = 0;
-  let salary = 0;
-  for (const op of data || []) {
-    const amount = Number(op.base_amount ?? op.amount ?? 0);
-    if (op.type === 'income') {
-      income += amount;
-    } else if (op.type === 'expense') {
-      expense += amount;
-    } else if (op.type === 'salary') {
-      salary += amount;
-    }
+  if ((dateFrom && !validDate(dateFrom)) || (dateTo && !validDate(dateTo))) {
+    return errorResponse('Dates must use YYYY-MM-DD', 400);
   }
-
-  return jsonResponse({ income, expense, salary, balance: income - expense - salary });
+  const { data, error } = await supabase
+    .rpc('get_workspace_operation_totals', {
+      p_workspace_id: workspaceId,
+      p_date_from: dateFrom || null,
+      p_date_to: dateTo || null,
+    })
+    .single();
+  if (error) return errorResponse(error.message, 500);
+  return jsonResponse(data);
 }
 
 async function getOperations(
@@ -84,8 +161,10 @@ async function getOperations(
 ) {
   const dateFrom = url.searchParams.get('dateFrom');
   const dateTo = url.searchParams.get('dateTo');
-  const limit = parseInt(url.searchParams.get('limit') || '50', 10);
-  const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+  const requestedLimit = Number.parseInt(url.searchParams.get('limit') || '50', 10);
+  const requestedOffset = Number.parseInt(url.searchParams.get('offset') || '0', 10);
+  const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 200) : 50;
+  const offset = Number.isFinite(requestedOffset) ? Math.max(requestedOffset, 0) : 0;
 
   let query = supabase
     .from('operations')
@@ -153,34 +232,45 @@ async function createOperation(
   body: Record<string, unknown>,
 ) {
   const { amount, type, description, category_id, operation_date, tag_ids, account_id } = body;
+  const numericAmount = Number(amount);
+  const operationType = typeof type === 'string' ? type.toLowerCase() : '';
+  const operationDate = operation_date === undefined
+    ? new Date().toISOString().split('T')[0]
+    : operation_date;
 
-  if (!amount || !type) {
+  if (!Number.isFinite(numericAmount) || numericAmount <= 0 || !operationType) {
     return errorResponse('amount and type are required', 400);
   }
-
-  // If account_id not provided, use default account
-  let resolvedAccountId = account_id;
-  if (!resolvedAccountId) {
-    const { data: defaultAcc } = await supabase
-      .from('accounts')
-      .select('id')
-      .eq('workspace_id', workspaceId)
-      .eq('is_default', true)
-      .single();
-    resolvedAccountId = defaultAcc?.id || null;
+  if (!OPERATION_TYPES.has(operationType)) {
+    return errorResponse('type must be income, expense or salary; use /transfers for transfers', 400);
   }
+  if (!validDate(operationDate)) return errorResponse('operation_date must use YYYY-MM-DD', 400);
+  if (!await validateCategory(supabase, workspaceId, category_id)) {
+    return errorResponse('Category is unavailable in this workspace', 400);
+  }
+  if (!await validateTags(supabase, workspaceId, tag_ids)) {
+    return errorResponse('One or more tags are unavailable in this workspace', 400);
+  }
+
+  const money = await resolveOperationMoney(
+    supabase, workspaceId, account_id, numericAmount, operationDate,
+  );
+  if ('error' in money) return errorResponse(money.error, 422);
 
   const { data, error } = await supabase
     .from('operations')
     .insert({
       workspace_id: workspaceId,
       user_id: userId,
-      amount,
-      type,
+      amount: numericAmount,
+      type: operationType,
       description: description || null,
       category_id: category_id || null,
-      account_id: resolvedAccountId,
-      operation_date: operation_date || new Date().toISOString().split('T')[0],
+      account_id: money.accountId,
+      operation_date: operationDate,
+      currency: money.currency,
+      exchange_rate: money.exchangeRate,
+      base_amount: money.baseAmount,
     })
     .select()
     .single();
@@ -195,7 +285,7 @@ async function createOperation(
     const { error: tagError } = await supabase
       .from('operation_tags')
       .insert(tagRows);
-    if (tagError) console.error('Tag insert error:', tagError.message);
+    if (tagError) return errorResponse(tagError.message, 500);
   }
 
   return jsonResponse(data, 201);
@@ -207,7 +297,40 @@ async function updateOperation(
   opId: string,
   body: Record<string, unknown>,
 ) {
-  const { tag_ids, ...fields } = body;
+  const { tag_ids } = body;
+  const { data: current, error: currentError } = await supabase
+    .from('operations')
+    .select('amount, type, description, category_id, account_id, operation_date')
+    .eq('id', opId)
+    .eq('workspace_id', workspaceId)
+    .maybeSingle();
+  if (currentError || !current) return errorResponse('Operation not found', 404);
+  if (current.type === 'transfer') return errorResponse('Use /transfers to update transfers', 400);
+
+  const numericAmount = body.amount === undefined ? Number(current.amount) : Number(body.amount);
+  const operationType = body.type === undefined ? current.type : String(body.type).toLowerCase();
+  const operationDate = body.operation_date === undefined ? current.operation_date : body.operation_date;
+  const categoryId = body.category_id === undefined ? current.category_id : body.category_id;
+  const accountId = body.account_id === undefined ? current.account_id : body.account_id;
+  if (!Number.isFinite(numericAmount) || numericAmount <= 0) return errorResponse('amount must be greater than zero', 400);
+  if (!OPERATION_TYPES.has(operationType)) return errorResponse('Invalid operation type', 400);
+  if (!validDate(operationDate)) return errorResponse('operation_date must use YYYY-MM-DD', 400);
+  if (!await validateCategory(supabase, workspaceId, categoryId)) return errorResponse('Invalid category', 400);
+  if (!await validateTags(supabase, workspaceId, tag_ids)) return errorResponse('Invalid tags', 400);
+
+  const money = await resolveOperationMoney(supabase, workspaceId, accountId, numericAmount, operationDate);
+  if ('error' in money) return errorResponse(money.error, 422);
+  const fields = {
+    amount: numericAmount,
+    type: operationType,
+    description: body.description === undefined ? current.description : body.description,
+    category_id: categoryId || null,
+    account_id: money.accountId,
+    operation_date: operationDate,
+    currency: money.currency,
+    exchange_rate: money.exchangeRate,
+    base_amount: money.baseAmount,
+  };
 
   const { data, error } = await supabase
     .from('operations')
