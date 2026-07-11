@@ -13,6 +13,14 @@ export default class AppErrorBoundary extends Component {
 
   componentDidCatch(error, info) {
     console.error('Unhandled application error', error, info);
+    const isStaleChunk = /Failed to fetch dynamically imported module|Importing a module script failed|ChunkLoadError/i
+      .test(error?.message || '');
+    const reloadKey = 'fintrack_chunk_reload_at';
+    const lastReload = Number(window.sessionStorage.getItem(reloadKey) || 0);
+    if (isStaleChunk && Date.now() - lastReload > 60_000) {
+      window.sessionStorage.setItem(reloadKey, String(Date.now()));
+      window.location.reload();
+    }
   }
 
   handleReload = () => {
