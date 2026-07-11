@@ -133,7 +133,7 @@ supabase/
 
 ## REST API
 
-**Endpoint:** `https://ofnwfuqmwrshojcfhwyk.supabase.co/functions/v1/api`
+**Endpoint:** `https://trpfmcggvixnfmcgvxsq.supabase.co/functions/v1/api`
 
 **Авторизация:** `Authorization: Bearer <supabase_access_token>`
 
@@ -179,7 +179,7 @@ npm run dev
 
 ```bash
 SUPABASE_ACCESS_TOKEN=... npx supabase@latest functions deploy api \
-  --project-ref ofnwfuqmwrshojcfhwyk --no-verify-jwt
+  --project-ref trpfmcggvixnfmcgvxsq --no-verify-jwt
 ```
 
 ### Мониторинг баланса OpenRouter
@@ -204,7 +204,7 @@ Edge Function `check-openrouter-balance` сохраняет серверный �
 
 ## Инфраструктура
 
-- **Supabase:** `ofnwfuqmwrshojcfhwyk.supabase.co` (eu-central-1)
+- **Supabase:** `trpfmcggvixnfmcgvxsq.supabase.co` (eu-central-1)
 - **Vercel:** авто-деплой из GitHub
 - **GitHub:** `zorgoalex/FinTrackApp`
 
