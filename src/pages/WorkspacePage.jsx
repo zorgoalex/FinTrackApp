@@ -1,5 +1,4 @@
 import { useMemo, useState, useCallback, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import useOperations from '../hooks/useOperations';
@@ -276,6 +275,42 @@ export default function WorkspacePage() {
         <div className="space-y-4 mb-20">
           {/* Summary blocks */}
           {operationsLoading ? (
+            <div className="card animate-pulse sm:hidden">
+              <div className="mb-3 h-3 w-24 rounded bg-gray-200 dark:bg-gray-700" />
+              <div className="h-7 w-40 rounded bg-gray-200 dark:bg-gray-700" />
+            </div>
+          ) : (
+            <section className="card sm:hidden" aria-labelledby="mobile-month-summary">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p id="mobile-month-summary" className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Итог месяца</p>
+                  <p className={`mt-1 text-2xl font-bold tabular-nums ${monthTotalColor}`}>
+                    {formatSignedAmount(summary?.month?.total || 0)}
+                  </p>
+                </div>
+                <button onClick={openAnalytics} className="min-h-10 rounded-lg px-3 text-sm font-medium text-primary-600 dark:text-primary-400">
+                  Аналитика
+                </button>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-3 border-t border-gray-100 pt-3 dark:border-gray-700">
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Доходы</p>
+                  <p className="mt-0.5 font-semibold text-green-600 dark:text-green-400">+{formatUnsignedAmount(summary?.month?.income || 0, currencySymbol)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Расходы</p>
+                  <p className="mt-0.5 font-semibold text-red-600 dark:text-red-400">−{formatUnsignedAmount((summary?.month?.expense || 0) + (summary?.month?.salary || 0), currencySymbol)}</p>
+                </div>
+              </div>
+              {topExpenseCategories[0] && (
+                <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                  Больше всего: <span className="font-medium text-gray-700 dark:text-gray-200">{topExpenseCategories[0].name} · {formatUnsignedAmount(topExpenseCategories[0].amount, currencySymbol)}</span>
+                </p>
+              )}
+            </section>
+          )}
+          <div className="hidden sm:block">
+          {operationsLoading ? (
             <div className="grid grid-cols-2 gap-3">
               {[0, 1].map((i) => (
                 <div key={i} className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border border-gray-200 dark:border-gray-700 animate-pulse">
@@ -409,6 +444,7 @@ export default function WorkspacePage() {
               </div>
             </div>
           )}
+          </div>
 
           {operationsError && (
             <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl p-3 text-sm text-red-700 dark:text-red-400">
@@ -704,27 +740,6 @@ export default function WorkspacePage() {
           onClose={() => setShowQuickSettings(false)}
         />
       )}
-
-      {/* Eye icon + dropdown in header via portal */}
-      {typeof document !== 'undefined' && document.getElementById('page-header-actions') &&
-        createPortal(
-          <div className="relative">
-            <button
-              onClick={() => setDashboardSettingsOpen(v => !v)}
-              className={`p-1.5 rounded-lg transition-colors ${
-                dashboardSettingsOpen
-                  ? 'text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20'
-                  : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
-              }`}
-              title="Настройка виджетов"
-            >
-              {dashboardSettingsOpen ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
-            {dashboardSettingsOpen && <WidgetSettingsDropdown dashboardBlocks={dashboardBlocks} setDashboardBlocks={setDashboardBlocks} workspaceId={workspaceId} />}
-          </div>,
-          document.getElementById('page-header-actions')
-        )
-      }
 
     </div>
   );
