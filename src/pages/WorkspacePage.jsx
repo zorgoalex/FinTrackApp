@@ -271,8 +271,19 @@ export default function WorkspacePage() {
 
   return (
     <div className="min-h-screen relative">
-      <div className="max-w-2xl mx-auto p-4">
-        <div className="space-y-4 mb-20">
+      <div className="mx-auto max-w-7xl p-4 lg:px-8 lg:py-7">
+        <div className="space-y-5 mb-20">
+          <header className="hidden items-end justify-between gap-6 sm:flex">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-600 dark:text-primary-400">Рабочее пространство</p>
+              <h1 className="mt-2 text-3xl font-bold tracking-tight text-gray-950 dark:text-white">{currentWorkspace.name}</h1>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Финансовая картина, счета и последние изменения в одном месте.</p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={openOperations} className="btn-secondary min-h-11">Все операции</button>
+              <button onClick={openAnalytics} className="btn-primary min-h-11"><BarChart3 size={16} className="mr-2" />Аналитика</button>
+            </div>
+          </header>
           {/* Summary blocks */}
           {operationsLoading ? (
             <div className="card animate-pulse sm:hidden">
@@ -356,7 +367,7 @@ export default function WorkspacePage() {
               </div>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-4">
               {[
                 {
                   key: 'today', label: <><BarChart3 size={16} className="text-gray-500 dark:text-gray-400" /> За сегодня</>,
@@ -422,7 +433,7 @@ export default function WorkspacePage() {
                   )}
                 </div>
               ))}
-              <div className="flex justify-end gap-1.5">
+              <div className="col-span-2 flex justify-end gap-1.5">
                 <button
                   onClick={togglePin}
                   title={summaryPinned ? 'Открепить вид' : 'Закрепить вид'}
@@ -456,14 +467,14 @@ export default function WorkspacePage() {
             <button
               onClick={() => openOperationForm('income')}
               disabled={!canCreateOperations}
-              className="px-3 py-2 rounded-xl bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 disabled:opacity-50 font-medium text-sm btn-press"
+              className="min-h-11 px-4 py-2 rounded-xl bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 disabled:opacity-50 font-medium text-sm btn-press"
             >
               + Доход
             </button>
             <button
               onClick={() => openOperationForm('expense')}
               disabled={!canCreateOperations}
-              className="px-3 py-2 rounded-xl bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800 disabled:opacity-50 font-medium text-sm btn-press"
+              className="min-h-11 px-4 py-2 rounded-xl bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800 disabled:opacity-50 font-medium text-sm btn-press"
             >
               + Расход
             </button>
@@ -471,7 +482,7 @@ export default function WorkspacePage() {
               <button
                 onClick={() => openOperationForm('transfer')}
                 disabled={!canCreateOperations}
-                className="px-3 py-2 rounded-xl bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800 disabled:opacity-50 font-medium text-sm btn-press"
+                className="min-h-11 px-4 py-2 rounded-xl bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800 disabled:opacity-50 font-medium text-sm btn-press"
               >
                 ⇄ Перевод
               </button>
@@ -512,6 +523,7 @@ export default function WorkspacePage() {
             {dashboardSettingsOpen && <WidgetSettingsDropdown dashboardBlocks={dashboardBlocks} setDashboardBlocks={setDashboardBlocks} workspaceId={workspaceId} />}
           </div>
 
+          <div className="grid items-start gap-4 lg:grid-cols-2">
           {/* Account balances */}
           {activeAccounts.length > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border border-gray-200 dark:border-gray-700">
@@ -713,10 +725,11 @@ export default function WorkspacePage() {
               </div>
             )}
           </div>
+          </div>
         </div>
       </div>
 
-      <div className="hidden sm:block">
+      <div className="hidden sm:block lg:hidden">
         <button onClick={() => openOperationForm('income')} className="fab btn-press">
           <span className="text-2xl">+</span>
         </button>
