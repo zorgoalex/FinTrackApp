@@ -11,8 +11,9 @@ import useAccounts from '../hooks/useAccounts';
 import AddOperationModal from '../components/AddOperationModal';
 import EditOperationModal from '../components/EditOperationModal';
 import QuickButtonsSettings from '../components/QuickButtonsSettings';
+import ImportOperationsModal from '../components/ImportOperationsModal';
 import MonthPicker from '../components/MonthPicker';
-import { Pencil, Trash2, ChevronDown, X, Plus, Settings, Wallet, Download, Search, SlidersHorizontal, MoreHorizontal } from 'lucide-react';
+import { Pencil, Trash2, ChevronDown, X, Plus, Settings, Wallet, Download, Upload, Search, SlidersHorizontal, MoreHorizontal } from 'lucide-react';
 import { formatSignedAmount, formatUnsignedAmount, formatGroupDate } from '../utils/formatters';
 import { getMonthRange } from '../utils/dateRange';
 import { buildOperationsCSV, downloadOperationsCSV } from '../utils/export';
@@ -63,6 +64,7 @@ export function OperationPage() {
     hasMore,
     loadMore,
     loadingMore,
+    refresh,
   } = useOperations(workspaceId, { dateFrom, dateTo });
 
   const { categories } = useCategories(workspaceId);
@@ -95,6 +97,7 @@ export function OperationPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [actionMenuId, setActionMenuId] = useState(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   useEffect(() => {
     if (!actionMenuId) return undefined;
@@ -457,12 +460,28 @@ export function OperationPage() {
           onChange={setSelectedMonth}
         />
         <div className="flex gap-2">
+          {permissions.canCreateOperations && (
+            <button onClick={() => setImportOpen(true)} className="btn-secondary min-h-11 min-w-11" disabled={loading} aria-label="Импорт операций из CSV">
+              <Upload size={16} className="mr-2" />
+              <span className="hidden sm:inline">Импорт</span>
+            </button>
+          )}
           <button onClick={handleExportOperations} className="btn-secondary min-h-11 min-w-11" disabled={exporting || loading} aria-label={exporting ? 'Экспорт операций выполняется' : 'Экспорт операций в CSV'}>
             <Download size={16} className="mr-2" />
             <span className="hidden sm:inline">{exporting ? 'Экспорт...' : 'CSV'}</span>
           </button>
         </div>
       </header>
+
+      <ImportOperationsModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        categories={categories}
+        accounts={accounts}
+        baseCurrency={currentWorkspace?.base_currency || 'KZT'}
+        onImport={addOperation}
+        onRefresh={refresh}
+      />
 
       {exportError && (
         <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl p-3 text-sm text-red-700 dark:text-red-400 mb-4">

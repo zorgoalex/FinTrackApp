@@ -238,7 +238,7 @@ export function useOperations(workspaceId, options = {}) {
     setVisibleLimit((current) => current + pageSize);
   }, [pageSize]);
 
-  const addOperation = useCallback(async (data) => {
+  const addOperation = useCallback(async (data, { refreshAfter = true } = {}) => {
     if (!workspaceId) {
       setError('Рабочее пространство не выбрано');
       return null;
@@ -319,7 +319,7 @@ export function useOperations(workspaceId, options = {}) {
           }
         }
 
-        await loadOperations();
+        if (refreshAfter) await loadOperations();
         return transferResult?.[0] || { success: true };
       } catch (transferException) {
         console.error('useOperations: transfer error', transferException);
@@ -393,7 +393,7 @@ export function useOperations(workspaceId, options = {}) {
         }
       }
 
-      await loadOperations();
+      if (refreshAfter) await loadOperations();
 
       return mapOperationWithDisplayName(insertedData, authUser);
     } catch (insertException) {
