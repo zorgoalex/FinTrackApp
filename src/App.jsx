@@ -8,6 +8,8 @@ import { ThemeProvider } from './contexts/ThemeContext';
 // Lazy-loaded pages
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const SignupPage = lazy(() => import('./pages/SignupPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
 const ComingSoonPage = lazy(() => import('./pages/ComingSoonPage'));
 const WorkspaceSelectPage = lazy(() => import('./pages/WorkspaceSelectPage'));
 const WorkspaceCreatePage = lazy(() => import('./pages/WorkspaceCreatePage'));
@@ -46,6 +48,14 @@ const router = createBrowserRouter([
   {
     path: '/signup',
     element: <SignupPage />
+  },
+  {
+    path: '/forgot-password',
+    element: <ForgotPasswordPage />
+  },
+  {
+    path: '/reset-password',
+    element: <ResetPasswordPage />
   },
   {
     path: '/accept-invitation',

@@ -77,7 +77,7 @@ export function AuthProvider({ children }) {
     }
     setLoading(true);
     try {
-      const { error: signErr } = await supabase.auth.signUp({
+      const { data, error: signErr } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -86,9 +86,48 @@ export function AuthProvider({ children }) {
         }
       });
       if (signErr) throw signErr;
-      return true;
+      return {
+        success: true,
+        requiresEmailConfirmation: !data.session
+      };
     } catch (e) {
       setError(e.message || "Ошибка регистрации");
+      return { success: false, requiresEmailConfirmation: false };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const requestPasswordReset = async (email) => {
+    setError("");
+    setLoading(true);
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`
+      });
+      if (resetError) throw resetError;
+      return true;
+    } catch (e) {
+      setError(e.message || "Не удалось отправить письмо для восстановления пароля");
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updatePassword = async (password) => {
+    setError("");
+    if (!password || password.length < 6) {
+      setError("Пароль должен быть не менее 6 символов");
+      return false;
+    }
+    setLoading(true);
+    try {
+      const { error: updateError } = await supabase.auth.updateUser({ password });
+      if (updateError) throw updateError;
+      return true;
+    } catch (e) {
+      setError(e.message || "Не удалось изменить пароль");
       return false;
     } finally {
       setLoading(false);
@@ -106,6 +145,8 @@ export function AuthProvider({ children }) {
     login,
     logout,
     signUp,
+    requestPasswordReset,
+    updatePassword,
     loading,
     error,
     isAuthenticated: !!user

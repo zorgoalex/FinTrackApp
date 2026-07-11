@@ -39,6 +39,11 @@ export default function LoginPage() {
             {loading ? "Входим..." : "Войти"}
           </button>
         </form>
+        <div className="mt-3 text-center text-sm">
+          <Link to="/forgot-password" className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300">
+            Забыли пароль?
+          </Link>
+        </div>
         <div className="mt-4 text-sm text-center text-gray-600 dark:text-gray-400">
           Нет аккаунта? <Link to="/signup" className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300">Зарегистрируйтесь</Link>
         </div>
