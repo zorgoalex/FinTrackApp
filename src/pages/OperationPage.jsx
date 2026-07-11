@@ -12,9 +12,10 @@ import AddOperationModal from '../components/AddOperationModal';
 import EditOperationModal from '../components/EditOperationModal';
 import QuickButtonsSettings from '../components/QuickButtonsSettings';
 import MonthPicker from '../components/MonthPicker';
-import { Pencil, Trash2, ChevronDown, X, Plus, Settings, Wallet } from 'lucide-react';
+import { Pencil, Trash2, ChevronDown, X, Plus, Settings, Wallet, Download } from 'lucide-react';
 import { formatSignedAmount, formatUnsignedAmount, formatGroupDate } from '../utils/formatters';
 import { getMonthRange } from '../utils/dateRange';
+import { buildOperationsCSV, downloadOperationsCSV } from '../utils/export';
 
 const OPERATION_TYPES = {
   income:   { label: 'Доход',    sign: '+', color: 'text-green-600' },
@@ -89,6 +90,8 @@ export function OperationPage() {
   const [sortDir, setSortDir] = useState('desc');
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('operationsViewMode') || 'detailed');
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
 
   // Visible accounts filter (null = all visible)
   const [visibleAccountIds, setVisibleAccountIds] = useState(() => {
@@ -337,6 +340,64 @@ export function OperationPage() {
     navigate('/workspaces');
   };
 
+  const handleExportOperations = async () => {
+    const pageSize = 1000;
+    const exportedOperations = [];
+    setExporting(true);
+    setExportError('');
+
+    try {
+      for (let from = 0; ; from += pageSize) {
+        const { data, error: operationsError } = await supabase
+          .from('operations')
+          .select('id, amount, type, description, operation_date, category_id, account_id, transfer_direction, currency, exchange_rate, base_amount')
+          .eq('workspace_id', workspaceId)
+          .gte('operation_date', dateFrom)
+          .lte('operation_date', dateTo)
+          .order('operation_date', { ascending: true })
+          .order('created_at', { ascending: true })
+          .range(from, from + pageSize - 1);
+
+        if (operationsError) throw operationsError;
+        exportedOperations.push(...(data || []));
+        if (!data || data.length < pageSize) break;
+      }
+
+      const operationIds = exportedOperations.map((operation) => operation.id);
+      const tagsByOperation = new Map();
+      for (let index = 0; index < operationIds.length; index += 500) {
+        const ids = operationIds.slice(index, index + 500);
+        const { data: links, error: linksError } = await supabase
+          .from('operation_tags')
+          .select('operation_id, tag_id')
+          .in('operation_id', ids);
+        if (linksError) throw linksError;
+        (links || []).forEach((link) => {
+          const current = tagsByOperation.get(link.operation_id) || [];
+          const tag = tags.find((item) => item.id === link.tag_id);
+          if (tag) current.push(tag);
+          tagsByOperation.set(link.operation_id, current);
+        });
+      }
+
+      const rows = exportedOperations.map((operation) => ({
+        ...operation,
+        tags: tagsByOperation.get(operation.id) || []
+      }));
+      const csv = buildOperationsCSV(rows, {
+        categories,
+        accounts,
+        baseCurrency: currentWorkspace?.base_currency || 'KZT'
+      });
+      downloadOperationsCSV(csv, dateFrom, dateTo);
+    } catch (exportException) {
+      console.error('OperationPage: export error', exportException);
+      setExportError(exportException.message || 'Не удалось экспортировать операции');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   if (!workspaceId) {
     return (
       <div className="max-w-2xl mx-auto p-4">
@@ -358,10 +419,22 @@ export function OperationPage() {
           month={selectedMonth.month}
           onChange={setSelectedMonth}
         />
-        <button onClick={goBack} className="btn-secondary">
-          Назад
-        </button>
+        <div className="flex gap-2">
+          <button onClick={handleExportOperations} className="btn-secondary" disabled={exporting || loading}>
+            <Download size={16} className="mr-2" />
+            {exporting ? 'Экспорт...' : 'CSV'}
+          </button>
+          <button onClick={goBack} className="btn-secondary">
+            Назад
+          </button>
+        </div>
       </header>
+
+      {exportError && (
+        <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl p-3 text-sm text-red-700 dark:text-red-400 mb-4">
+          {exportError}
+        </div>
+      )}
 
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4">
         <div className="flex flex-wrap gap-2">
