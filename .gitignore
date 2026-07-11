@@ -257,9 +257,6 @@ specdata/
 # Vercel
 .vercel/
 
-# GitHub config
-.github*
-
 # AI helpers
 for_GJ_AI/
 
