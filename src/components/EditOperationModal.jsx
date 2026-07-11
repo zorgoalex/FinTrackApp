@@ -6,6 +6,7 @@ import useTags from '../hooks/useTags';
 import useAccounts from '../hooks/useAccounts';
 import useDebts from '../hooks/useDebts';
 import { useWorkspace } from '../contexts/WorkspaceContext';
+import { usePermissions } from '../hooks/usePermissions';
 import TagInput from './TagInput';
 import DebtSelector from './DebtSelector';
 
@@ -28,6 +29,7 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
   const { accounts } = useAccounts(workspaceId);
   const { activeDebts } = useDebts(workspaceId);
   const { currencyCode: baseCurrency, currencySymbol: baseSymbol } = useWorkspace();
+  const { canEditDirectories } = usePermissions();
   const activeAccounts = accounts.filter(a => !a.is_archived);
   const isTransfer = operation.type === 'transfer';
   const isCrossCurrencyTransfer = isTransfer
@@ -222,16 +224,18 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
-                <button
-                  type="button"
-                  onClick={() => setShowNewCat(!showNewCat)}
-                  className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 hover:border-primary-400 dark:hover:border-primary-500 transition-colors"
-                  title="Добавить категорию"
-                >
-                  <Plus size={16} />
-                </button>
+                {canEditDirectories && (
+                  <button
+                    type="button"
+                    onClick={() => setShowNewCat(!showNewCat)}
+                    className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 hover:border-primary-400 dark:hover:border-primary-500 transition-colors"
+                    title="Добавить категорию"
+                  >
+                    <Plus size={16} />
+                  </button>
+                )}
               </div>
-              {showNewCat && (
+              {canEditDirectories && showNewCat && (
                 <div className="mt-2 flex gap-2 items-center">
                   <input
                     type="text"
