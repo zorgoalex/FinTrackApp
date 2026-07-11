@@ -35,6 +35,18 @@ export default function BudgetsPage() {
     amount: result.amount + (budget.has_limit ? budget.amount : 0),
     spent: result.spent + budget.spent
   }), { amount: 0, spent: 0 });
+  const sortedExpenseCategories = [...expenseCategories].sort((left, right) => {
+    const leftBudget = budgetByCategory.get(left.id);
+    const rightBudget = budgetByCategory.get(right.id);
+    if (Boolean(leftBudget?.has_limit) !== Boolean(rightBudget?.has_limit)) {
+      return leftBudget?.has_limit ? -1 : 1;
+    }
+    return (rightBudget?.spent || 0) - (leftBudget?.spent || 0) || left.name.localeCompare(right.name, 'ru');
+  });
+  const dirtyCategoryIds = Object.keys(drafts).filter((categoryId) => {
+    const value = Number(drafts[categoryId]);
+    return Number.isFinite(value) && value > 0;
+  });
 
   const handleSave = async (categoryId) => {
     const existing = budgetByCategory.get(categoryId);
@@ -65,6 +77,18 @@ export default function BudgetsPage() {
     }
   };
 
+  const handleSaveAll = async () => {
+    setActionError('');
+    try {
+      for (const categoryId of dirtyCategoryIds) {
+        await saveBudget(categoryId, drafts[categoryId]);
+      }
+      setDrafts({});
+    } catch (saveException) {
+      setActionError(saveException.message || 'Не удалось сохранить лимиты');
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6 pb-24">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
@@ -81,7 +105,7 @@ export default function BudgetsPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 mb-6">
+      <div className="grid grid-cols-2 gap-3 mb-6 sm:grid-cols-3">
         <div className="card">
           <p className="text-xs text-gray-500 dark:text-gray-400">Запланировано</p>
           <p className="text-xl font-semibold">{formatMoney(totals.amount, currency)}</p>
@@ -92,10 +116,25 @@ export default function BudgetsPage() {
             {formatMoney(totals.spent, currency)}
           </p>
         </div>
+        {totals.amount > 0 && (
+          <div className="card col-span-2 sm:col-span-1">
+            <p className="text-xs text-gray-500 dark:text-gray-400">Осталось</p>
+            <p className={`text-xl font-semibold ${totals.amount - totals.spent < 0 ? 'text-red-600' : 'text-green-600'}`}>
+              {formatMoney(Math.abs(totals.amount - totals.spent), currency)}
+            </p>
+          </div>
+        )}
       </div>
 
+      {canManage && dirtyCategoryIds.length > 0 && (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-primary-200 bg-primary-50 p-3 dark:border-primary-800 dark:bg-primary-900/20">
+          <span className="text-sm text-primary-800 dark:text-primary-300">Изменено лимитов: {dirtyCategoryIds.length}</span>
+          <button type="button" onClick={handleSaveAll} className="btn-primary min-h-11">Сохранить все</button>
+        </div>
+      )}
+
       <div className="space-y-3">
-        {expenseCategories.map((category) => {
+        {sortedExpenseCategories.map((category) => {
           const budget = budgetByCategory.get(category.id);
           const hasLimit = Boolean(budget?.has_limit);
           const progress = hasLimit ? Math.max(0, budget.progress_pct) : 0;
@@ -118,22 +157,31 @@ export default function BudgetsPage() {
                   )}
                 </div>
                 {canManage && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex w-full items-center gap-2 sm:w-auto">
                     <input
                       type="number"
                       aria-label={`Лимит бюджета: ${category.name}`}
                       min="0.01"
                       step="0.01"
-                      className="input-field w-36"
+                      className="input-field min-h-11 min-w-0 flex-1 sm:w-36 sm:flex-none"
                       placeholder="Лимит"
                       value={drafts[category.id] ?? (hasLimit ? budget.amount : '')}
                       onChange={(event) => setDrafts((current) => ({ ...current, [category.id]: event.target.value }))}
                     />
-                    <button type="button" onClick={() => handleSave(category.id)} disabled={savingCategory === category.id} className="btn-primary p-2" title="Сохранить" aria-label={`Сохранить лимит: ${category.name}`}>
+                    {!hasLimit && budget?.spent > 0 && drafts[category.id] === undefined && (
+                      <button
+                        type="button"
+                        onClick={() => setDrafts((current) => ({ ...current, [category.id]: String(Math.ceil(budget.spent / 100) * 100) }))}
+                        className="min-h-11 shrink-0 rounded-lg border border-gray-300 px-2 text-xs text-gray-600 dark:border-gray-600 dark:text-gray-300"
+                      >
+                        По факту
+                      </button>
+                    )}
+                    <button type="button" onClick={() => handleSave(category.id)} disabled={savingCategory === category.id} className="btn-primary min-h-11 min-w-11 p-2" title="Сохранить" aria-label={`Сохранить лимит: ${category.name}`}>
                       <Save size={16} />
                     </button>
                     {hasLimit && (
-                      <button type="button" onClick={() => handleDelete(budget)} className="p-2 text-red-600" title="Удалить лимит" aria-label={`Удалить лимит: ${category.name}`}>
+                      <button type="button" onClick={() => handleDelete(budget)} className="min-h-11 min-w-11 p-2 text-red-600" title="Удалить лимит" aria-label={`Удалить лимит: ${category.name}`}>
                         <Trash2 size={16} />
                       </button>
                     )}

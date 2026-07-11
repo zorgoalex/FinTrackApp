@@ -4,7 +4,7 @@ import { useWorkspace } from '../contexts/WorkspaceContext';
 import useAnalytics from '../hooks/useAnalytics';
 import { formatUnsignedAmount } from '../utils/formatters';
 import { getMonthRange } from '../utils/dateRange';
-import { startOfYear, endOfYear, addMonths, subMonths, addYears, subYears, format } from 'date-fns';
+import { startOfYear, endOfYear, addMonths, subMonths, addYears, subYears, format, parseISO, subDays, differenceInCalendarDays } from 'date-fns';
 import { exportToCSV, buildTextReport } from '../utils/export';
 import { Download, Copy, ChevronDown, Check } from 'lucide-react';
 
@@ -59,6 +59,7 @@ export default function AnalyticsPage() {
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [breakdownTab, setBreakdownTab] = useState('categories');
+  const [categoryFlow, setCategoryFlow] = useState('expense');
   const [copied, setCopied] = useState(false);
 
   // Reset selection when active workspace changes
@@ -125,7 +126,19 @@ export default function AnalyticsPage() {
     return getPeriodDates(period, periodOffset);
   }, [period, periodOffset, customFrom, customTo]);
 
+  const previousRange = useMemo(() => {
+    const currentStart = parseISO(dateFrom);
+    const currentEnd = parseISO(dateTo);
+    const days = differenceInCalendarDays(currentEnd, currentStart) + 1;
+    const previousTo = subDays(currentStart, 1);
+    return {
+      dateFrom: format(subDays(previousTo, days - 1), 'yyyy-MM-dd'),
+      dateTo: format(previousTo, 'yyyy-MM-dd'),
+    };
+  }, [dateFrom, dateTo]);
+
   const { analytics, loading, error } = useAnalytics(selectedWsIds, { dateFrom, dateTo });
+  const { analytics: previousAnalytics, loading: previousLoading } = useAnalytics(selectedWsIds, previousRange);
 
   if (!workspaceId) {
     return (
@@ -136,7 +149,8 @@ export default function AnalyticsPage() {
   }
 
   const { totalIncome, totalExpense, balance, categoryBreakdown, tagBreakdown, operationCount } = analytics;
-  const maxCategoryAmount = Math.max(...categoryBreakdown.map(c => c.amount), 1);
+  const visibleCategoryBreakdown = categoryBreakdown.filter((category) => category.type === categoryFlow);
+  const maxCategoryAmount = Math.max(...visibleCategoryBreakdown.map(c => c.amount), 1);
   const maxTagAmount = Math.max(...tagBreakdown.map(t => t.amount), 1);
 
   const handleExportCSV = () => {
@@ -288,6 +302,16 @@ export default function AnalyticsPage() {
             <SummaryCard label="Баланс" amount={balance} color={balance >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'} bg="bg-gray-50 dark:bg-gray-800" currencySymbol={currencySymbol} />
           </div>
 
+          {!previousLoading && (
+            <div className="mb-6 rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800" data-testid="period-comparison">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">К предыдущему периоду</p>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <ComparisonMetric label="Доходы" current={totalIncome} previous={previousAnalytics.totalIncome} positiveIsGood />
+                <ComparisonMetric label="Расходы" current={totalExpense} previous={previousAnalytics.totalExpense} positiveIsGood={false} />
+              </div>
+            </div>
+          )}
+
           {/* Breakdown tabs (mobile) */}
           <div className="flex border-b border-gray-200 dark:border-gray-700 mb-4">
             <button
@@ -309,7 +333,25 @@ export default function AnalyticsPage() {
           </div>
 
           {breakdownTab === 'categories' ? (
-            <BreakdownTable items={categoryBreakdown} maxAmount={maxCategoryAmount} emptyText="Нет данных по категориям" currencySymbol={currencySymbol} />
+            <>
+              <div className="mb-3 grid grid-cols-2 rounded-lg bg-gray-100 p-1 dark:bg-gray-800">
+                <button
+                  type="button"
+                  onClick={() => setCategoryFlow('expense')}
+                  className={`min-h-10 rounded-md text-sm font-medium ${categoryFlow === 'expense' ? 'bg-white text-red-600 shadow-sm dark:bg-gray-700 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}
+                >
+                  Расходы
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCategoryFlow('income')}
+                  className={`min-h-10 rounded-md text-sm font-medium ${categoryFlow === 'income' ? 'bg-white text-green-600 shadow-sm dark:bg-gray-700 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}
+                >
+                  Доходы
+                </button>
+              </div>
+              <BreakdownTable items={visibleCategoryBreakdown} maxAmount={maxCategoryAmount} emptyText={`Нет данных по ${categoryFlow === 'income' ? 'доходам' : 'расходам'}`} currencySymbol={currencySymbol} />
+            </>
           ) : (
             <BreakdownTable items={tagBreakdown} maxAmount={maxTagAmount} emptyText="Нет данных по тегам" currencySymbol={currencySymbol} />
           )}
@@ -335,6 +377,25 @@ export default function AnalyticsPage() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function ComparisonMetric({ label, current, previous, positiveIsGood }) {
+  const hasBaseline = Number(previous) !== 0;
+  const change = hasBaseline ? ((Number(current) - Number(previous)) / Math.abs(Number(previous))) * 100 : null;
+  const isGood = change === null || change === 0 ? null : positiveIsGood ? change > 0 : change < 0;
+  const color = isGood === null
+    ? 'text-gray-500 dark:text-gray-400'
+    : isGood
+      ? 'text-green-600 dark:text-green-400'
+      : 'text-red-600 dark:text-red-400';
+  return (
+    <div>
+      <p className="text-xs text-gray-500 dark:text-gray-400">{label}</p>
+      <p className={`mt-0.5 font-semibold ${color}`}>
+        {change === null ? 'Нет базы' : `${change > 0 ? '+' : ''}${change.toFixed(1)}%`}
+      </p>
     </div>
   );
 }
