@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Mail, Settings, Trash2, UserPlus, Shield, Crown, Eye, User, Coins } from 'lucide-react';
+import { Users, Mail, Settings, Trash2, UserPlus, Shield, Crown, Eye, User, Coins, Download } from 'lucide-react';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { supabase } from '../contexts/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import ExchangeRateManager from '../components/ExchangeRateManager';
+import { createWorkspaceBackup, downloadWorkspaceBackup } from '../utils/workspaceBackup';
 
 const roleIcons = {
   owner: Crown,
@@ -74,6 +75,8 @@ export default function WorkspaceSettingsPage() {
   const [currencies, setCurrencies] = useState([]);
   const [currencyLoading, setCurrencyLoading] = useState(false);
   const [currencySuccess, setCurrencySuccess] = useState(false);
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [backupError, setBackupError] = useState('');
 
   // Синхронизировать локальное название с загруженным workspace
   useEffect(() => {
@@ -116,6 +119,20 @@ export default function WorkspaceSettingsPage() {
       alert(err.message || 'Ошибка при изменении валюты');
     } finally {
       setCurrencyLoading(false);
+    }
+  };
+
+  const handleDownloadBackup = async () => {
+    setBackupLoading(true);
+    setBackupError('');
+    try {
+      const backup = await createWorkspaceBackup(supabase, currentWorkspace.id);
+      downloadWorkspaceBackup(backup);
+    } catch (backupException) {
+      console.error('WorkspaceSettingsPage: backup error', backupException);
+      setBackupError(backupException.message || 'Не удалось создать резервную копию');
+    } finally {
+      setBackupLoading(false);
     }
   };
 
@@ -402,6 +419,25 @@ export default function WorkspaceSettingsPage() {
                     </p>
                   )}
                 </div>
+              </div>
+
+              <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Резервная копия</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  Скачайте финансовые данные пространства в JSON для хранения или будущей миграции.
+                </p>
+                {backupError && (
+                  <p className="text-sm text-red-600 dark:text-red-400 mb-3">{backupError}</p>
+                )}
+                <button
+                  type="button"
+                  onClick={handleDownloadBackup}
+                  disabled={backupLoading}
+                  className="btn-secondary disabled:opacity-50"
+                >
+                  <Download size={16} className="mr-2" />
+                  {backupLoading ? 'Создаём копию...' : 'Скачать резервную копию'}
+                </button>
               </div>
 
               {/* Опасная зона */}
