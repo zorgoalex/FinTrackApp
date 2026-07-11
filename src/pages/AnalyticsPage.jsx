@@ -236,7 +236,7 @@ export default function AnalyticsPage() {
               {period === p.key && p.key !== 'custom' && (
                 <button
                   onClick={() => setPeriodOffset(o => o - 1)}
-                  className="p-1 text-gray-400 dark:text-gray-500 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+                  className="grid min-h-11 min-w-11 place-items-center rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-gray-700 dark:hover:text-primary-400 transition-colors"
                   aria-label="Предыдущий период"
                 >
                   <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><polygon points="8,1 8,11 2,6" /></svg>
@@ -245,7 +245,7 @@ export default function AnalyticsPage() {
               <button
                 onClick={() => handlePeriodChange(p.key)}
                 title={p.title}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                className={`min-h-11 min-w-11 px-3 py-2 rounded-full text-sm font-medium border transition-colors ${
                   period === p.key
                     ? 'bg-primary-600 dark:bg-primary-500 text-white border-primary-600 dark:border-primary-500'
                     : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:border-primary-400'
@@ -256,7 +256,7 @@ export default function AnalyticsPage() {
               {period === p.key && p.key !== 'custom' && (
                 <button
                   onClick={() => setPeriodOffset(o => o + 1)}
-                  className="p-1 text-gray-400 dark:text-gray-500 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+                  className="grid min-h-11 min-w-11 place-items-center rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-gray-700 dark:hover:text-primary-400 transition-colors"
                   aria-label="Следующий период"
                 >
                   <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><polygon points="4,1 4,11 10,6" /></svg>
@@ -271,9 +271,9 @@ export default function AnalyticsPage() {
       {period === 'custom' && (
         <div className="flex gap-2 mb-4">
           <input type="date" value={customFrom} onInput={e => setCustomFrom(e.currentTarget.value)}
-            className="input-field text-sm" />
+            className="input-field text-sm" aria-label="Начало периода" />
           <input type="date" value={customTo} onInput={e => setCustomTo(e.currentTarget.value)}
-            className="input-field text-sm" />
+            className="input-field text-sm" aria-label="Конец периода" />
         </div>
       )}
 
@@ -316,7 +316,7 @@ export default function AnalyticsPage() {
           <div className="flex border-b border-gray-200 dark:border-gray-700 mb-4">
             <button
               onClick={() => setBreakdownTab('categories')}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              className={`min-h-11 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                 breakdownTab === 'categories' ? 'border-primary-600 dark:border-primary-400 text-primary-600 dark:text-primary-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
               }`}
             >
@@ -324,7 +324,7 @@ export default function AnalyticsPage() {
             </button>
             <button
               onClick={() => setBreakdownTab('tags')}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              className={`min-h-11 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                 breakdownTab === 'tags' ? 'border-primary-600 dark:border-primary-400 text-primary-600 dark:text-primary-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
               }`}
             >
@@ -338,14 +338,14 @@ export default function AnalyticsPage() {
                 <button
                   type="button"
                   onClick={() => setCategoryFlow('expense')}
-                  className={`min-h-10 rounded-md text-sm font-medium ${categoryFlow === 'expense' ? 'bg-white text-red-600 shadow-sm dark:bg-gray-700 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}
+                  className={`min-h-11 rounded-md text-sm font-medium ${categoryFlow === 'expense' ? 'bg-white text-red-600 shadow-sm dark:bg-gray-700 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}
                 >
                   Расходы
                 </button>
                 <button
                   type="button"
                   onClick={() => setCategoryFlow('income')}
-                  className={`min-h-10 rounded-md text-sm font-medium ${categoryFlow === 'income' ? 'bg-white text-green-600 shadow-sm dark:bg-gray-700 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}
+                  className={`min-h-11 rounded-md text-sm font-medium ${categoryFlow === 'income' ? 'bg-white text-green-600 shadow-sm dark:bg-gray-700 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}
                 >
                   Доходы
                 </button>
@@ -360,7 +360,7 @@ export default function AnalyticsPage() {
           <div className="flex gap-2 mt-6" data-testid="export-buttons">
             <button
               onClick={handleExportCSV}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/50 text-sm font-medium transition-colors"
+              className="flex min-h-11 items-center gap-2 px-4 py-2 rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/50 text-sm font-medium transition-colors"
               data-testid="export-csv"
             >
               <Download size={16} />
@@ -368,7 +368,7 @@ export default function AnalyticsPage() {
             </button>
             <button
               onClick={handleCopyReport}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 border border-primary-200 dark:border-primary-800 hover:bg-primary-100 dark:hover:bg-primary-900/50 text-sm font-medium transition-colors"
+              className="flex min-h-11 items-center gap-2 px-4 py-2 rounded-lg bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 border border-primary-200 dark:border-primary-800 hover:bg-primary-100 dark:hover:bg-primary-900/50 text-sm font-medium transition-colors"
               data-testid="export-copy"
             >
               <Copy size={16} />

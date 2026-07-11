@@ -448,7 +448,7 @@ export function OperationPage() {
           onChange={setSelectedMonth}
         />
         <div className="flex gap-2">
-          <button onClick={handleExportOperations} className="btn-secondary" disabled={exporting || loading}>
+          <button onClick={handleExportOperations} className="btn-secondary min-h-11 min-w-11" disabled={exporting || loading} aria-label={exporting ? 'Экспорт операций выполняется' : 'Экспорт операций в CSV'}>
             <Download size={16} className="mr-2" />
             <span className="hidden sm:inline">{exporting ? 'Экспорт...' : 'CSV'}</span>
           </button>
@@ -466,14 +466,14 @@ export function OperationPage() {
           <button
             onClick={() => openAddModal('income')}
             disabled={!permissions.canCreateOperations || loading}
-            className="px-3 py-2 rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 disabled:opacity-50 font-medium text-sm truncate btn-press"
+            className="min-h-11 px-3 py-2 rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 disabled:opacity-50 font-medium text-sm truncate btn-press"
           >
             ＋ Доход
           </button>
           <button
             onClick={() => openAddModal('expense')}
             disabled={!permissions.canCreateOperations || loading}
-            className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800 disabled:opacity-50 font-medium text-sm truncate btn-press"
+            className="min-h-11 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800 disabled:opacity-50 font-medium text-sm truncate btn-press"
           >
             ＋ Расход
           </button>
@@ -481,7 +481,7 @@ export function OperationPage() {
             <button
               onClick={() => openAddModal('transfer')}
               disabled={!permissions.canCreateOperations || loading}
-              className="px-3 py-2 rounded-lg bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800 disabled:opacity-50 font-medium text-sm truncate btn-press"
+              className="min-h-11 px-3 py-2 rounded-lg bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800 disabled:opacity-50 font-medium text-sm truncate btn-press"
             >
               ⇄ Перевод
             </button>
@@ -492,7 +492,7 @@ export function OperationPage() {
               key={i}
               onClick={() => openAddModal(btn.type, btn.category)}
               disabled={!permissions.canCreateOperations || loading}
-              className="px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 disabled:opacity-50 font-medium text-sm truncate hover:bg-gray-100"
+              className="min-h-11 px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 disabled:opacity-50 font-medium text-sm truncate hover:bg-gray-100"
             >
               ＋ {btn.label}
             </button>
@@ -502,7 +502,8 @@ export function OperationPage() {
           {permissions.hasManagementRights && quickButtons.length < 5 && (
             <button
               onClick={() => setShowQuickSettings(true)}
-              className="p-2 rounded-lg text-gray-400 hover:text-gray-300 transition-colors"
+              aria-label="Настроить быстрые кнопки"
+              className="grid min-h-11 min-w-11 place-items-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300 transition-colors"
             >
               <Plus size={16} />
             </button>
@@ -634,7 +635,8 @@ export function OperationPage() {
             )}
             <button
               onClick={() => setAccountSettingsOpen(v => !v)}
-              className={`p-1 rounded transition-colors ${
+              aria-label="Настроить отображение счетов"
+              className={`grid min-h-11 min-w-11 place-items-center rounded-lg transition-colors ${
                 accountSettingsOpen
                   ? 'text-primary-600 dark:text-primary-400'
                   : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
@@ -887,7 +889,7 @@ export function OperationPage() {
                             <button
                               key={t.id}
                               type="button"
-                              className="text-[0.7rem] italic text-green-400 hover:text-green-600 hover:underline cursor-pointer"
+                              className="min-h-11 rounded-full px-2 text-[0.7rem] italic text-green-500 hover:bg-green-50 hover:text-green-700 cursor-pointer dark:hover:bg-green-950/30"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setFilterTags((prev) =>
