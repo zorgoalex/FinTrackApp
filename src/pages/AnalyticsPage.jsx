@@ -270,9 +270,9 @@ export default function AnalyticsPage() {
       {/* Custom date range inputs */}
       {period === 'custom' && (
         <div className="flex gap-2 mb-4">
-          <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)}
+          <input type="date" value={customFrom} onInput={e => setCustomFrom(e.currentTarget.value)}
             className="input-field text-sm" />
-          <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)}
+          <input type="date" value={customTo} onInput={e => setCustomTo(e.currentTarget.value)}
             className="input-field text-sm" />
         </div>
       )}

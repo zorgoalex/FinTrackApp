@@ -22,7 +22,7 @@ function DeleteAlert({ message, onClose }) {
   return (
     <div className="bg-red-900/50 border border-red-500 text-red-300 rounded p-3 text-sm flex items-center justify-between">
       <span>{message}</span>
-      <button onClick={onClose} className="ml-2 text-red-400 hover:text-red-200">
+      <button onClick={onClose} aria-label="Закрыть сообщение" className="ml-2 grid min-h-11 min-w-11 place-items-center rounded-lg text-red-400 hover:bg-red-900/30 hover:text-red-200">
         <X size={16} />
       </button>
     </div>
@@ -39,12 +39,14 @@ export default function DictionariesPage() {
       <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">Справочники</h1>
 
       {/* Tabs */}
-      <div className="flex border-b border-gray-200 dark:border-gray-700 mb-4">
+      <div className="grid grid-cols-3 border-b border-gray-200 dark:border-gray-700 mb-4" role="tablist" aria-label="Разделы справочников">
         {TABS.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            role="tab"
+            aria-selected={activeTab === tab.key}
+            className={`min-h-11 px-2 py-2 text-sm font-medium border-b-2 transition-colors ${
               activeTab === tab.key
                 ? 'border-primary-600 dark:border-primary-400 text-primary-600 dark:text-primary-400'
                 : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
@@ -137,12 +139,16 @@ function CategoriesTab({ workspaceId, canEdit }) {
         <button
           data-testid="archive-toggle"
           onClick={() => setShowArchived((v) => !v)}
-          className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 border border-gray-200 dark:border-gray-700 rounded px-2 py-1"
+          className="flex min-h-11 items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2"
         >
           {showArchived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
           {showArchived ? 'Скрыть архивные' : 'Показать архивные'}
         </button>
       </div>
+
+      {visibleCategories.length === 0 && (
+        <p className="rounded-xl border border-dashed border-gray-300 px-4 py-8 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">{showArchived ? 'Архивных категорий нет' : 'Категорий пока нет'}</p>
+      )}
 
       {visibleCategories.map((cat) =>
         editingId === cat.id ? (
@@ -157,9 +163,9 @@ function CategoriesTab({ workspaceId, canEdit }) {
         ) : (
           <div
             key={cat.id}
-            className={`flex items-center justify-between bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2${cat.is_archived ? ' opacity-60' : ''}`}
+            className={`flex min-h-14 items-center justify-between gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2${cat.is_archived ? ' opacity-60' : ''}`}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <span
                 className="w-3 h-3 rounded-full flex-shrink-0"
                 style={{ backgroundColor: cat.color || '#6B7280' }}
@@ -181,7 +187,7 @@ function CategoriesTab({ workspaceId, canEdit }) {
             {canEdit && (
               <div className="flex items-center gap-1">
                 {!cat.is_archived && (
-                  <button onClick={() => startEdit(cat)} className="p-1 text-gray-400 dark:text-gray-500 hover:text-primary-600 dark:hover:text-primary-400">
+                  <button onClick={() => startEdit(cat)} aria-label={`Редактировать категорию ${cat.name}`} className="grid min-h-11 min-w-11 place-items-center rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-gray-700 dark:hover:text-primary-400">
                     <Pencil size={16} />
                   </button>
                 )}
@@ -189,7 +195,8 @@ function CategoriesTab({ workspaceId, canEdit }) {
                   <button
                     data-testid={`archive-btn-${cat.id}`}
                     onClick={() => handleArchive(cat.id)}
-                    className="p-1 text-gray-400 dark:text-gray-500 hover:text-orange-500 dark:hover:text-orange-400"
+                    aria-label={`Архивировать категорию ${cat.name}`}
+                    className="grid min-h-11 min-w-11 place-items-center rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 hover:text-orange-500 dark:hover:bg-gray-700 dark:hover:text-orange-400"
                     title="Архивировать"
                   >
                     <Archive size={16} />
@@ -199,14 +206,16 @@ function CategoriesTab({ workspaceId, canEdit }) {
                     <button
                       data-testid={`unarchive-btn-${cat.id}`}
                       onClick={() => handleUnarchive(cat.id)}
-                      className="p-1 text-gray-400 dark:text-gray-500 hover:text-primary-600 dark:hover:text-primary-400"
+                      aria-label={`Разархивировать категорию ${cat.name}`}
+                      className="grid min-h-11 min-w-11 place-items-center rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-gray-700 dark:hover:text-primary-400"
                       title="Разархивировать"
                     >
                       <ArchiveRestore size={16} />
                     </button>
                     <button
                       onClick={() => handleDelete(cat.id)}
-                      className="p-1 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400"
+                      aria-label={`Удалить категорию ${cat.name}`}
+                      className="grid min-h-11 min-w-11 place-items-center rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 hover:text-red-600 dark:hover:bg-gray-700 dark:hover:text-red-400"
                       title="Удалить"
                     >
                       <Trash2 size={16} />
@@ -232,7 +241,7 @@ function CategoriesTab({ workspaceId, canEdit }) {
       {canEdit && !showAdd && !editingId && (
         <button
           onClick={() => { resetForm(); setShowAdd(true); }}
-          className="flex items-center gap-1 text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 mt-2"
+          className="flex min-h-11 w-full items-center justify-center gap-1 rounded-xl border border-dashed border-primary-300 text-sm text-primary-600 dark:border-primary-700 dark:text-primary-400 hover:bg-primary-50 hover:text-primary-700 dark:hover:bg-primary-950/30 dark:hover:text-primary-300 mt-2"
         >
           <Plus size={16} /> Добавить категорию
         </button>
@@ -243,19 +252,21 @@ function CategoriesTab({ workspaceId, canEdit }) {
 
 function InlineCategoryForm({ form, setForm, onSave, onCancel, saving }) {
   return (
-    <div className="flex flex-wrap items-center gap-2 bg-white dark:bg-gray-800 border border-primary-200 dark:border-primary-700 rounded-xl px-4 py-2">
+    <div className="grid grid-cols-[1fr_auto] items-center gap-2 bg-white dark:bg-gray-800 border border-primary-200 dark:border-primary-700 rounded-xl p-3 sm:flex sm:flex-wrap">
       <input
         type="text"
         placeholder="Название"
         value={form.name}
         onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-        className="flex-1 min-w-[120px] text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary-500"
+        aria-label="Название категории"
+        className="min-h-11 min-w-0 text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary-500 sm:flex-1 sm:min-w-[120px]"
         autoFocus
       />
       <select
         value={form.type}
         onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
-        className="text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary-500"
+        aria-label="Тип категории"
+        className="min-h-11 text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-primary-500"
       >
         <option value="income">Доход</option>
         <option value="expense">Расход</option>
@@ -264,16 +275,18 @@ function InlineCategoryForm({ form, setForm, onSave, onCancel, saving }) {
         type="color"
         value={form.color}
         onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
-        className="w-8 h-8 p-0 border border-gray-300 dark:border-gray-600 rounded cursor-pointer"
+        aria-label="Цвет категории"
+        className="h-11 w-11 p-1 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer"
       />
       <button
         onClick={onSave}
         disabled={saving || !form.name.trim()}
-        className="p-1 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 disabled:opacity-40"
+        aria-label="Сохранить категорию"
+        className="grid min-h-11 min-w-11 place-items-center rounded-lg text-green-600 dark:text-green-400 hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-950/30 dark:hover:text-green-300 disabled:opacity-40"
       >
         <Check size={18} />
       </button>
-      <button onClick={onCancel} className="p-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300">
+      <button onClick={onCancel} aria-label="Отменить редактирование категории" className="grid min-h-11 min-w-11 place-items-center rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300">
         <X size={18} />
       </button>
     </div>
@@ -351,12 +364,16 @@ function TagsTab({ workspaceId, canEdit }) {
         <button
           data-testid="archive-toggle"
           onClick={() => setShowArchived((v) => !v)}
-          className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 border border-gray-200 dark:border-gray-700 rounded px-2 py-1"
+          className="flex min-h-11 items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2"
         >
           {showArchived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
           {showArchived ? 'Скрыть архивные' : 'Показать архивные'}
         </button>
       </div>
+
+      {visibleTags.length === 0 && (
+        <p className="rounded-xl border border-dashed border-gray-300 px-4 py-8 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">{showArchived ? 'Архивных тегов нет' : 'Тегов пока нет'}</p>
+      )}
 
       {visibleTags.map((tag) =>
         editingId === tag.id ? (
@@ -371,9 +388,9 @@ function TagsTab({ workspaceId, canEdit }) {
         ) : (
           <div
             key={tag.id}
-            className={`flex items-center justify-between bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2${tag.is_archived ? ' opacity-60' : ''}`}
+            className={`flex min-h-14 items-center justify-between gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2${tag.is_archived ? ' opacity-60' : ''}`}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <span
                 className="w-3 h-3 rounded-full flex-shrink-0"
                 style={{ backgroundColor: tag.color || '#6B7280' }}
@@ -386,7 +403,7 @@ function TagsTab({ workspaceId, canEdit }) {
             {canEdit && (
               <div className="flex items-center gap-1">
                 {!tag.is_archived && (
-                  <button onClick={() => startEdit(tag)} className="p-1 text-gray-400 dark:text-gray-500 hover:text-primary-600 dark:hover:text-primary-400">
+                  <button onClick={() => startEdit(tag)} aria-label={`Редактировать тег ${tag.name}`} className="grid min-h-11 min-w-11 place-items-center rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-gray-700 dark:hover:text-primary-400">
                     <Pencil size={16} />
                   </button>
                 )}
@@ -394,7 +411,8 @@ function TagsTab({ workspaceId, canEdit }) {
                   <button
                     data-testid={`archive-btn-${tag.id}`}
                     onClick={() => handleArchive(tag.id)}
-                    className="p-1 text-gray-400 dark:text-gray-500 hover:text-orange-500 dark:hover:text-orange-400"
+                    aria-label={`Архивировать тег ${tag.name}`}
+                    className="grid min-h-11 min-w-11 place-items-center rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 hover:text-orange-500 dark:hover:bg-gray-700 dark:hover:text-orange-400"
                     title="Архивировать"
                   >
                     <Archive size={16} />
@@ -404,14 +422,16 @@ function TagsTab({ workspaceId, canEdit }) {
                     <button
                       data-testid={`unarchive-btn-${tag.id}`}
                       onClick={() => handleUnarchive(tag.id)}
-                      className="p-1 text-gray-400 dark:text-gray-500 hover:text-primary-600 dark:hover:text-primary-400"
+                      aria-label={`Разархивировать тег ${tag.name}`}
+                      className="grid min-h-11 min-w-11 place-items-center rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-gray-700 dark:hover:text-primary-400"
                       title="Разархивировать"
                     >
                       <ArchiveRestore size={16} />
                     </button>
                     <button
                       onClick={() => handleDelete(tag.id)}
-                      className="p-1 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400"
+                      aria-label={`Удалить тег ${tag.name}`}
+                      className="grid min-h-11 min-w-11 place-items-center rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 hover:text-red-600 dark:hover:bg-gray-700 dark:hover:text-red-400"
                       title="Удалить"
                     >
                       <Trash2 size={16} />
@@ -437,7 +457,7 @@ function TagsTab({ workspaceId, canEdit }) {
       {canEdit && !showAdd && !editingId && (
         <button
           onClick={() => { resetForm(); setShowAdd(true); }}
-          className="flex items-center gap-1 text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 mt-2"
+          className="flex min-h-11 w-full items-center justify-center gap-1 rounded-xl border border-dashed border-primary-300 text-sm text-primary-600 dark:border-primary-700 dark:text-primary-400 hover:bg-primary-50 hover:text-primary-700 dark:hover:bg-primary-950/30 dark:hover:text-primary-300 mt-2"
         >
           <Plus size={16} /> Добавить тег
         </button>
@@ -448,29 +468,32 @@ function TagsTab({ workspaceId, canEdit }) {
 
 function InlineTagForm({ form, setForm, onSave, onCancel, saving }) {
   return (
-    <div className="flex flex-wrap items-center gap-2 bg-white dark:bg-gray-800 border border-primary-200 dark:border-primary-700 rounded-xl px-4 py-2">
+    <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 bg-white dark:bg-gray-800 border border-primary-200 dark:border-primary-700 rounded-xl p-3 sm:flex sm:flex-wrap">
       <input
         type="text"
         placeholder="Название"
         value={form.name}
         onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-        className="flex-1 min-w-[120px] text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary-500"
+        aria-label="Название тега"
+        className="min-h-11 min-w-0 text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary-500 sm:flex-1 sm:min-w-[120px]"
         autoFocus
       />
       <input
         type="color"
         value={form.color}
         onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
-        className="w-8 h-8 p-0 border border-gray-300 dark:border-gray-600 rounded cursor-pointer"
+        aria-label="Цвет тега"
+        className="h-11 w-11 p-1 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer"
       />
       <button
         onClick={onSave}
         disabled={saving || !form.name.trim()}
-        className="p-1 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 disabled:opacity-40"
+        aria-label="Сохранить тег"
+        className="grid min-h-11 min-w-11 place-items-center rounded-lg text-green-600 dark:text-green-400 hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-950/30 dark:hover:text-green-300 disabled:opacity-40"
       >
         <Check size={18} />
       </button>
-      <button onClick={onCancel} className="p-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300">
+      <button onClick={onCancel} aria-label="Отменить редактирование тега" className="grid min-h-11 min-w-11 place-items-center rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300">
         <X size={18} />
       </button>
     </div>
@@ -549,12 +572,16 @@ function AccountsTab({ workspaceId, canEdit }) {
       <div className="flex justify-end mb-1">
         <button
           onClick={() => setShowArchived((v) => !v)}
-          className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 border border-gray-200 dark:border-gray-700 rounded px-2 py-1"
+          className="flex min-h-11 items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2"
         >
           {showArchived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
           {showArchived ? 'Скрыть архивные' : 'Показать архивные'}
         </button>
       </div>
+
+      {visibleAccounts.length === 0 && (
+        <p className="rounded-xl border border-dashed border-gray-300 px-4 py-8 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">{showArchived ? 'Архивных счетов нет' : 'Счетов пока нет'}</p>
+      )}
 
       {visibleAccounts.map((acc) =>
         editingId === acc.id ? (
@@ -570,9 +597,9 @@ function AccountsTab({ workspaceId, canEdit }) {
         ) : (
           <div
             key={acc.id}
-            className={`flex items-center justify-between bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2${acc.is_archived ? ' opacity-60' : ''}`}
+            className={`flex min-h-14 items-center justify-between gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2${acc.is_archived ? ' opacity-60' : ''}`}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <span
                 className="w-3 h-3 rounded-full flex-shrink-0"
                 style={{ backgroundColor: acc.color || '#6B7280' }}
@@ -589,14 +616,15 @@ function AccountsTab({ workspaceId, canEdit }) {
             {canEdit && !acc.is_default && (
               <div className="flex items-center gap-1">
                 {!acc.is_archived && (
-                  <button onClick={() => startEdit(acc)} className="p-1 text-gray-400 dark:text-gray-500 hover:text-primary-600 dark:hover:text-primary-400">
+                  <button onClick={() => startEdit(acc)} aria-label={`Редактировать счёт ${acc.name}`} className="grid min-h-11 min-w-11 place-items-center rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-gray-700 dark:hover:text-primary-400">
                     <Pencil size={16} />
                   </button>
                 )}
                 {!acc.is_archived ? (
                   <button
                     onClick={() => handleArchive(acc.id)}
-                    className="p-1 text-gray-400 dark:text-gray-500 hover:text-orange-500 dark:hover:text-orange-400"
+                    aria-label={`Архивировать счёт ${acc.name}`}
+                    className="grid min-h-11 min-w-11 place-items-center rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 hover:text-orange-500 dark:hover:bg-gray-700 dark:hover:text-orange-400"
                     title="Архивировать"
                   >
                     <Archive size={16} />
@@ -605,14 +633,16 @@ function AccountsTab({ workspaceId, canEdit }) {
                   <>
                     <button
                       onClick={() => handleUnarchive(acc.id)}
-                      className="p-1 text-gray-400 dark:text-gray-500 hover:text-primary-600 dark:hover:text-primary-400"
+                      aria-label={`Разархивировать счёт ${acc.name}`}
+                      className="grid min-h-11 min-w-11 place-items-center rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-gray-700 dark:hover:text-primary-400"
                       title="Разархивировать"
                     >
                       <ArchiveRestore size={16} />
                     </button>
                     <button
                       onClick={() => handleDelete(acc.id)}
-                      className="p-1 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400"
+                      aria-label={`Удалить счёт ${acc.name}`}
+                      className="grid min-h-11 min-w-11 place-items-center rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 hover:text-red-600 dark:hover:bg-gray-700 dark:hover:text-red-400"
                       title="Удалить"
                     >
                       <Trash2 size={16} />
@@ -639,7 +669,7 @@ function AccountsTab({ workspaceId, canEdit }) {
       {canEdit && !showAdd && !editingId && (
         <button
           onClick={() => { resetForm(); setShowAdd(true); }}
-          className="flex items-center gap-1 text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 mt-2"
+          className="flex min-h-11 w-full items-center justify-center gap-1 rounded-xl border border-dashed border-primary-300 text-sm text-primary-600 dark:border-primary-700 dark:text-primary-400 hover:bg-primary-50 hover:text-primary-700 dark:hover:bg-primary-950/30 dark:hover:text-primary-300 mt-2"
         >
           <Plus size={16} /> Добавить счёт
         </button>
@@ -650,20 +680,21 @@ function AccountsTab({ workspaceId, canEdit }) {
 
 function InlineAccountForm({ form, setForm, onSave, onCancel, saving, currencies }) {
   return (
-    <div className="flex flex-wrap items-center gap-2 bg-white dark:bg-gray-800 border border-primary-200 dark:border-primary-700 rounded-xl px-4 py-2">
+    <div className="grid grid-cols-[1fr_auto] items-center gap-2 bg-white dark:bg-gray-800 border border-primary-200 dark:border-primary-700 rounded-xl p-3 sm:flex sm:flex-wrap">
       <input
         type="text"
         placeholder="Название счёта"
         value={form.name}
         onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-        className="flex-1 min-w-[120px] text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary-500"
+        aria-label="Название счёта"
+        className="min-h-11 min-w-0 text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary-500 sm:flex-1 sm:min-w-[120px]"
         autoFocus
       />
       <select
         value={form.currency || 'KZT'}
         onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}
-        className="text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary-500"
         aria-label="Валюта счёта"
+        className="min-h-11 text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-primary-500"
       >
         {(currencies || []).map((currency) => (
           <option key={currency.code} value={currency.code}>
@@ -675,16 +706,18 @@ function InlineAccountForm({ form, setForm, onSave, onCancel, saving, currencies
         type="color"
         value={form.color}
         onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
-        className="w-8 h-8 p-0 border border-gray-300 dark:border-gray-600 rounded cursor-pointer"
+        aria-label="Цвет счёта"
+        className="h-11 w-11 p-1 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer"
       />
       <button
         onClick={onSave}
         disabled={saving || !form.name.trim()}
-        className="p-1 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 disabled:opacity-40"
+        aria-label="Сохранить счёт"
+        className="grid min-h-11 min-w-11 place-items-center rounded-lg text-green-600 dark:text-green-400 hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-950/30 dark:hover:text-green-300 disabled:opacity-40"
       >
         <Check size={18} />
       </button>
-      <button onClick={onCancel} className="p-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300">
+      <button onClick={onCancel} aria-label="Отменить редактирование счёта" className="grid min-h-11 min-w-11 place-items-center rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300">
         <X size={18} />
       </button>
     </div>

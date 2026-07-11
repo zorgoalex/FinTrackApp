@@ -76,8 +76,10 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
 
   const typeInfo = OPERATION_TYPES[operation.type] || OPERATION_TYPES.income;
 
-  const set = (field) => (e) =>
-    setForm((prev) => ({ ...prev, [field]: e.target.value }));
+  const set = (field) => (e) => {
+    const value = e.currentTarget.value;
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
 
   const filteredCategories = (operation.type === 'salary'
     ? categories.filter((c) => c.type === 'expense')
@@ -345,7 +347,7 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
             <input
               type="date"
               value={form.operationDate}
-              onChange={set('operationDate')}
+              onInput={set('operationDate')}
               className="input-field"
               required
             />

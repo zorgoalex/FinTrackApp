@@ -13,12 +13,24 @@ const DIRECTION_COLORS = {
   owed_to_me: 'text-green-600 dark:text-green-400',
 };
 
+function formatDebtTotals(debts, direction, fallbackCurrency) {
+  const totals = debts
+    .filter(debt => debt.direction === direction)
+    .reduce((result, debt) => {
+      const currency = debt.currency || fallbackCurrency;
+      result[currency] = (result[currency] || 0) + Number(debt.remaining_amount || 0);
+      return result;
+    }, {});
+  const values = Object.entries(totals).map(([currency, amount]) => formatUnsignedAmount(amount, currency));
+  return values.length ? values.join(' · ') : formatUnsignedAmount(0, fallbackCurrency);
+}
+
 export function DebtsPage() {
   const [searchParams] = useSearchParams();
   const workspaceId = searchParams.get('workspaceId');
-  const { currencySymbol } = useWorkspace();
+  const { currencyCode, currencySymbol } = useWorkspace();
 
-  const { debts, loading, createDebt, updateDebt, archiveDebt, unarchiveDebt, deleteDebt, getDebtHistory, refresh } = useDebts(workspaceId);
+  const { debts, loading, error, createDebt, updateDebt, archiveDebt, unarchiveDebt, deleteDebt, getDebtHistory, refresh } = useDebts(workspaceId);
 
   const [filterDirection, setFilterDirection] = useState(null);
   const [showArchived, setShowArchived] = useState(false);
@@ -33,6 +45,7 @@ export function DebtsPage() {
     if (filterDirection && d.direction !== filterDirection) return false;
     return true;
   });
+  const activeDebts = debts.filter(debt => !debt.is_archived && debt.remaining_amount > 0);
 
   const toggleExpand = useCallback(async (debtId) => {
     if (expandedDebtId === debtId) {
@@ -74,17 +87,33 @@ export function DebtsPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
+    <div className="max-w-2xl mx-auto px-4 py-4 pb-24 space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">Долги и обязательства</h1>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">Долги и обязательства</h1>
+          <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Остатки и история погашений</p>
+        </div>
         <button
           onClick={() => setFormModal('add')}
-          className="px-3 py-2 rounded-xl bg-primary-600 text-white hover:bg-primary-700 transition-colors font-medium text-sm flex items-center gap-1.5"
+          className="min-h-11 shrink-0 px-3 py-2 rounded-xl bg-primary-600 text-white hover:bg-primary-700 transition-colors font-medium text-sm flex items-center gap-1.5"
         >
           <Plus size={16} /> Добавить
         </button>
       </div>
+
+      {!loading && activeDebts.length > 0 && (
+        <div className="grid grid-cols-2 gap-2" aria-label="Сводка по долгам">
+          <div className="rounded-xl border border-red-100 bg-red-50 p-3 dark:border-red-900/50 dark:bg-red-950/30">
+            <p className="text-xs text-red-600 dark:text-red-400">Я должен</p>
+            <p className="mt-1 text-sm font-bold tabular-nums text-red-700 dark:text-red-300">{formatDebtTotals(activeDebts, 'i_owe', currencyCode)}</p>
+          </div>
+          <div className="rounded-xl border border-green-100 bg-green-50 p-3 dark:border-green-900/50 dark:bg-green-950/30">
+            <p className="text-xs text-green-600 dark:text-green-400">Мне должны</p>
+            <p className="mt-1 text-sm font-bold tabular-nums text-green-700 dark:text-green-300">{formatDebtTotals(activeDebts, 'owed_to_me', currencyCode)}</p>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
@@ -96,7 +125,7 @@ export function DebtsPage() {
           <button
             key={String(key)}
             onClick={() => setFilterDirection(key)}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+            className={`min-h-11 px-3 py-2 rounded-full text-sm font-medium border transition-colors ${
               filterDirection === key
                 ? 'bg-primary-600 dark:bg-primary-500 text-white border-primary-600 dark:border-primary-500'
                 : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:border-primary-400 hover:text-primary-600'
@@ -110,7 +139,7 @@ export function DebtsPage() {
 
         <button
           onClick={() => setShowArchived(!showArchived)}
-          className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+          className={`min-h-11 px-3 py-2 rounded-full text-sm font-medium border transition-colors ${
             showArchived
               ? 'bg-gray-700 dark:bg-gray-600 text-white border-gray-700 dark:border-gray-600'
               : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600'
@@ -123,16 +152,20 @@ export function DebtsPage() {
       {deleteError && (
         <div className="text-red-600 dark:text-red-400 text-sm bg-red-50 dark:bg-red-900/20 rounded-lg p-3">{deleteError}</div>
       )}
+      {error && (
+        <div className="text-red-600 dark:text-red-400 text-sm bg-red-50 dark:bg-red-900/20 rounded-lg p-3">{error}</div>
+      )}
 
       {/* Loading */}
       {loading && <div className="text-center py-8 text-gray-500 dark:text-gray-400">Загрузка...</div>}
 
       {/* Empty state */}
       {!loading && filteredDebts.length === 0 && (
-        <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+        <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-5 py-10 text-center text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
           <Banknote size={48} className="mx-auto text-gray-300 dark:text-gray-600 mb-3" />
           <p className="text-sm">Долгов пока нет</p>
-          <p className="text-xs">Добавьте первый долг или обязательство</p>
+          <p className="text-xs mb-5">Добавьте первый долг или обязательство</p>
+          <button onClick={() => setFormModal('add')} className="min-h-11 rounded-xl bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">Добавить долг</button>
         </div>
       )}
 
@@ -192,14 +225,15 @@ export function DebtsPage() {
                   {!debt.is_archived && !isPaidOff && (
                     <button
                       onClick={() => setQuickPayDebt(debt)}
-                      className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 border border-primary-200 dark:border-primary-800 hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors"
+                      className="min-h-11 px-3 py-2 rounded-lg text-sm font-medium bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 border border-primary-200 dark:border-primary-800 hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors"
                     >
                       Оплатить
                     </button>
                   )}
                   <button
                     onClick={() => setFormModal(debt)}
-                    className="p-1.5 rounded-lg text-gray-400 hover:text-primary-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    aria-label="Редактировать долг"
+                    className="grid min-h-11 min-w-11 place-items-center rounded-lg text-gray-400 hover:text-primary-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     title="Редактировать"
                   >
                     <Pencil size={14} />
@@ -207,7 +241,8 @@ export function DebtsPage() {
                   {debt.is_archived ? (
                     <button
                       onClick={() => unarchiveDebt(debt.id)}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                      aria-label="Разархивировать долг"
+                      className="grid min-h-11 min-w-11 place-items-center rounded-lg text-gray-400 hover:text-green-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                       title="Разархивировать"
                     >
                       <ArchiveRestore size={14} />
@@ -215,7 +250,8 @@ export function DebtsPage() {
                   ) : (
                     <button
                       onClick={() => archiveDebt(debt.id)}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                      aria-label="Архивировать долг"
+                      className="grid min-h-11 min-w-11 place-items-center rounded-lg text-gray-400 hover:text-amber-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                       title="Архивировать"
                     >
                       <Archive size={14} />
@@ -224,7 +260,8 @@ export function DebtsPage() {
                   {debt.is_archived && (
                     <button
                       onClick={() => handleDelete(debt.id)}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                      aria-label="Удалить долг"
+                      className="grid min-h-11 min-w-11 place-items-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                       title="Удалить"
                     >
                       <Trash2 size={14} />
@@ -232,7 +269,8 @@ export function DebtsPage() {
                   )}
                   <button
                     onClick={() => toggleExpand(debt.id)}
-                    className="ml-auto p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    aria-label={isExpanded ? 'Скрыть историю платежей' : 'Показать историю платежей'}
+                    className="ml-auto grid min-h-11 min-w-11 place-items-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     title="История платежей"
                   >
                     {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -259,7 +297,7 @@ export function DebtsPage() {
                             )}
                           </div>
                           <span className="text-sm font-semibold tabular-nums text-gray-900 dark:text-gray-100 shrink-0 ml-2">
-                            −{formatUnsignedAmount(op.debt_applied_amount, currencySymbol)}
+                            −{formatUnsignedAmount(op.debt_applied_amount, debt.currency || currencySymbol)}
                           </span>
                         </div>
                       ))}

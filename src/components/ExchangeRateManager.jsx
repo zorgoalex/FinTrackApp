@@ -133,7 +133,7 @@ function ExchangeRateManager({ workspaceId, baseCurrency }) {
           <input
             type="date"
             value={rateDate}
-            onChange={(e) => setRateDate(e.target.value)}
+            onInput={(e) => setRateDate(e.currentTarget.value)}
             disabled={submitting}
             className="input-field text-sm"
           />

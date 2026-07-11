@@ -124,7 +124,7 @@ export default function Layout() {
         {/* Mobile Header */}
         <header className="glass border-b border-gray-200 dark:border-gray-700 px-4 py-3 sticky top-0 z-30 lg:hidden shadow-sm">
           <div className="flex items-center justify-between">
-            <button onClick={toggleSidebar} className="p-2 -ml-2" aria-label="Открыть меню">
+            <button onClick={toggleSidebar} className="grid min-h-11 min-w-11 place-items-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Открыть меню">
               <Menu size={24} className="text-gray-600 dark:text-gray-400" />
             </button>
             <div className="flex-1 min-w-0 mx-2 sm:mx-4">
@@ -134,7 +134,7 @@ export default function Layout() {
               <div id="page-header-actions" className="flex items-center gap-1"></div>
               <button
                 onClick={toggleTheme}
-                className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                className="grid min-h-11 min-w-11 place-items-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                 aria-label={theme === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему'}
               >
                 {theme === 'dark' ? <Sun size={18} className="text-gray-400" /> : <Moon size={18} className="text-gray-600" />}

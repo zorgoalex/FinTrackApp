@@ -127,8 +127,10 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
 
   const typeInfo = OPERATION_TYPES[form.type] || OPERATION_TYPES.income;
 
-  const set = (field) => (e) =>
-    setForm((prev) => ({ ...prev, [field]: e.target.value }));
+  const set = (field) => (e) => {
+    const value = e.currentTarget.value;
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
 
   const filteredCategories = (form.type === 'salary'
     ? categories.filter((c) => c.type === 'expense')
@@ -479,7 +481,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
               aria-label="Дата операции"
               type="date"
               value={form.operationDate}
-              onChange={set('operationDate')}
+              onInput={set('operationDate')}
               className="input-field"
               required
             />

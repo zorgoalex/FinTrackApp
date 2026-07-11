@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { normalizeAmountInput, formatAmountInput } from '../utils/formatters';
 import { useWorkspace } from '../contexts/WorkspaceContext';
+import { useCurrencies } from '../hooks/useCurrencies';
 
 const DIRECTIONS = [
   { value: 'i_owe', label: 'Я должен' },
@@ -9,17 +10,20 @@ const DIRECTIONS = [
 ];
 
 function todayDateString() {
-  return new Date().toISOString().slice(0, 10);
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
 export default function DebtFormModal({ debt, onClose, onSave }) {
-  const { currencySymbol } = useWorkspace();
+  const { workspaceId, currencyCode, currencySymbol } = useWorkspace();
+  const { currencies } = useCurrencies(workspaceId);
   const isEdit = !!debt;
 
   const [form, setForm] = useState({
     title: '',
     counterparty: '',
     direction: 'i_owe',
+    currency: currencyCode,
     initial_amount: '',
     opened_on: todayDateString(),
     due_on: '',
@@ -35,13 +39,14 @@ export default function DebtFormModal({ debt, onClose, onSave }) {
         title: debt.title || '',
         counterparty: debt.counterparty || '',
         direction: debt.direction || 'i_owe',
+        currency: debt.currency || currencyCode,
         initial_amount: String(debt.initial_amount || ''),
         opened_on: debt.opened_on || todayDateString(),
         due_on: debt.due_on || '',
         notes: debt.notes || '',
       });
     }
-  }, [debt]);
+  }, [debt, currencyCode]);
 
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose(); };
@@ -49,7 +54,10 @@ export default function DebtFormModal({ debt, onClose, onSave }) {
     return () => document.removeEventListener('keydown', handler);
   }, [onClose]);
 
-  const set = (field) => (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }));
+  const set = (field) => (e) => {
+    const value = e.currentTarget.value;
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -65,6 +73,7 @@ export default function DebtFormModal({ debt, onClose, onSave }) {
         title: form.title,
         counterparty: form.counterparty,
         direction: form.direction,
+        currency: form.currency,
         initial_amount: amount,
         opened_on: form.opened_on || todayDateString(),
         due_on: form.due_on || null,
@@ -79,13 +88,13 @@ export default function DebtFormModal({ debt, onClose, onSave }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-backdrop-in">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm p-0 sm:items-center sm:p-4 animate-backdrop-in" role="dialog" aria-modal="true" aria-labelledby="debt-form-title">
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 w-full max-w-md max-h-[90vh] overflow-y-auto animate-modal-in">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+          <h2 id="debt-form-title" className="text-base font-semibold text-gray-900 dark:text-gray-100">
             {isEdit ? 'Редактировать долг' : 'Новый долг'}
           </h2>
-          <button onClick={onClose} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300">
+          <button onClick={onClose} aria-label="Закрыть" className="grid min-h-11 min-w-11 place-items-center rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300">
             <X size={20} />
           </button>
         </div>
@@ -99,6 +108,7 @@ export default function DebtFormModal({ debt, onClose, onSave }) {
               onChange={set('direction')}
               className="input-field"
               disabled={isEdit}
+              aria-label="Направление долга"
             >
               {DIRECTIONS.map(d => (
                 <option key={d.value} value={d.value}>{d.label}</option>
@@ -117,6 +127,7 @@ export default function DebtFormModal({ debt, onClose, onSave }) {
               placeholder="Кредит на машину, долг Васе..."
               required
               autoFocus
+              aria-label="Название долга"
             />
           </div>
 
@@ -130,12 +141,14 @@ export default function DebtFormModal({ debt, onClose, onSave }) {
               className="input-field"
               placeholder="Банк, ФИО, компания..."
               required
+              aria-label="Контрагент"
             />
           </div>
 
           {/* Amount */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Сумма, {currencySymbol}</label>
+          <div className="grid grid-cols-[1fr_auto] gap-2">
+            <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Сумма, {form.currency === currencyCode ? currencySymbol : form.currency}</label>
             <input
               type="text"
               inputMode="decimal"
@@ -146,7 +159,15 @@ export default function DebtFormModal({ debt, onClose, onSave }) {
               className="input-field"
               placeholder="0"
               required
+              aria-label="Сумма долга"
             />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Валюта</label>
+              <select value={form.currency} onChange={set('currency')} className="input-field min-w-24" disabled={isEdit} aria-label="Валюта долга">
+                {currencies.map(currency => <option key={currency.code} value={currency.code}>{currency.code}</option>)}
+              </select>
+            </div>
           </div>
 
           {/* Opened date */}
@@ -155,8 +176,9 @@ export default function DebtFormModal({ debt, onClose, onSave }) {
             <input
               type="date"
               value={form.opened_on}
-              onChange={set('opened_on')}
+              onInput={set('opened_on')}
               className="input-field"
+              aria-label="Дата открытия"
             />
           </div>
 
@@ -166,8 +188,9 @@ export default function DebtFormModal({ debt, onClose, onSave }) {
             <input
               type="date"
               value={form.due_on}
-              onChange={set('due_on')}
+              onInput={set('due_on')}
               className="input-field"
+              aria-label="Срок погашения"
             />
           </div>
 
@@ -180,6 +203,7 @@ export default function DebtFormModal({ debt, onClose, onSave }) {
               className="input-field"
               rows={2}
               placeholder="Условия, проценты..."
+              aria-label="Примечание"
             />
           </div>
 
@@ -191,14 +215,14 @@ export default function DebtFormModal({ debt, onClose, onSave }) {
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors font-medium text-sm"
+              className="min-h-11 flex-1 px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors font-medium text-sm"
             >
               Отмена
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 px-4 py-2.5 rounded-xl bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 transition-colors font-medium text-sm"
+              className="min-h-11 flex-1 px-4 py-2.5 rounded-xl bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 transition-colors font-medium text-sm"
             >
               {loading ? 'Сохранение...' : isEdit ? 'Сохранить' : 'Создать'}
             </button>

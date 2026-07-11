@@ -89,7 +89,8 @@ const TagInput = forwardRef(function TagInput(
               <button
                 type="button"
                 onClick={() => removeTag(i)}
-                className="text-indigo-400 hover:text-indigo-700 leading-none"
+                aria-label={`Удалить тег ${tag.name}`}
+                className="grid min-h-7 min-w-7 place-items-center rounded-full text-indigo-400 hover:bg-indigo-100 hover:text-indigo-700 dark:hover:bg-indigo-800 leading-none"
               >
                 ×
               </button>
@@ -110,6 +111,7 @@ const TagInput = forwardRef(function TagInput(
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
+        aria-label="Теги"
         className="input-field text-sm"
         data-testid="tag-input"
       />
@@ -123,7 +125,7 @@ const TagInput = forwardRef(function TagInput(
               type="button"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => addTag(tag)}
-              className="w-full text-left px-3 py-2 text-sm text-gray-900 dark:text-gray-100 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors"
+              className="min-h-11 w-full text-left px-3 py-2 text-sm text-gray-900 dark:text-gray-100 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors"
             >
               #{tag.name}
             </button>
