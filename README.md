@@ -182,6 +182,24 @@ SUPABASE_ACCESS_TOKEN=... npx supabase@latest functions deploy api \
   --project-ref ofnwfuqmwrshojcfhwyk --no-verify-jwt
 ```
 
+### Мониторинг баланса OpenRouter
+
+Edge Function `check-openrouter-balance` сохраняет серверный баланс в закрытой таблице
+`ai_provider_status` и отправляет администратору письмо при переходе через пороги $15, $10 и $5.
+Для неизменившейся проблемы письмо повторяется не чаще раза в сутки.
+
+1. Применить миграции и развернуть функцию: `supabase db push`, затем
+   `supabase functions deploy check-openrouter-balance --no-verify-jwt`.
+2. Добавить Supabase secrets: `OPENROUTER_MANAGEMENT_KEY`, `AI_MONITOR_CRON_SECRET`,
+   `AI_ADMIN_ALERT_EMAILS` и `RESEND_API_KEY`. Это серверные значения без префикса `VITE_`;
+   добавлять их в Vercel не нужно.
+3. В Supabase Cron создать POST-вызов функции каждые 30–60 минут и передавать случайный
+   `AI_MONITOR_CRON_SECRET` в заголовке `x-cron-secret`. Для расписания секрет хранить через
+   Supabase Vault, а не открытым текстом в SQL-миграции.
+
+Пороги переопределяются секретами `AI_BALANCE_WARNING_USD`,
+`AI_BALANCE_CRITICAL_USD` и `AI_BALANCE_SEVERE_USD`.
+
 ---
 
 ## Инфраструктура

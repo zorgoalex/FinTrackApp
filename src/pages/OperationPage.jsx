@@ -275,16 +275,25 @@ export function OperationPage() {
         return;
       }
 
-      const results = await Promise.all(ids.map(async (id) => {
-        const { data } = await supabase.rpc('get_user_email', { user_id: id });
-        return [id, data || null];
-      }));
+      const { data: profiles, error: profilesError } = await supabase.rpc(
+        'get_workspace_member_profiles',
+        { p_workspace_id: workspaceId }
+      );
+      if (profilesError) {
+        setAuthorEmails({});
+        return;
+      }
 
-      setAuthorEmails(Object.fromEntries(results.filter(([, email]) => Boolean(email))));
+      const relevantIds = new Set(ids);
+      setAuthorEmails(Object.fromEntries(
+        (profiles || [])
+          .filter(profile => relevantIds.has(profile.user_id) && profile.email)
+          .map(profile => [profile.user_id, profile.email])
+      ));
     };
 
     loadEmails();
-  }, [operations]);
+  }, [operations, workspaceId]);
 
   const closeModal = () => {
     setIsModalOpen(false);
@@ -553,16 +562,17 @@ export function OperationPage() {
       <div className="flex flex-wrap items-center gap-2 mb-3">
         {[
           { key: null,       label: 'Все', title: 'Все типы' },
-          { key: 'income',   label: '+', title: 'Доходы' },
-          { key: 'expense',  label: '−', title: 'Расходы' },
-          { key: 'transfer', label: '⇄', title: 'Переводы' },
+          { key: 'income',   label: '+ Доходы', title: 'Доходы' },
+          { key: 'expense',  label: '− Расходы', title: 'Расходы' },
+          { key: 'transfer', label: '⇄ Переводы', title: 'Переводы' },
         ].map(({ key, label, title }) => (
           <button
             key={String(key)}
             onClick={() => setFilterType(key)}
             title={title}
+            aria-pressed={filterType === key}
             data-testid={`type-filter-${key ?? 'all'}`}
-            className={`px-3 py-1.5 rounded-full text-sm font-bold border transition-colors ${
+            className={`min-h-11 px-3 py-2 rounded-full text-sm font-semibold border transition-colors ${
               filterType === key
                 ? 'bg-primary-600 dark:bg-primary-500 text-white border-primary-600 dark:border-primary-500'
                 : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:border-primary-400 hover:text-primary-600 dark:hover:text-primary-400'
@@ -572,11 +582,12 @@ export function OperationPage() {
           </button>
         ))}
 
-        <span className="text-gray-300 dark:text-gray-600 select-none">|</span>
+        <span className="hidden text-gray-300 dark:text-gray-600 select-none sm:inline" aria-hidden="true">|</span>
 
         <button
           onClick={() => toggleSort('date')}
-          className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors flex items-center gap-1 ${
+          aria-label={`Сортировать по дате, сейчас ${sortField === 'date' ? (sortDir === 'desc' ? 'сначала новые' : 'сначала старые') : 'не выбрано'}`}
+          className={`min-h-11 px-3 py-2 rounded-full text-sm font-medium border transition-colors flex items-center gap-1 ${
             sortField === 'date'
               ? 'bg-gray-700 dark:bg-gray-600 text-white border-gray-700 dark:border-gray-600'
               : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:border-gray-500'
@@ -587,7 +598,8 @@ export function OperationPage() {
 
         <button
           onClick={() => toggleSort('amount')}
-          className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors flex items-center gap-1 ${
+          aria-label={`Сортировать по сумме, сейчас ${sortField === 'amount' ? (sortDir === 'desc' ? 'по убыванию' : 'по возрастанию') : 'не выбрано'}`}
+          className={`min-h-11 px-3 py-2 rounded-full text-sm font-medium border transition-colors flex items-center gap-1 ${
             sortField === 'amount'
               ? 'bg-gray-700 dark:bg-gray-600 text-white border-gray-700 dark:border-gray-600'
               : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:border-gray-500'

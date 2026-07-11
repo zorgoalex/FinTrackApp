@@ -105,19 +105,6 @@ export function WorkspaceProvider({ children }) {
         }
       }
 
-      const ownerIds = Array.from(new Set(Object.values(ownersByWorkspaceId).filter(Boolean)));
-      let ownersByUserId = {};
-      if (ownerIds.length > 0) {
-        const emailPromises = ownerIds.map(id =>
-          supabase.rpc('get_user_email', { user_id: id }).then(({ data }) => ({ id, email: data }))
-        );
-        const emailResults = await Promise.all(emailPromises);
-        ownersByUserId = emailResults.reduce((acc, { id, email }) => {
-          acc[id] = email || id;
-          return acc;
-        }, {});
-      }
-      
       // Filter out soft-deleted workspaces (they won't be in ownersByWorkspaceId
       // because that query has .is('deleted_at', null))
       const workspaces = (data || [])
@@ -125,7 +112,9 @@ export function WorkspaceProvider({ children }) {
         .map(item => ({
           ...item.workspaces,
           owner_id: ownersByWorkspaceId[item.workspace_id] || null,
-          ownerName: ownersByUserId[ownersByWorkspaceId[item.workspace_id]] || null,
+          ownerName: ownersByWorkspaceId[item.workspace_id] === user.id
+            ? (user.email || 'Вы')
+            : 'Владелец',
           userRole: item.role,
           joinedAt: item.joined_at,
           lastAccessedAt: item.last_accessed_at
