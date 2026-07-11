@@ -45,7 +45,7 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  const login = async (email, password) => {
+  const login = async (identifier, password) => {
     setError("");
     if (!password || password.length < 6) {
       setError("Пароль должен быть не менее 6 символов");
@@ -53,8 +53,23 @@ export function AuthProvider({ children }) {
     }
     setLoading(true);
     try {
-      const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
-      if (authError) throw authError;
+      let data;
+      if (identifier.includes('@')) {
+        const result = await supabase.auth.signInWithPassword({ email: identifier.trim(), password });
+        if (result.error) throw result.error;
+        data = result.data;
+      } else {
+        const { data: loginData, error: invokeError } = await supabase.functions.invoke('login-user', {
+          body: { identifier: identifier.trim(), password }
+        });
+        if (invokeError || loginData?.error) throw new Error(loginData?.error || 'Ошибка входа');
+        const sessionResult = await supabase.auth.setSession({
+          access_token: loginData.access_token,
+          refresh_token: loginData.refresh_token
+        });
+        if (sessionResult.error) throw sessionResult.error;
+        data = sessionResult.data;
+      }
       const supaUser = data.user;
       if (!supaUser) throw new Error("Не удалось получить данные пользователя");
       const profile = { id: supaUser.id, email: supaUser.email };
@@ -69,7 +84,7 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const signUp = async (name, email, password) => {
+  const signUp = async (username, email, password) => {
     setError("");
     if (!password || password.length < 6) {
       setError("Пароль должен быть не менее 6 символов");
@@ -81,7 +96,7 @@ export function AuthProvider({ children }) {
         email,
         password,
         options: {
-          data: { name },
+          data: { name: username, username },
           emailRedirectTo: window.location.origin
         }
       });

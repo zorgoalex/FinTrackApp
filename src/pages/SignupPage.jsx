@@ -6,7 +6,7 @@ export default function SignupPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { signUp, loading, error } = useAuth();
-  const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [localError, setLocalError] = useState("");
@@ -19,7 +19,11 @@ export default function SignupPage() {
       setLocalError("Пароль должен быть не менее 6 символов");
       return;
     }
-    const result = await signUp(name, email, password);
+    if (!/^[\p{L}\p{N}_]{3,21}$/u.test(username)) {
+      setLocalError("Имя аккаунта: 3–21 символ, только буквы, цифры и _");
+      return;
+    }
+    const result = await signUp(username, email, password);
     if (result.success && result.requiresEmailConfirmation) {
       setConfirmationSent(true);
       return;
@@ -44,7 +48,7 @@ export default function SignupPage() {
           <div className="text-red-600 dark:text-red-400 text-sm mb-3">{error || localError}</div>
         )}
         {!confirmationSent && <form onSubmit={handleSubmit} className="space-y-3">
-          <input type="text" className="input-field" placeholder="Имя" value={name} onChange={(e)=>setName(e.target.value)} required />
+          <input type="text" className="input-field" placeholder="Имя аккаунта" value={username} onChange={(e)=>setUsername(e.target.value)} autoComplete="username" minLength={3} maxLength={21} required />
           <input type="email" className="input-field" placeholder="Email" value={email} onChange={(e)=>setEmail(e.target.value)} required />
           <input type="password" className="input-field" placeholder="Пароль" value={password} onChange={(e)=>setPassword(e.target.value)} required />
           <button className="btn-primary w-full" disabled={loading}>

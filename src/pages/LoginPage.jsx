@@ -6,7 +6,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { login, loading, error } = useAuth();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [localError, setLocalError] = useState("");
 
@@ -17,7 +17,7 @@ export default function LoginPage() {
       setLocalError("Пароль должен быть не менее 6 символов");
       return;
     }
-    const ok = await login(email, password);
+    const ok = await login(identifier, password);
     if (ok) {
       const from = location.state?.from;
       navigate(from ? from.pathname + (from.search || "") : "/workspaces", { replace: true });
@@ -33,7 +33,7 @@ export default function LoginPage() {
           <div className="text-red-600 dark:text-red-400 text-sm mb-3">{error || localError}</div>
         )}
         <form onSubmit={handleSubmit} className="space-y-3">
-          <input type="email" className="input-field" placeholder="Email" value={email} onChange={(e)=>setEmail(e.target.value)} required />
+          <input type="text" className="input-field" placeholder="Email или имя аккаунта" value={identifier} onChange={(e)=>setIdentifier(e.target.value)} autoComplete="username" required />
           <input type="password" className="input-field" placeholder="Пароль" value={password} onChange={(e)=>setPassword(e.target.value)} required />
           <button className="btn-primary w-full" disabled={loading}>
             {loading ? "Входим..." : "Войти"}
