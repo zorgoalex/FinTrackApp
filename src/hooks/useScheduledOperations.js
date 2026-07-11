@@ -3,6 +3,7 @@ import { supabase } from '../contexts/AuthContext';
 
 export function useScheduledOperations(workspaceId) {
   const [items, setItems] = useState([]);
+  const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -14,13 +15,28 @@ export function useScheduledOperations(workspaceId) {
     try {
       setLoading(true);
       setError(null);
-      const { data, error: err } = await supabase
-        .from('scheduled_operations')
-        .select('id, workspace_id, user_id, amount, type, description, category_id, account_id, frequency, next_date, is_active, created_at, currency, last_error, last_error_at')
-        .eq('workspace_id', workspaceId)
-        .order('next_date', { ascending: true });
-      if (err) throw err;
-      setItems(data || []);
+      const [itemsResult, historyResult] = await Promise.all([
+        supabase
+          .from('scheduled_operations')
+          .select('id, workspace_id, user_id, amount, type, description, category_id, account_id, frequency, next_date, is_active, created_at, currency, last_error, last_error_at')
+          .eq('workspace_id', workspaceId)
+          .order('next_date', { ascending: true }),
+        supabase
+          .from('operations')
+          .select('id, scheduled_operation_id, scheduled_for_date, operation_date, amount, base_amount, currency, type, description, account_id, created_at')
+          .eq('workspace_id', workspaceId)
+          .not('scheduled_operation_id', 'is', null)
+          .order('scheduled_for_date', { ascending: false })
+          .limit(20),
+      ]);
+      if (itemsResult.error) throw itemsResult.error;
+      setItems(itemsResult.data || []);
+      if (historyResult.error) {
+        console.error('useScheduledOperations: history load error', historyResult.error);
+        setHistory([]);
+      } else {
+        setHistory(historyResult.data || []);
+      }
     } catch (e) {
       console.error('useScheduledOperations: load error', e);
       setError(e.message);
@@ -116,5 +132,5 @@ export function useScheduledOperations(workspaceId) {
     return update(id, { is_active: isActive });
   }, [update]);
 
-  return { items, loading, error, add, update, remove, toggle, refresh: load };
+  return { items, history, loading, error, add, update, remove, toggle, refresh: load };
 }

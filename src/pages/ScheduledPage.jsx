@@ -5,7 +5,7 @@ import { useScheduledOperations } from '../hooks/useScheduledOperations';
 import { useCategories } from '../hooks/useCategories';
 import { useAccounts } from '../hooks/useAccounts';
 import { formatMoney } from '../utils/formatters';
-import { Plus, Trash2, Pause, Play, Pencil, X } from 'lucide-react';
+import { CheckCircle2, Plus, Trash2, Pause, Play, Pencil, X } from 'lucide-react';
 
 const FREQ_LABELS = {
   daily: 'Ежедневно',
@@ -31,7 +31,7 @@ export default function ScheduledPage() {
   const { workspaceId: wsFromCtx } = useWorkspace();
   const workspaceId = searchParams.get('workspaceId') || wsFromCtx;
 
-  const { items, loading, error, add, update, remove, toggle } = useScheduledOperations(workspaceId);
+  const { items, history, loading, error, add, update, remove, toggle } = useScheduledOperations(workspaceId);
   const { categories } = useCategories(workspaceId);
   const { accounts } = useAccounts(workspaceId);
   const activeAccounts = accounts.filter(account => !account.is_archived);
@@ -358,6 +358,29 @@ export default function ScheduledPage() {
           </section>
           ))}
         </div>
+      )}
+
+      {!loading && history.length > 0 && (
+        <section className="mt-7" data-testid="scheduled-history">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">История выполнения</h2>
+            <span className="text-xs text-gray-500 dark:text-gray-400">Последние {history.length}</span>
+          </div>
+          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
+            {history.map((operation, index) => (
+              <div key={operation.id} className={`flex items-center gap-3 p-3 ${index ? 'border-t border-gray-100 dark:border-gray-700' : ''}`}>
+                <CheckCircle2 size={18} className="shrink-0 text-green-600 dark:text-green-400" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-gray-900 dark:text-gray-100">{operation.description || TYPE_LABELS[operation.type] || 'Операция'}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Выполнено за {new Date(`${operation.scheduled_for_date || operation.operation_date}T00:00:00`).toLocaleDateString('ru-RU')}</p>
+                </div>
+                <span className={`shrink-0 text-sm font-semibold tabular-nums ${operation.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
+                  {operation.type === 'income' ? '+' : '−'}{formatMoney(operation.amount, operation.currency || 'KZT')}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
     </div>
   );
