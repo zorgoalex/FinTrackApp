@@ -6,6 +6,7 @@ import { useWorkspace } from '../contexts/WorkspaceContext'
 import { usePermissions } from '../hooks/usePermissions'
 import { useTheme } from '../contexts/ThemeContext'
 import WorkspaceSwitcher from './WorkspaceSwitcher'
+import { BUILD_LABEL } from '../utils/buildInfo'
 
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -95,6 +96,7 @@ export default function Layout() {
             <LogOut size={20} className="text-gray-500 dark:text-gray-400" />
           </button>
         </div>
+        <p className="px-3 text-[10px] text-gray-400 dark:text-gray-600" data-testid="build-version">Версия {BUILD_LABEL}</p>
       </div>
     </>
   );

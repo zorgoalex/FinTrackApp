@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useAuth } from "../contexts/AuthContext";
+import { BUILD_LABEL } from '../utils/buildInfo';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -47,6 +48,9 @@ export default function LoginPage() {
         <div className="mt-4 text-sm text-center text-gray-600 dark:text-gray-400">
           Нет аккаунта? <Link to="/signup" className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300">Зарегистрируйтесь</Link>
         </div>
+        <p className="mt-6 text-center text-[11px] text-gray-400 dark:text-gray-600" data-testid="build-version">
+          Версия {BUILD_LABEL}
+        </p>
       </div>
     </div>
   );
