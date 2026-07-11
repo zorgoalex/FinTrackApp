@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import AuthShell from '../components/AuthShell';
 
 export default function ForgotPasswordPage() {
   const { requestPasswordReset, loading, error } = useAuth();
@@ -14,12 +15,7 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">
-      <div className="card w-full max-w-sm">
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-primary-600 dark:text-primary-400">ФинУчёт</h1>
-        </div>
-        <h2 className="text-xl font-semibold mb-2">Восстановление пароля</h2>
+    <AuthShell eyebrow="Безопасность" title="Восстановление пароля" subtitle="Получите ссылку для создания нового пароля.">
         <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
           Укажите email аккаунта — мы отправим ссылку для создания нового пароля.
         </p>
@@ -39,7 +35,7 @@ export default function ForgotPasswordPage() {
               autoComplete="email"
               required
             />
-            <button className="btn-primary w-full" disabled={loading}>
+            <button className="btn-primary min-h-11 w-full" disabled={loading}>
               {loading ? 'Отправляем...' : 'Отправить ссылку'}
             </button>
           </form>
@@ -49,7 +45,6 @@ export default function ForgotPasswordPage() {
             Вернуться ко входу
           </Link>
         </div>
-      </div>
-    </div>
+    </AuthShell>
   );
 }

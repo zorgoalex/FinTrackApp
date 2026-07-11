@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useAuth } from "../contexts/AuthContext";
-import { BUILD_LABEL } from '../utils/buildInfo';
+import AuthShell from '../components/AuthShell';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -26,17 +26,14 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">
-      <div className="card w-full max-w-sm">
-        <div className="text-center mb-6"><h1 className="text-2xl font-bold text-primary-600 dark:text-primary-400">ФинУчёт</h1></div>
-        <h2 className="text-xl font-semibold mb-4">Вход</h2>
+    <AuthShell eyebrow="С возвращением" title="Войдите в ФинУчёт" subtitle="Продолжите работу со своими бюджетами и пространствами.">
         {(error || localError) && (
           <div className="text-red-600 dark:text-red-400 text-sm mb-3">{error || localError}</div>
         )}
         <form onSubmit={handleSubmit} className="space-y-3">
           <input type="text" className="input-field" placeholder="Email или имя аккаунта" value={identifier} onChange={(e)=>setIdentifier(e.target.value)} autoComplete="username" required />
           <input type="password" className="input-field" placeholder="Пароль" value={password} onChange={(e)=>setPassword(e.target.value)} required />
-          <button className="btn-primary w-full" disabled={loading}>
+          <button className="btn-primary min-h-11 w-full" disabled={loading}>
             {loading ? "Входим..." : "Войти"}
           </button>
         </form>
@@ -48,10 +45,6 @@ export default function LoginPage() {
         <div className="mt-4 text-sm text-center text-gray-600 dark:text-gray-400">
           Нет аккаунта? <Link to="/signup" className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300">Зарегистрируйтесь</Link>
         </div>
-        <p className="mt-6 text-center text-[11px] text-gray-400 dark:text-gray-600" data-testid="build-version">
-          Версия {BUILD_LABEL}
-        </p>
-      </div>
-    </div>
+    </AuthShell>
   );
 }

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import AuthShell from '../components/AuthShell';
 
 export default function SignupPage() {
   const navigate = useNavigate();
@@ -35,10 +36,7 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">
-      <div className="card w-full max-w-sm">
-        <div className="text-center mb-6"><h1 className="text-2xl font-bold text-primary-600 dark:text-primary-400">ФинУчёт</h1></div>
-        <h2 className="text-xl font-semibold mb-4">Регистрация</h2>
+    <AuthShell eyebrow="Новый аккаунт" title="Начните вести финансы" subtitle="Создайте безопасное пространство для личного бюджета или небольшой команды.">
         {confirmationSent && (
           <div className="mb-4 rounded-lg bg-green-50 p-3 text-sm text-green-700 dark:bg-green-900/30 dark:text-green-300">
             Регистрация завершена. Проверьте почту и подтвердите email, затем войдите в приложение.
@@ -51,14 +49,13 @@ export default function SignupPage() {
           <input type="text" className="input-field" placeholder="Имя аккаунта" value={username} onChange={(e)=>setUsername(e.target.value)} autoComplete="username" minLength={3} maxLength={21} required />
           <input type="email" className="input-field" placeholder="Email" value={email} onChange={(e)=>setEmail(e.target.value)} required />
           <input type="password" className="input-field" placeholder="Пароль" value={password} onChange={(e)=>setPassword(e.target.value)} required />
-          <button className="btn-primary w-full" disabled={loading}>
+          <button className="btn-primary min-h-11 w-full" disabled={loading}>
             {loading ? "Создаём..." : "Зарегистрироваться"}
           </button>
         </form>}
         <div className="mt-4 text-sm text-center text-gray-600 dark:text-gray-400">
           Уже есть аккаунт? <Link to="/login" className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300">Войти</Link>
         </div>
-      </div>
-    </div>
+    </AuthShell>
   );
 }

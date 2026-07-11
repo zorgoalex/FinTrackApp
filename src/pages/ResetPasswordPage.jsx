@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import AuthShell from '../components/AuthShell';
 
 export default function ResetPasswordPage() {
   const { updatePassword, loading, error } = useAuth();
@@ -25,12 +26,7 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">
-      <div className="card w-full max-w-sm">
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-primary-600 dark:text-primary-400">ФинУчёт</h1>
-        </div>
-        <h2 className="text-xl font-semibold mb-4">Новый пароль</h2>
+    <AuthShell eyebrow="Безопасность" title="Новый пароль" subtitle="Придумайте пароль длиной не менее шести символов.">
         {updated ? (
           <div className="rounded-lg bg-green-50 p-3 text-sm text-green-700 dark:bg-green-900/30 dark:text-green-300">
             Пароль изменён. Теперь можно войти с новым паролем.
@@ -60,7 +56,7 @@ export default function ResetPasswordPage() {
               minLength={6}
               required
             />
-            <button className="btn-primary w-full" disabled={loading}>
+            <button className="btn-primary min-h-11 w-full" disabled={loading}>
               {loading ? 'Сохраняем...' : 'Сохранить пароль'}
             </button>
           </form>
@@ -70,7 +66,6 @@ export default function ResetPasswordPage() {
             Перейти ко входу
           </Link>
         </div>
-      </div>
-    </div>
+    </AuthShell>
   );
 }
