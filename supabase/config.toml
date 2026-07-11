@@ -7,6 +7,9 @@ project_id = "FinTrackApp"
 [functions.check-openrouter-balance]
 verify_jwt = false
 
+[functions.ai-assistant]
+verify_jwt = true
+
 [api]
 enabled = true
 # Port to use for the API URL.

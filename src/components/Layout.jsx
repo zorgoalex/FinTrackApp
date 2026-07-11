@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
-import { Menu, X, Home, Settings, BarChart3, Calendar, CreditCard, LogOut, BookOpen, Sun, Moon, Receipt, Target, PlusCircle, MoreHorizontal } from 'lucide-react'
+import { Menu, X, Home, Settings, BarChart3, Calendar, CreditCard, LogOut, BookOpen, Sun, Moon, Receipt, Target, PlusCircle, MoreHorizontal, Sparkles } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useWorkspace } from '../contexts/WorkspaceContext'
 import { usePermissions } from '../hooks/usePermissions'
@@ -26,6 +26,7 @@ export default function Layout() {
     { icon: Receipt, label: 'Долги', path: workspaceId ? `/debts?workspaceId=${workspaceId}` : '/debts', matchPath: '/debts' },
     { icon: Target, label: 'Бюджеты', path: workspaceId ? `/budgets?workspaceId=${workspaceId}` : '/budgets', matchPath: '/budgets' },
     { icon: BarChart3, label: 'Аналитика', path: workspaceId ? `/analytics?workspaceId=${workspaceId}` : '/analytics', matchPath: '/analytics' },
+    { icon: Sparkles, label: 'AI-ассистент', path: workspaceId ? `/assistant?workspaceId=${workspaceId}` : '/assistant', matchPath: '/assistant' },
     { icon: BookOpen, label: 'Справочники', path: workspaceId ? `/workspace/${workspaceId}/dictionaries` : '/dictionaries', matchPath: '/dictionaries' },
     ...(canViewWorkspaceSettings ? [{
       icon: Settings,

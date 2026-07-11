@@ -23,6 +23,7 @@ const ScheduledPage = lazy(() => import('./pages/ScheduledPage'));
 const InvitationAcceptPage = lazy(() => import('./pages/InvitationAcceptPage'));
 const DebtsPage = lazy(() => import('./pages/DebtsPage'));
 const BudgetsPage = lazy(() => import('./pages/BudgetsPage'));
+const AssistantPage = lazy(() => import('./pages/AssistantPage'));
 
 function LoadingFallback() {
   return (
@@ -136,6 +137,16 @@ const router = createBrowserRouter([
       {
         index: true,
         element: <ScheduledPage />
+      }
+    ]
+  },
+  {
+    path: '/assistant',
+    element: protectedLayoutWithWorkspace,
+    children: [
+      {
+        index: true,
+        element: <AssistantPage />
       }
     ]
   },
