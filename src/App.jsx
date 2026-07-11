@@ -22,6 +22,7 @@ const DictionariesPage = lazy(() => import('./pages/DictionariesPage'));
 const ScheduledPage = lazy(() => import('./pages/ScheduledPage'));
 const InvitationAcceptPage = lazy(() => import('./pages/InvitationAcceptPage'));
 const DebtsPage = lazy(() => import('./pages/DebtsPage'));
+const BudgetsPage = lazy(() => import('./pages/BudgetsPage'));
 
 function LoadingFallback() {
   return (
@@ -115,6 +116,16 @@ const router = createBrowserRouter([
       {
         index: true,
         element: <DebtsPage />
+      }
+    ]
+  },
+  {
+    path: '/budgets',
+    element: protectedLayoutWithWorkspace,
+    children: [
+      {
+        index: true,
+        element: <BudgetsPage />
       }
     ]
   },

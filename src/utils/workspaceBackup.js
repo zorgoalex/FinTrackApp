@@ -9,7 +9,8 @@ const WORKSPACE_TABLES = [
   ['operations', 'operations'],
   ['scheduled_operations', 'scheduledOperations'],
   ['debts', 'debts'],
-  ['exchange_rates', 'exchangeRates']
+  ['exchange_rates', 'exchangeRates'],
+  ['budgets', 'budgets']
 ];
 
 async function fetchAllWorkspaceRows(supabase, table, workspaceId) {
@@ -55,7 +56,8 @@ export function buildWorkspaceBackupDocument({ workspace, data, exportedAt = new
       operationTags: data.operationTags || [],
       scheduledOperations: data.scheduledOperations || [],
       debts: data.debts || [],
-      exchangeRates: data.exchangeRates || []
+      exchangeRates: data.exchangeRates || [],
+      budgets: data.budgets || []
     }
   };
 }

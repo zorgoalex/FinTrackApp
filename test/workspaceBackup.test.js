@@ -12,7 +12,8 @@ test('builds a versioned workspace backup without invitation secrets', () => {
     data: {
       accounts: [{ id: 'account-1' }],
       operations: [{ id: 'operation-1' }],
-      operationTags: [{ operation_id: 'operation-1', tag_id: 'tag-1' }]
+      operationTags: [{ operation_id: 'operation-1', tag_id: 'tag-1' }],
+      budgets: [{ id: 'budget-1', amount: 50000 }]
     }
   });
 
@@ -21,6 +22,7 @@ test('builds a versioned workspace backup without invitation secrets', () => {
   assert.equal(backup.workspace.base_currency, 'KZT');
   assert.deepEqual(backup.data.accounts, [{ id: 'account-1' }]);
   assert.deepEqual(backup.data.categories, []);
+  assert.deepEqual(backup.data.budgets, [{ id: 'budget-1', amount: 50000 }]);
   assert.equal('workspaceInvitations' in backup.data, false);
 });
 
