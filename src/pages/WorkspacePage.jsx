@@ -6,31 +6,34 @@ import { usePermissions } from '../hooks/usePermissions';
 import useAccounts from '../hooks/useAccounts';
 import AddOperationModal from '../components/AddOperationModal';
 import QuickButtonsSettings from '../components/QuickButtonsSettings';
-import { Plus, BarChart3, TrendingUp, FileText, Pin, Minimize2, Maximize2, Wallet, Settings, Receipt, Eye, EyeOff } from 'lucide-react';
+import { Plus, BarChart3, TrendingUp, FileText, Pin, Minimize2, Maximize2, Wallet, Settings, Receipt, Eye, EyeOff, ArrowUp, ArrowDown, Landmark } from 'lucide-react';
 import { formatUnsignedAmount, formatSignedAmount as formatBalanceFn } from '../utils/formatters';
 import useCategories from '../hooks/useCategories';
 import useDebts from '../hooks/useDebts';
+import useDashboardPreferences from '../hooks/useDashboardPreferences';
+import useNetWorth from '../hooks/useNetWorth';
 
-function WidgetSettingsDropdown({ dashboardBlocks, setDashboardBlocks, workspaceId }) {
+const widgetLabels = {
+  summary: 'Итоги периода', accounts: 'Счета', net_worth: 'Чистый капитал',
+  debts: 'Долги', recent_operations: 'Последние операции',
+};
+
+function WidgetSettingsDropdown({ dashboard }) {
+  const { preferences, toggleWidget, moveWidget, toggleWidgetSize, saving } = dashboard;
   return (
-    <div className="absolute right-0 top-full mt-2 z-50 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-3 border border-gray-200 dark:border-gray-700 min-w-[180px]">
-      <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Показывать на главной:</p>
-      <label className="flex items-center gap-2 cursor-pointer py-0.5">
-        <input
-          type="checkbox"
-          checked={dashboardBlocks.debts !== false}
-          onChange={() => {
-            setDashboardBlocks(prev => {
-              const next = { ...prev, debts: !prev.debts };
-              localStorage.setItem(`dashboardBlocks_${workspaceId}`, JSON.stringify(next));
-              return next;
-            });
-          }}
-          className="rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500"
-        />
-        <Receipt size={14} className="text-gray-500 dark:text-gray-400" />
-        <span className="text-sm text-gray-700 dark:text-gray-300">Долги</span>
-      </label>
+    <div className="absolute right-0 top-full mt-2 z-50 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-3 border border-gray-200 dark:border-gray-700 min-w-[260px]">
+      <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">Видимость и порядок · синхронизировано</p>
+      {preferences.widget_order.map((widget, index) => (
+        <div key={widget} className="flex items-center gap-2 py-1">
+          <input type="checkbox" checked={!preferences.hidden_widgets.includes(widget)} onChange={() => toggleWidget(widget)} disabled={saving} className="rounded border-gray-300 text-primary-600" />
+          <span className="min-w-0 flex-1 text-sm text-gray-700 dark:text-gray-300">{widgetLabels[widget]}</span>
+          {widget !== 'summary' && <button disabled={saving} onClick={() => toggleWidgetSize(widget)} className="min-w-9 rounded px-1 py-0.5 text-[10px] text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700" title="Размер виджета">{preferences.widget_sizes[widget] === 'wide' ? '2/2' : '1/2'}</button>}
+          {widget !== 'summary' ? <>
+            <button disabled={saving || index === 1} onClick={() => moveWidget(widget, -1)} className="rounded p-1 disabled:opacity-25" aria-label={`Поднять ${widgetLabels[widget]}`}><ArrowUp size={14} /></button>
+            <button disabled={saving || index === preferences.widget_order.length - 1} onClick={() => moveWidget(widget, 1)} className="rounded p-1 disabled:opacity-25" aria-label={`Опустить ${widgetLabels[widget]}`}><ArrowDown size={14} /></button>
+          </> : <span className="px-2 text-[10px] text-gray-400">фикс.</span>}
+        </div>
+      ))}
     </div>
   );
 }
@@ -69,75 +72,44 @@ export default function WorkspacePage() {
   const { categories } = useCategories(workspaceId);
   const { accounts, loadBalances } = useAccounts(workspaceId);
   const { activeDebts } = useDebts(workspaceId);
+  const dashboard = useDashboardPreferences(workspaceId);
+  const netWorth = useNetWorth(workspaceId);
   const [balances, setBalances] = useState({});
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
 
-  // Dashboard block visibility (localStorage per workspace)
-  const [dashboardBlocks, setDashboardBlocks] = useState(() => {
-    if (!workspaceId) return { debts: true };
-    try {
-      const stored = localStorage.getItem(`dashboardBlocks_${workspaceId}`);
-      return stored ? { debts: true, ...JSON.parse(stored) } : { debts: true };
-    } catch { return { debts: true }; }
-  });
   const [dashboardSettingsOpen, setDashboardSettingsOpen] = useState(false);
 
-  // Accounts "summary only" mode (localStorage per workspace)
-  const [accountsSummaryOnly, setAccountsSummaryOnly] = useState(() => {
-    if (!workspaceId) return false;
-    return localStorage.getItem(`accountsSummaryOnly_${workspaceId}`) === 'true';
-  });
+  const [accountsSummaryOnly, setAccountsSummaryOnly] = useState(false);
 
-  // Visible accounts from localStorage (null = all visible)
-  const [visibleAccountIds, setVisibleAccountIds] = useState(() => {
-    if (!workspaceId) return null;
-    const stored = localStorage.getItem(`visibleAccounts_${workspaceId}`);
-    if (!stored) return null;
-    try { return JSON.parse(stored); } catch { return null; }
-  });
+  const [visibleAccountIds, setVisibleAccountIds] = useState(null);
 
-  // Sync visibleAccountIds when workspaceId changes
   useEffect(() => {
-    if (!workspaceId) { setVisibleAccountIds(null); return; }
-    const stored = localStorage.getItem(`visibleAccounts_${workspaceId}`);
-    if (!stored) { setVisibleAccountIds(null); return; }
-    try { setVisibleAccountIds(JSON.parse(stored)); } catch { setVisibleAccountIds(null); }
-  }, [workspaceId]);
+    const accountSettings = dashboard.preferences.widget_settings?.accounts || {};
+    setVisibleAccountIds(Array.isArray(accountSettings.visibleAccountIds) ? accountSettings.visibleAccountIds : null);
+    setAccountsSummaryOnly(Boolean(accountSettings.summaryOnly));
+  }, [dashboard.preferences.widget_settings]);
 
-  // Sync dashboard settings when workspaceId changes
-  useEffect(() => {
-    if (!workspaceId) return;
-    try {
-      const stored = localStorage.getItem(`dashboardBlocks_${workspaceId}`);
-      setDashboardBlocks(stored ? { debts: true, ...JSON.parse(stored) } : { debts: true });
-    } catch { setDashboardBlocks({ debts: true }); }
-    setAccountsSummaryOnly(localStorage.getItem(`accountsSummaryOnly_${workspaceId}`) === 'true');
-  }, [workspaceId]);
+  const saveAccountDisplaySettings = useCallback((settings) => dashboard.save({
+    ...dashboard.preferences,
+    widget_settings: {
+      ...dashboard.preferences.widget_settings,
+      accounts: { ...dashboard.preferences.widget_settings?.accounts, ...settings },
+    },
+  }), [dashboard]);
 
   const activeAccounts = useMemo(() => accounts.filter(a => !a.is_archived), [accounts]);
 
   const toggleAccountVisibility = useCallback((accountId) => {
-    setVisibleAccountIds(prev => {
-      // If null (all visible), start with all IDs minus the toggled one
-      const allIds = activeAccounts.map(a => a.id);
-      const current = prev || allIds;
-      let next;
-      if (current.includes(accountId)) {
-        next = current.filter(id => id !== accountId);
-        // Don't allow empty selection
-        if (next.length === 0) return prev;
-      } else {
-        next = [...current, accountId];
-      }
-      // If all selected, store null (= all)
-      if (next.length >= allIds.length) {
-        localStorage.removeItem(`visibleAccounts_${workspaceId}`);
-        return null;
-      }
-      localStorage.setItem(`visibleAccounts_${workspaceId}`, JSON.stringify(next));
-      return next;
-    });
-  }, [activeAccounts, workspaceId]);
+    const allIds = activeAccounts.map(a => a.id);
+    const current = visibleAccountIds || allIds;
+    const selected = current.includes(accountId)
+      ? current.filter(id => id !== accountId)
+      : [...current, accountId];
+    if (selected.length === 0) return;
+    const next = selected.length >= allIds.length ? null : selected;
+    setVisibleAccountIds(next);
+    saveAccountDisplaySettings({ visibleAccountIds: next });
+  }, [activeAccounts, visibleAccountIds, saveAccountDisplaySettings]);
 
   const displayedAccounts = useMemo(() => {
     if (!visibleAccountIds) return activeAccounts;
@@ -208,6 +180,19 @@ export default function WorkspacePage() {
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 3);
   }, [operations, categories]);
+
+  const isWidgetVisible = useCallback(
+    (widget) => !dashboard.preferences.hidden_widgets.includes(widget),
+    [dashboard.preferences.hidden_widgets]
+  );
+  const widgetOrder = useCallback(
+    (widget) => dashboard.preferences.widget_order.indexOf(widget),
+    [dashboard.preferences.widget_order]
+  );
+  const widgetSpan = useCallback(
+    (widget) => dashboard.preferences.widget_sizes[widget] === 'wide' ? 'lg:col-span-2' : '',
+    [dashboard.preferences.widget_sizes]
+  );
 
   const goToWorkspaceSelect = () => {
     navigate('/workspaces');
@@ -284,6 +269,7 @@ export default function WorkspacePage() {
               <button onClick={openAnalytics} className="btn-primary min-h-11"><BarChart3 size={16} className="mr-2" />Аналитика</button>
             </div>
           </header>
+          <div className={isWidgetVisible('summary') ? 'contents' : 'hidden'}>
           {/* Summary blocks */}
           {operationsLoading ? (
             <div className="card animate-pulse sm:hidden">
@@ -456,6 +442,7 @@ export default function WorkspacePage() {
             </div>
           )}
           </div>
+          </div>
 
           {operationsError && (
             <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl p-3 text-sm text-red-700 dark:text-red-400">
@@ -520,13 +507,13 @@ export default function WorkspacePage() {
             >
               {dashboardSettingsOpen ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
-            {dashboardSettingsOpen && <WidgetSettingsDropdown dashboardBlocks={dashboardBlocks} setDashboardBlocks={setDashboardBlocks} workspaceId={workspaceId} />}
+            {dashboardSettingsOpen && <WidgetSettingsDropdown dashboard={dashboard} />}
           </div>
 
           <div className="grid items-start gap-4 lg:grid-cols-2">
           {/* Account balances */}
-          {activeAccounts.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border border-gray-200 dark:border-gray-700">
+          {isWidgetVisible('accounts') && activeAccounts.length > 0 && (
+            <div style={{ order: widgetOrder('accounts') }} className={`${widgetSpan('accounts')} bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border border-gray-200 dark:border-gray-700`}>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <Wallet size={16} className="text-gray-500 dark:text-gray-400" />
@@ -559,15 +546,9 @@ export default function WorkspacePage() {
                       type="checkbox"
                       checked={accountsSummaryOnly}
                       onChange={() => {
-                        setAccountsSummaryOnly(prev => {
-                          const next = !prev;
-                          if (next) {
-                            localStorage.setItem(`accountsSummaryOnly_${workspaceId}`, 'true');
-                          } else {
-                            localStorage.removeItem(`accountsSummaryOnly_${workspaceId}`);
-                          }
-                          return next;
-                        });
+                        const next = !accountsSummaryOnly;
+                        setAccountsSummaryOnly(next);
+                        saveAccountDisplaySettings({ summaryOnly: next });
                       }}
                       className="rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500"
                     />
@@ -634,9 +615,22 @@ export default function WorkspacePage() {
             </div>
           )}
 
+          {isWidgetVisible('net_worth') && (
+            <div style={{ order: widgetOrder('net_worth') }} className={`${widgetSpan('net_worth')} bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border border-gray-200 dark:border-gray-700`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2"><Landmark size={16} className="text-primary-600 dark:text-primary-400" /><h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Чистый капитал</h3></div>
+                <button onClick={() => navigate(workspaceId ? `/assets?workspaceId=${workspaceId}` : '/assets')} className="text-xs text-primary-600 dark:text-primary-400">Подробнее</button>
+              </div>
+              {netWorth.loading ? <div className="mt-4 h-8 animate-pulse rounded bg-gray-100 dark:bg-gray-700" /> : <>
+                <p className={`mt-3 text-2xl font-bold tabular-nums ${(netWorth.report?.net_worth || 0) >= 0 ? 'text-primary-600 dark:text-primary-400' : 'text-red-600 dark:text-red-400'}`}>{formatSignedAmount(netWorth.report?.net_worth || 0)}</p>
+                <div className="mt-3 grid grid-cols-2 gap-3 border-t border-gray-100 pt-3 text-xs dark:border-gray-700"><div><span className="text-gray-500">Активы</span><p className="mt-1 font-semibold text-green-600 dark:text-green-400">{formatUnsignedAmount(netWorth.report?.total_assets || 0, currencySymbol)}</p></div><div><span className="text-gray-500">Обязательства</span><p className="mt-1 font-semibold text-red-600 dark:text-red-400">{formatUnsignedAmount(netWorth.report?.total_liabilities || 0, currencySymbol)}</p></div></div>
+              </>}
+            </div>
+          )}
+
           {/* Debts widget */}
-          {dashboardBlocks.debts !== false && activeDebts.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border border-gray-200 dark:border-gray-700">
+          {isWidgetVisible('debts') && activeDebts.length > 0 && (
+            <div style={{ order: widgetOrder('debts') }} className={`${widgetSpan('debts')} bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border border-gray-200 dark:border-gray-700`}>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <Receipt size={16} className="text-gray-500 dark:text-gray-400" />
@@ -680,7 +674,7 @@ export default function WorkspacePage() {
             </div>
           )}
 
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border border-gray-200 dark:border-gray-700">
+          {isWidgetVisible('recent_operations') && <div style={{ order: widgetOrder('recent_operations') }} className={`${widgetSpan('recent_operations')} bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border border-gray-200 dark:border-gray-700`}>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Последние операции</h3>
               <button onClick={openOperations} className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300">
@@ -725,7 +719,7 @@ export default function WorkspacePage() {
                 <p className="text-xs">Добавьте первую запись</p>
               </div>
             )}
-          </div>
+          </div>}
           </div>
         </div>
       </div>
