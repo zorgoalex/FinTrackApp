@@ -16,7 +16,7 @@ export function useAccounts(workspaceId) {
       setError(null);
       const { data, error: loadErr } = await supabase
         .from('accounts')
-        .select('id, workspace_id, name, color, currency, is_default, is_archived, created_at, updated_at')
+        .select('id, workspace_id, name, color, currency, opening_balance, opening_date, is_default, is_archived, created_at, updated_at')
         .eq('workspace_id', workspaceId)
         .order('is_default', { ascending: false })
         .order('name', { ascending: true });
@@ -32,13 +32,20 @@ export function useAccounts(workspaceId) {
     }
   }, [workspaceId]);
 
-  const addAccount = useCallback(async ({ name, color, currency }) => {
+  const addAccount = useCallback(async ({ name, color, currency, opening_balance, opening_date }) => {
     if (!workspaceId) return null;
     try {
       const { data, error: insertErr } = await supabase
         .from('accounts')
-        .insert([{ workspace_id: workspaceId, name: name.trim(), color: color || '#6B7280', currency: currency || 'KZT' }])
-        .select('id, workspace_id, name, color, currency, is_default, is_archived, created_at, updated_at')
+        .insert([{
+          workspace_id: workspaceId,
+          name: name.trim(),
+          color: color || '#6B7280',
+          currency: currency || 'KZT',
+          opening_balance: Number(opening_balance) || 0,
+          opening_date: opening_date || new Date().toISOString().slice(0, 10),
+        }])
+        .select('id, workspace_id, name, color, currency, opening_balance, opening_date, is_default, is_archived, created_at, updated_at')
         .single();
 
       if (insertErr) throw insertErr;
@@ -51,19 +58,21 @@ export function useAccounts(workspaceId) {
     }
   }, [workspaceId, loadAccounts]);
 
-  const updateAccount = useCallback(async (id, { name, color }) => {
+  const updateAccount = useCallback(async (id, { name, color, opening_balance, opening_date }) => {
     if (!workspaceId) return null;
     try {
       const updates = {};
       if (name !== undefined) updates.name = name.trim();
       if (color !== undefined) updates.color = color;
+      if (opening_balance !== undefined) updates.opening_balance = Number(opening_balance) || 0;
+      if (opening_date !== undefined) updates.opening_date = opening_date;
 
       const { data, error: updateErr } = await supabase
         .from('accounts')
         .update(updates)
         .eq('id', id)
         .eq('workspace_id', workspaceId)
-        .select('id, workspace_id, name, color, currency, is_default, is_archived, created_at, updated_at')
+        .select('id, workspace_id, name, color, currency, opening_balance, opening_date, is_default, is_archived, created_at, updated_at')
         .single();
 
       if (updateErr) throw updateErr;
@@ -168,6 +177,27 @@ export function useAccounts(workspaceId) {
     }
   }, [workspaceId]);
 
+  const loadBalanceHistory = useCallback(async ({ dateFrom, dateTo, granularity = 'day', accountIds = null }) => {
+    if (!workspaceId || !dateFrom || !dateTo) return [];
+    const { data, error: rpcErr } = await supabase.rpc('get_account_balance_history', {
+      p_workspace_id: workspaceId,
+      p_date_from: dateFrom,
+      p_date_to: dateTo,
+      p_granularity: granularity,
+      p_account_ids: accountIds,
+    });
+    if (rpcErr) throw rpcErr;
+    return (data || []).map((row) => ({
+      ...row,
+      opening_balance: Number(row.opening_balance) || 0,
+      change: Number(row.change) || 0,
+      closing_balance: Number(row.closing_balance) || 0,
+      opening_base_balance: Number(row.opening_base_balance) || 0,
+      base_change: Number(row.base_change) || 0,
+      closing_base_balance: Number(row.closing_base_balance) || 0,
+    }));
+  }, [workspaceId]);
+
   useEffect(() => {
     loadAccounts();
   }, [loadAccounts]);
@@ -182,6 +212,7 @@ export function useAccounts(workspaceId) {
     archiveAccount,
     unarchiveAccount,
     loadBalances,
+    loadBalanceHistory,
     refresh: loadAccounts,
   };
 }

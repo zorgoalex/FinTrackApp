@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Copy, Save, Trash2 } from 'lucide-react';
+import { CheckCircle2, Copy, Pause, Play, Plus, Save, Target, Trash2 } from 'lucide-react';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { usePermissions } from '../hooks/usePermissions';
 import useCategories from '../hooks/useCategories';
 import useBudgets from '../hooks/useBudgets';
+import useSavingsGoals from '../hooks/useSavingsGoals';
+import useAccounts from '../hooks/useAccounts';
 import MonthPicker from '../components/MonthPicker';
 import { formatMoney } from '../utils/formatters';
 import { getMonthRange } from '../utils/dateRange';
@@ -25,6 +27,7 @@ export default function BudgetsPage() {
   const { categories } = useCategories(workspaceId);
   const { budgets, loading, error, saveBudget, deleteBudget, copyPreviousMonth } = useBudgets(workspaceId, month);
   const [drafts, setDrafts] = useState({});
+  const [rolloverDrafts, setRolloverDrafts] = useState({});
   const [savingCategory, setSavingCategory] = useState('');
   const [actionError, setActionError] = useState('');
   const currency = currentWorkspace?.base_currency || 'KZT';
@@ -60,8 +63,16 @@ export default function BudgetsPage() {
     setSavingCategory(categoryId);
     setActionError('');
     try {
-      await saveBudget(categoryId, value);
+      await saveBudget(categoryId, value, rolloverDrafts[categoryId] || {
+        rollover_mode: existing?.rollover_mode || 'none',
+        carry_cap: existing?.carry_cap ?? '',
+      });
       setDrafts((current) => {
+        const next = { ...current };
+        delete next[categoryId];
+        return next;
+      });
+      setRolloverDrafts((current) => {
         const next = { ...current };
         delete next[categoryId];
         return next;
@@ -87,7 +98,11 @@ export default function BudgetsPage() {
     setActionError('');
     try {
       for (const categoryId of dirtyCategoryIds) {
-        await saveBudget(categoryId, drafts[categoryId]);
+        const existing = budgetByCategory.get(categoryId);
+        await saveBudget(categoryId, drafts[categoryId], rolloverDrafts[categoryId] || {
+          rollover_mode: existing?.rollover_mode || 'none',
+          carry_cap: existing?.carry_cap ?? '',
+        });
       }
       setDrafts({});
     } catch (saveException) {
@@ -193,6 +208,11 @@ export default function BudgetsPage() {
                       {exceeded ? ` — превышение ${formatMoney(Math.abs(budget.remaining), currency)}` : ''}
                     </p>
                   )}
+                  {hasLimit && budget.carryover_amount !== 0 && (
+                    <p className="mt-1 text-xs text-primary-600 dark:text-primary-400">
+                      Перенос: {formatMoney(budget.carryover_amount, currency)} · доступно {formatMoney(budget.effective_amount, currency)}
+                    </p>
+                  )}
                 </div>
                 {canManage && (
                   <div className="flex w-full items-center gap-2 sm:w-auto">
@@ -226,6 +246,40 @@ export default function BudgetsPage() {
                   </div>
                 )}
               </div>
+              {canManage && (
+                <div className="mt-3 grid gap-2 border-t border-gray-100 pt-3 dark:border-gray-700 sm:grid-cols-2">
+                  <label className="text-xs text-gray-500 dark:text-gray-400">
+                    Перенос на следующий месяц
+                    <select
+                      className="input-field mt-1 min-h-11 w-full"
+                      value={rolloverDrafts[category.id]?.rollover_mode ?? budget?.rollover_mode ?? 'none'}
+                      onChange={(event) => setRolloverDrafts((current) => ({
+                        ...current,
+                        [category.id]: { ...current[category.id], rollover_mode: event.target.value, carry_cap: current[category.id]?.carry_cap ?? budget?.carry_cap ?? '' },
+                      }))}
+                    >
+                      <option value="none">Не переносить</option>
+                      <option value="unused">Только неиспользованный остаток</option>
+                      <option value="full">Весь лимит</option>
+                    </select>
+                  </label>
+                  <label className="text-xs text-gray-500 dark:text-gray-400">
+                    Максимум переноса (необязательно)
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      className="input-field mt-1 min-h-11 w-full"
+                      placeholder="Без ограничения"
+                      value={rolloverDrafts[category.id]?.carry_cap ?? budget?.carry_cap ?? ''}
+                      onChange={(event) => setRolloverDrafts((current) => ({
+                        ...current,
+                        [category.id]: { ...current[category.id], rollover_mode: current[category.id]?.rollover_mode ?? budget?.rollover_mode ?? 'none', carry_cap: event.target.value },
+                      }))}
+                    />
+                  </label>
+                </div>
+              )}
               {hasLimit && (
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
                   <div
@@ -244,6 +298,71 @@ export default function BudgetsPage() {
         )}
         {loading && <div className="text-center text-sm text-gray-500">Загрузка бюджетов...</div>}
       </div>
+      <SavingsGoalsSection workspaceId={workspaceId} currency={currency} canManage={canManage} />
     </div>
+  );
+}
+
+function SavingsGoalsSection({ workspaceId, currency, canManage }) {
+  const { goals, loading, error, addGoal, addContribution, transitionGoal } = useSavingsGoals(workspaceId);
+  const { accounts } = useAccounts(workspaceId);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ name: '', targetAmount: '', targetDate: '', accountId: '' });
+  const [contributions, setContributions] = useState({});
+  const [actionError, setActionError] = useState('');
+
+  const submitGoal = async (event) => {
+    event.preventDefault();
+    setActionError('');
+    try {
+      await addGoal(form);
+      setForm({ name: '', targetAmount: '', targetDate: '', accountId: '' });
+      setShowForm(false);
+    } catch (exception) { setActionError(exception.message || 'Не удалось создать цель'); }
+  };
+
+  const contribute = async (goal) => {
+    const amount = Number(contributions[goal.id]);
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    setActionError('');
+    try {
+      await addContribution(goal.id, amount);
+      setContributions((current) => ({ ...current, [goal.id]: '' }));
+    } catch (exception) { setActionError(exception.message || 'Не удалось добавить накопление'); }
+  };
+
+  return (
+    <section className="mt-10 border-t border-gray-200 pt-8 dark:border-gray-700">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div><h2 className="flex items-center gap-2 text-xl font-bold"><Target size={20} /> Накопительные цели</h2><p className="text-sm text-gray-600 dark:text-gray-400">Отдельный учёт накоплений и прогресса</p></div>
+        {canManage && <button type="button" onClick={() => setShowForm((value) => !value)} className="btn-primary min-h-11"><Plus size={16} className="mr-1" /> Цель</button>}
+      </div>
+      {(error || actionError) && <p role="alert" className="mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-300">{actionError || error}</p>}
+      {showForm && (
+        <form onSubmit={submitGoal} className="card mb-4 grid gap-3 sm:grid-cols-2">
+          <input className="input-field min-h-11" placeholder="Название цели" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required />
+          <input className="input-field min-h-11" type="number" min="0.01" step="0.01" placeholder="Целевая сумма" value={form.targetAmount} onChange={(event) => setForm((current) => ({ ...current, targetAmount: event.target.value }))} required />
+          <input className="input-field min-h-11" type="date" value={form.targetDate} onChange={(event) => setForm((current) => ({ ...current, targetDate: event.target.value }))} aria-label="Срок цели" />
+          <select className="input-field min-h-11" value={form.accountId} onChange={(event) => setForm((current) => ({ ...current, accountId: event.target.value }))}><option value="">Без привязки к счёту</option>{accounts.filter((account) => !account.is_archived).map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select>
+          <button className="btn-primary min-h-11 sm:col-span-2" type="submit">Создать цель</button>
+        </form>
+      )}
+      <div className="space-y-3">
+        {goals.map((goal) => (
+          <article key={goal.id} className="card">
+            <div className="flex items-start justify-between gap-3"><div><h3 className="font-medium">{goal.name}</h3><p className="text-sm text-gray-500">{formatMoney(goal.saved_amount, currency)} из {formatMoney(goal.target_amount, currency)}{goal.target_date ? ` · до ${goal.target_date}` : ''}</p></div><span className="text-sm font-semibold text-primary-600">{Math.min(goal.progress_pct, 100).toFixed(0)}%</span></div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700"><div className="h-full rounded-full bg-primary-600" style={{ width: `${Math.min(goal.progress_pct, 100)}%` }} /></div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {goal.status === 'active' && <><input type="number" min="0.01" step="0.01" className="input-field min-h-11 min-w-0 flex-1" placeholder="Добавить накопление" value={contributions[goal.id] || ''} onChange={(event) => setContributions((current) => ({ ...current, [goal.id]: event.target.value }))} /><button type="button" className="btn-primary min-h-11" onClick={() => contribute(goal)}>Добавить</button></>}
+              {canManage && goal.status === 'active' && <button type="button" className="min-h-11 min-w-11 rounded-lg text-gray-500" title="Поставить на паузу" onClick={() => transitionGoal(goal.id, 'paused')}><Pause size={18} /></button>}
+              {canManage && goal.status === 'paused' && <button type="button" className="btn-secondary min-h-11" onClick={() => transitionGoal(goal.id, 'active')}><Play size={16} className="mr-1" /> Продолжить</button>}
+              {canManage && !['completed', 'cancelled'].includes(goal.status) && <button type="button" className="min-h-11 min-w-11 rounded-lg text-green-600" title="Завершить" onClick={() => transitionGoal(goal.id, 'completed')}><CheckCircle2 size={18} /></button>}
+            </div>
+          </article>
+        ))}
+        {!loading && goals.length === 0 && <p className="rounded-xl border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500 dark:border-gray-700">Накопительных целей пока нет.</p>}
+        {loading && <p className="text-center text-sm text-gray-500">Загрузка целей…</p>}
+      </div>
+    </section>
   );
 }

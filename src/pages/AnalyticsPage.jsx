@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import useAnalytics from '../hooks/useAnalytics';
+import useAccounts from '../hooks/useAccounts';
 import { formatUnsignedAmount } from '../utils/formatters';
 import { getMonthRange } from '../utils/dateRange';
 import { startOfYear, endOfYear, addMonths, subMonths, addYears, subYears, format, parseISO, subDays, differenceInCalendarDays } from 'date-fns';
@@ -14,6 +15,78 @@ const PERIODS = [
   { key: 'year', label: '1г', title: 'Год' },
   { key: 'custom', label: 'Произвольный', title: 'Произвольный период' },
 ];
+
+function BalanceHistoryCard({ workspaceId, dateFrom, dateTo, currencySymbol }) {
+  const { loadBalanceHistory } = useAccounts(workspaceId);
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    if (!workspaceId) {
+      setRows([]);
+      return undefined;
+    }
+    const days = differenceInCalendarDays(parseISO(dateTo), parseISO(dateFrom));
+    const granularity = days > 180 ? 'month' : days > 45 ? 'week' : 'day';
+    setLoading(true);
+    setError('');
+    loadBalanceHistory({ dateFrom, dateTo, granularity })
+      .then((data) => { if (active) setRows(data); })
+      .catch((exception) => { if (active) setError(exception.message || 'Не удалось загрузить историю остатков'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [workspaceId, dateFrom, dateTo, loadBalanceHistory]);
+
+  const points = useMemo(() => {
+    const totals = new Map();
+    rows.forEach((row) => totals.set(row.period_start, (totals.get(row.period_start) || 0) + row.closing_base_balance));
+    return [...totals.entries()].sort(([left], [right]) => left.localeCompare(right));
+  }, [rows]);
+
+  if (!workspaceId) return null;
+  const values = points.map(([, value]) => value);
+  const min = Math.min(...values, 0);
+  const max = Math.max(...values, 0);
+  const span = max - min || 1;
+  const polyline = points.map(([, value], index) => {
+    const x = points.length === 1 ? 50 : (index / (points.length - 1)) * 100;
+    const y = 34 - ((value - min) / span) * 28;
+    return `${x},${y}`;
+  }).join(' ');
+  const first = values[0] || 0;
+  const last = values.at(-1) || 0;
+
+  return (
+    <section className="mb-6 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800" data-testid="balance-history">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-medium text-gray-900 dark:text-gray-100">Динамика остатков</h2>
+          <p className="text-xs text-gray-500 dark:text-gray-400">По всем активным счетам в базовой валюте</p>
+        </div>
+        {!loading && points.length > 0 && (
+          <span className={`text-sm font-semibold ${last - first >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            {last - first >= 0 ? '+' : '−'}{formatUnsignedAmount(Math.abs(last - first), currencySymbol)}
+          </span>
+        )}
+      </div>
+      {loading ? <p className="py-8 text-center text-sm text-gray-500">Загрузка истории…</p> : error ? (
+        <p role="alert" className="mt-3 text-sm text-red-600">{error}</p>
+      ) : points.length === 0 ? (
+        <p className="py-8 text-center text-sm text-gray-500">За период нет данных по остаткам.</p>
+      ) : (
+        <>
+          <svg viewBox="0 0 100 40" className="mt-3 h-40 w-full overflow-visible" role="img" aria-label="График остатков по счетам" preserveAspectRatio="none">
+            <line x1="0" y1="34" x2="100" y2="34" stroke="currentColor" className="text-gray-200 dark:text-gray-700" vectorEffect="non-scaling-stroke" />
+            <polyline points={polyline} fill="none" stroke="currentColor" className="text-primary-600 dark:text-primary-400" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+          </svg>
+          <div className="flex justify-between text-xs text-gray-500"><span>{points[0][0]}</span><span>{formatUnsignedAmount(last, currencySymbol)}</span><span>{points.at(-1)[0]}</span></div>
+        </>
+      )}
+    </section>
+  );
+}
 
 function getPeriodDates(periodKey, offset) {
   const base = new Date();
@@ -312,6 +385,13 @@ export default function AnalyticsPage() {
               </div>
             </div>
           )}
+
+          <BalanceHistoryCard
+            workspaceId={selectedWsIds.length === 1 ? selectedWsIds[0] : null}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            currencySymbol={currencySymbol}
+          />
 
           {/* Breakdown tabs (mobile) */}
           <div className="flex border-b border-gray-200 dark:border-gray-700 mb-4">

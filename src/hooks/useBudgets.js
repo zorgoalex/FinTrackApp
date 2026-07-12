@@ -14,65 +14,28 @@ export default function useBudgets(workspaceId, month) {
     setLoading(true);
     setError('');
     try {
-      const monthEnd = new Date(`${month}T00:00:00`);
-      monthEnd.setMonth(monthEnd.getMonth() + 1);
-      const monthEndString = [
-        monthEnd.getFullYear(),
-        String(monthEnd.getMonth() + 1).padStart(2, '0'),
-        String(monthEnd.getDate()).padStart(2, '0'),
-      ].join('-');
-
-      const [progressResult, operationsResult] = await Promise.all([
-        supabase.rpc('get_budget_progress', {
-          p_workspace_id: workspaceId,
-          p_month: month
-        }),
-        supabase
-          .from('operations')
-          .select('category_id, base_amount, amount')
-          .eq('workspace_id', workspaceId)
-          .in('type', ['expense', 'employee_salary'])
-          .gte('operation_date', month)
-          .lt('operation_date', monthEndString)
-          .not('category_id', 'is', null),
-      ]);
+      const progressResult = await supabase.rpc('get_budget_progress', {
+        p_workspace_id: workspaceId,
+        p_month: month
+      });
 
       if (progressResult.error) throw progressResult.error;
-      if (operationsResult.error) throw operationsResult.error;
-
-      const spentByCategory = new Map();
-      (operationsResult.data || []).forEach((operation) => {
-        const amount = Number(operation.base_amount ?? operation.amount) || 0;
-        spentByCategory.set(
-          operation.category_id,
-          (spentByCategory.get(operation.category_id) || 0) + amount,
-        );
-      });
 
       const merged = new Map();
       (progressResult.data || []).forEach((budget) => {
         const amount = Number(budget.amount) || 0;
-        const spent = spentByCategory.get(budget.category_id) ?? (Number(budget.spent) || 0);
+        const effectiveAmount = Number(budget.effective_amount ?? budget.amount) || 0;
+        const spent = Number(budget.spent) || 0;
         merged.set(budget.category_id, {
           ...budget,
           amount,
+          carry_cap: budget.carry_cap === null ? null : Number(budget.carry_cap),
+          carryover_amount: Number(budget.carryover_amount) || 0,
+          effective_amount: effectiveAmount,
           spent,
-          remaining: amount - spent,
-          progress_pct: amount > 0 ? (spent / amount) * 100 : 0,
+          remaining: effectiveAmount - spent,
+          progress_pct: effectiveAmount > 0 ? (spent / effectiveAmount) * 100 : 0,
           has_limit: true,
-        });
-      });
-
-      spentByCategory.forEach((spent, categoryId) => {
-        if (merged.has(categoryId)) return;
-        merged.set(categoryId, {
-          id: null,
-          category_id: categoryId,
-          amount: 0,
-          spent,
-          remaining: null,
-          progress_pct: 0,
-          has_limit: false,
         });
       });
 
@@ -89,20 +52,20 @@ export default function useBudgets(workspaceId, month) {
     loadBudgets();
   }, [loadBudgets]);
 
-  const saveBudget = async (categoryId, amount) => {
+  const saveBudget = async (categoryId, amount, options = {}) => {
     setError('');
     const numericAmount = Number(amount);
     if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
       throw new Error('Лимит должен быть больше нуля');
     }
-    const { data: userData } = await supabase.auth.getUser();
-    const { error: saveError } = await supabase.from('budgets').upsert({
-      workspace_id: workspaceId,
-      category_id: categoryId,
-      month,
-      amount: numericAmount,
-      created_by: userData?.user?.id || null
-    }, { onConflict: 'workspace_id,category_id,month' });
+    const { error: saveError } = await supabase.rpc('ensure_budget_period', {
+      p_workspace_id: workspaceId,
+      p_category_id: categoryId,
+      p_month: month,
+      p_amount: numericAmount,
+      p_rollover_mode: options.rollover_mode || 'none',
+      p_carry_cap: options.carry_cap === '' || options.carry_cap === undefined ? null : Number(options.carry_cap),
+    });
     if (saveError) throw saveError;
     await loadBudgets();
   };
@@ -127,23 +90,22 @@ export default function useBudgets(workspaceId, month) {
     ].join('-');
     const { data: previousBudgets, error: previousError } = await supabase
       .from('budgets')
-      .select('category_id, amount')
+      .select('category_id, amount, rollover_mode, carry_cap')
       .eq('workspace_id', workspaceId)
       .eq('month', previousMonth);
     if (previousError) throw previousError;
     if (!previousBudgets?.length) return 0;
-    const { data: userData } = await supabase.auth.getUser();
-    const { error: copyError } = await supabase.from('budgets').upsert(
-      previousBudgets.map((budget) => ({
-        workspace_id: workspaceId,
-        category_id: budget.category_id,
-        month,
-        amount: budget.amount,
-        created_by: userData?.user?.id || null,
-      })),
-      { onConflict: 'workspace_id,category_id,month', ignoreDuplicates: true },
-    );
-    if (copyError) throw copyError;
+    for (const budget of previousBudgets) {
+      const { error: copyError } = await supabase.rpc('ensure_budget_period', {
+        p_workspace_id: workspaceId,
+        p_category_id: budget.category_id,
+        p_month: month,
+        p_amount: Number(budget.amount),
+        p_rollover_mode: budget.rollover_mode || 'none',
+        p_carry_cap: budget.carry_cap,
+      });
+      if (copyError) throw copyError;
+    }
     await loadBudgets();
     return previousBudgets.length;
   };

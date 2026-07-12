@@ -584,22 +584,34 @@ function AccountsTab({ workspaceId, canEdit }) {
   const [editingId, setEditingId] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
-  const [form, setForm] = useState({ name: '', color: '#6B7280', currency: 'KZT' });
+  const emptyAccount = () => ({
+    name: '',
+    color: '#6B7280',
+    currency: 'KZT',
+    opening_balance: '0',
+    opening_date: new Date().toISOString().slice(0, 10),
+  });
+  const [form, setForm] = useState(emptyAccount);
   const [saving, setSaving] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
 
   const clearDeleteError = useCallback(() => setDeleteError(null), []);
 
   const resetForm = () => {
-    setForm({ name: '', color: '#6B7280', currency: 'KZT' });
+    setForm(emptyAccount());
     setEditingId(null);
     setShowAdd(false);
   };
 
   const startEdit = (acc) => {
-    if (acc.is_default) return; // Cannot edit default account name
     setEditingId(acc.id);
-    setForm({ name: acc.name, color: acc.color || '#6B7280', currency: acc.currency || 'KZT' });
+    setForm({
+      name: acc.name,
+      color: acc.color || '#6B7280',
+      currency: acc.currency || 'KZT',
+      opening_balance: String(acc.opening_balance ?? 0),
+      opening_date: acc.opening_date || new Date().toISOString().slice(0, 10),
+    });
     setShowAdd(false);
   };
 
@@ -683,6 +695,9 @@ function AccountsTab({ workspaceId, canEdit }) {
               />
               <span className="text-sm text-gray-900 dark:text-gray-100">{acc.name}</span>
               <span className="text-xs text-gray-500 dark:text-gray-400">{acc.currency || 'KZT'}</span>
+              {(Number(acc.opening_balance) !== 0) && (
+                <span className="text-xs text-gray-500 dark:text-gray-400">старт: {Number(acc.opening_balance).toLocaleString('ru-RU')} · {acc.opening_date}</span>
+              )}
               {acc.is_default && (
                 <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-400">основной</span>
               )}
@@ -690,14 +705,14 @@ function AccountsTab({ workspaceId, canEdit }) {
                 <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">архив</span>
               )}
             </div>
-            {canEdit && !acc.is_default && (
+            {canEdit && (
               <div className="flex items-center gap-1">
                 {!acc.is_archived && (
                   <button onClick={() => startEdit(acc)} aria-label={`Редактировать счёт ${acc.name}`} className="grid min-h-11 min-w-11 place-items-center rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-gray-700 dark:hover:text-primary-400">
                     <Pencil size={16} />
                   </button>
                 )}
-                {!acc.is_archived ? (
+                {!acc.is_archived && !acc.is_default ? (
                   <button
                     onClick={() => handleArchive(acc.id)}
                     aria-label={`Архивировать счёт ${acc.name}`}
@@ -706,7 +721,7 @@ function AccountsTab({ workspaceId, canEdit }) {
                   >
                     <Archive size={16} />
                   </button>
-                ) : (
+                ) : acc.is_archived ? (
                   <>
                     <button
                       onClick={() => handleUnarchive(acc.id)}
@@ -725,7 +740,7 @@ function AccountsTab({ workspaceId, canEdit }) {
                       <Trash2 size={16} />
                     </button>
                   </>
-                )}
+                ) : null}
               </div>
             )}
           </div>
@@ -757,14 +772,14 @@ function AccountsTab({ workspaceId, canEdit }) {
 
 function InlineAccountForm({ form, setForm, onSave, onCancel, saving, currencies }) {
   return (
-    <div className="grid grid-cols-[1fr_auto] items-center gap-2 bg-white dark:bg-gray-800 border border-primary-200 dark:border-primary-700 rounded-xl p-3 sm:flex sm:flex-wrap">
+    <div className="grid grid-cols-2 items-center gap-2 bg-white dark:bg-gray-800 border border-primary-200 dark:border-primary-700 rounded-xl p-3 sm:flex sm:flex-wrap">
       <input
         type="text"
         placeholder="Название счёта"
         value={form.name}
         onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
         aria-label="Название счёта"
-        className="min-h-11 min-w-0 text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary-500 sm:flex-1 sm:min-w-[120px]"
+        className="col-span-2 min-h-11 min-w-0 text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary-500 sm:flex-1 sm:min-w-[120px]"
         autoFocus
       />
       <select
@@ -779,6 +794,25 @@ function InlineAccountForm({ form, setForm, onSave, onCancel, saving, currencies
           </option>
         ))}
       </select>
+      <label className="col-span-2 grid grid-cols-2 items-center gap-2 text-xs text-gray-500 sm:col-span-1 sm:flex sm:items-center">
+        <span>Начальный остаток</span>
+        <input
+          type="number"
+          step="0.01"
+          value={form.opening_balance ?? '0'}
+          onChange={(e) => setForm((f) => ({ ...f, opening_balance: e.target.value }))}
+          className="input-field min-h-11 min-w-0 sm:w-32"
+        />
+      </label>
+      <label className="col-span-2 grid grid-cols-2 items-center gap-2 text-xs text-gray-500 sm:col-span-1 sm:flex sm:items-center">
+        <span>На дату</span>
+        <input
+          type="date"
+          value={form.opening_date || ''}
+          onChange={(e) => setForm((f) => ({ ...f, opening_date: e.target.value }))}
+          className="input-field min-h-11 min-w-0 sm:w-40"
+        />
+      </label>
       <input
         type="color"
         value={form.color}
