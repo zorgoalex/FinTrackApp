@@ -28,16 +28,22 @@ export default function ProfilePage() {
   const [telegramLink, setTelegramLink] = useState(null);
   const [telegramBusy, setTelegramBusy] = useState(false);
   const [telegramError, setTelegramError] = useState('');
+  const [telegramMessage, setTelegramMessage] = useState('');
+  const [now, setNow] = useState(() => Date.now());
 
-  const loadTelegram = useCallback(async () => {
+  const loadTelegram = useCallback(async ({ silent = false } = {}) => {
     const { data, error: invokeError } = await invokeTelegram('status');
     if (invokeError || data?.error) {
-      setTelegramError(data?.error || 'Не удалось проверить Telegram');
+      if (!silent) setTelegramError(data?.error || 'Не удалось проверить Telegram');
       setTelegram((current) => ({ ...current, loading: false }));
       return false;
     }
+    setTelegramError('');
     setTelegram({ loading: false, linked: Boolean(data.linked), telegram_username: data.telegram_username, first_name: data.first_name, linked_at: data.linked_at });
-    if (data.linked) setTelegramLink(null);
+    if (data.linked) {
+      setTelegramLink(null);
+      setTelegramMessage('Telegram успешно подключён');
+    }
     return Boolean(data.linked);
   }, []);
 
@@ -58,13 +64,18 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!telegramLink || telegram.linked) return undefined;
-    const interval = window.setInterval(loadTelegram, 3000);
-    return () => window.clearInterval(interval);
+    const tick = window.setInterval(() => setNow(Date.now()), 1000);
+    const polling = window.setInterval(() => loadTelegram({ silent: true }), 3000);
+    return () => {
+      window.clearInterval(tick);
+      window.clearInterval(polling);
+    };
   }, [loadTelegram, telegram.linked, telegramLink]);
 
   const connectTelegram = async () => {
     setTelegramBusy(true);
     setTelegramError('');
+    setTelegramMessage('');
     const popup = window.open('about:blank', '_blank');
     if (popup) popup.opener = null;
     const { data, error: invokeError } = await invokeTelegram('create');
@@ -75,12 +86,23 @@ export default function ProfilePage() {
       return;
     }
     setTelegramLink({ url: data.url, expires_at: data.expires_at, bot_username: data.bot_username });
+    setNow(Date.now());
     if (popup) popup.location.href = data.url;
+  };
+
+  const checkTelegram = async () => {
+    setTelegramBusy(true);
+    setTelegramError('');
+    setTelegramMessage('Проверяем подключение…');
+    const linked = await loadTelegram();
+    setTelegramBusy(false);
+    if (!linked) setTelegramMessage('Telegram пока не подключён. В боте нажмите Start, затем проверьте ещё раз.');
   };
 
   const unlinkTelegram = async () => {
     setTelegramBusy(true);
     setTelegramError('');
+    setTelegramMessage('');
     const { data, error: invokeError } = await invokeTelegram('unlink');
     setTelegramBusy(false);
     if (invokeError || data?.error) { setTelegramError(data?.error || 'Не удалось отключить Telegram'); return; }
@@ -110,6 +132,10 @@ export default function ProfilePage() {
 
   const displayName = profile?.display_name || profile?.username || user?.email || 'Пользователь';
   const initial = displayName.charAt(0).toUpperCase();
+  const telegramExpiresAt = telegramLink ? new Date(telegramLink.expires_at).getTime() : 0;
+  const telegramSecondsLeft = Math.max(0, Math.ceil((telegramExpiresAt - now) / 1000));
+  const telegramLinkExpired = Boolean(telegramLink && telegramSecondsLeft === 0);
+  const telegramTimeLeft = `${String(Math.floor(telegramSecondsLeft / 60)).padStart(2, '0')}:${String(telegramSecondsLeft % 60).padStart(2, '0')}`;
 
   return (
     <div className="mx-auto max-w-2xl space-y-4 p-4 pb-24 sm:p-6" data-testid="profile-page">
@@ -144,14 +170,25 @@ export default function ProfilePage() {
           </div>
         </div>
         {telegramError && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-2 text-sm text-red-600 dark:bg-red-950/30">{telegramError}</p>}
+        {telegramMessage && !telegramError && <p role="status" className="mt-3 rounded-lg bg-gray-50 p-2 text-sm text-gray-600 dark:bg-gray-900/40 dark:text-gray-300">{telegramMessage}</p>}
         {telegramLink && !telegram.linked && (
-          <div className="mt-3 rounded-xl bg-sky-50 p-3 text-sm text-sky-900 dark:bg-sky-950/30 dark:text-sky-200">
-            <p className="font-medium">Откройте @{telegramLink.bot_username} и нажмите Start</p>
-            <p className="mt-0.5 text-xs opacity-75">Ссылка действует до {new Date(telegramLink.expires_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</p>
-            <div className="mt-3 flex gap-2">
-              <a href={telegramLink.url} target="_blank" rel="noreferrer" className="btn-primary flex min-h-11 flex-1 items-center justify-center gap-1.5 text-sm"><ExternalLink size={16} /> Открыть бота</a>
-              <button type="button" onClick={loadTelegram} className="btn-secondary grid min-h-11 min-w-11 place-items-center" aria-label="Проверить Telegram"><RefreshCw size={16} /></button>
-            </div>
+          <div className={`mt-3 rounded-xl p-3 text-sm ${telegramLinkExpired ? 'bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200' : 'bg-sky-50 text-sky-900 dark:bg-sky-950/30 dark:text-sky-200'}`}>
+            {telegramLinkExpired ? (
+              <>
+                <p className="font-medium">Срок ссылки истёк</p>
+                <p className="mt-0.5 text-xs opacity-75">Создайте новую ссылку — старая больше не подключит аккаунт.</p>
+                <button type="button" disabled={telegramBusy} onClick={connectTelegram} className="btn-primary mt-3 min-h-11 w-full">{telegramBusy ? 'Создаём ссылку…' : 'Создать новую ссылку'}</button>
+              </>
+            ) : (
+              <>
+                <p className="font-medium">Откройте @{telegramLink.bot_username} и обязательно нажмите Start</p>
+                <p className="mt-0.5 text-xs opacity-75">Ссылка действует ещё {telegramTimeLeft}</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <a href={telegramLink.url} target="_blank" rel="noreferrer" className="btn-primary flex min-h-11 items-center justify-center gap-1.5 text-sm"><ExternalLink size={16} /> Открыть бота</a>
+                  <button type="button" disabled={telegramBusy} onClick={checkTelegram} className="btn-secondary flex min-h-11 items-center justify-center gap-1.5 text-sm"><RefreshCw size={16} /> Проверить подключение</button>
+                </div>
+              </>
+            )}
           </div>
         )}
         <div className="mt-3">
