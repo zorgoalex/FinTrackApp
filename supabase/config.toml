@@ -10,6 +10,12 @@ verify_jwt = false
 [functions.ai-assistant]
 verify_jwt = true
 
+[functions.telegram-link]
+verify_jwt = true
+
+[functions.telegram-bot]
+verify_jwt = false
+
 [api]
 enabled = true
 # Port to use for the API URL.

@@ -22,7 +22,7 @@ export default function SignupPage() {
       return;
     }
     if (!/^[\p{L}\p{N}_]{3,21}$/u.test(username)) {
-      setLocalError("Имя аккаунта: 3–21 символ, только буквы, цифры и _");
+      setLocalError("Логин: 3–21 символ, только буквы, цифры и _");
       return;
     }
     const result = await signUp(username, email, password);
@@ -48,7 +48,7 @@ export default function SignupPage() {
         )}
         {!confirmationSent && <SocialAuthButtons mode="signup" />}
         {!confirmationSent && <form onSubmit={handleSubmit} className="space-y-3">
-          <input type="text" className="input-field" placeholder="Имя аккаунта" value={username} onChange={(e)=>setUsername(e.target.value)} autoComplete="username" minLength={3} maxLength={21} required />
+          <input type="text" className="input-field" placeholder="Логин" value={username} onChange={(e)=>setUsername(e.target.value)} autoComplete="username" minLength={3} maxLength={21} required />
           <input type="email" className="input-field" placeholder="Email" value={email} onChange={(e)=>setEmail(e.target.value)} required />
           <input type="password" className="input-field" placeholder="Пароль" value={password} onChange={(e)=>setPassword(e.target.value)} required />
           <button className="btn-primary min-h-11 w-full" disabled={loading}>

@@ -58,7 +58,7 @@ Deno.serve(async (request) => {
     admin.from('scheduled_operations').select('id,workspace_id,next_date,description,amount,currency,type').eq('is_active', true).gte('next_date', today).lte('next_date', through),
     admin.from('debts').select('id,workspace_id,due_on,title,counterparty,initial_amount,currency,direction').eq('is_archived', false).gte('due_on', today).lte('due_on', through),
     admin.from('operations').select('debt_id,debt_applied_amount').not('debt_id', 'is', null),
-    admin.from('telegram_users').select('telegram_id,user_id'),
+    admin.from('telegram_users').select('telegram_id,chat_id,user_id'),
   ]);
   const queryError = plansResult.error || schedulesResult.error || debtsResult.error || debtPaymentsResult.error || telegramResult.error;
   if (queryError) return json({ error: queryError.message }, 500);
@@ -70,7 +70,7 @@ Deno.serve(async (request) => {
     ...(schedulesResult.data || []).map((item) => ({ source_type: 'scheduled_operation' as const, source_id: item.id, workspace_id: item.workspace_id, event_date: item.next_date, title: item.description || 'Регулярная операция', amount: Number(item.amount), currency: item.currency, direction: ['income', 'personal_salary'].includes(item.type) ? 'income' : 'expense' })),
     ...(debtsResult.data || []).map((item) => ({ source_type: 'debt_due' as const, source_id: item.id, workspace_id: item.workspace_id, event_date: item.due_on, title: `${item.title} · ${item.counterparty}`, amount: Math.max(0, Number(item.initial_amount) - (paidByDebt.get(item.id) || 0)), currency: item.currency, direction: item.direction === 'owed_to_me' ? 'income' : 'expense' })).filter((item) => item.amount > 0),
   ];
-  const telegramByUser = new Map((telegramResult.data || []).map((item) => [item.user_id, Number(item.telegram_id)]));
+  const telegramByUser = new Map((telegramResult.data || []).map((item) => [item.user_id, Number(item.chat_id || item.telegram_id)]));
   let created = 0;
   let telegramSent = 0;
   const telegramDigests = new Map<string, { chatId: number; lines: string[]; notificationIds: string[] }>();

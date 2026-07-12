@@ -86,12 +86,27 @@ function formatMoney(n: number) {
 
 // --- Command Handlers ---
 
-async function handleStart(chatId: number) {
+async function handleStart(chatId: number, telegramId: number, args: string[], sender: { username?: string; first_name?: string }) {
+  if (args[0]) {
+    const { error } = await supabaseAdmin.rpc('consume_telegram_link_token', {
+      p_token: args[0],
+      p_telegram_id: telegramId,
+      p_chat_id: chatId,
+      p_telegram_username: sender.username || null,
+      p_first_name: sender.first_name || null,
+    });
+    if (error) {
+      await sendMessage(chatId, 'Ссылка привязки недействительна или истекла. Создайте новую ссылку в личном кабинете ФинУчёта.');
+      return;
+    }
+    await sendMessage(chatId, '<b>Telegram успешно подключён к ФинУчёту.</b>\nТеперь сюда будут приходить выбранные уведомления.');
+    return;
+  }
   await sendMessage(
     chatId,
-    `<b>FinTrackApp Bot</b>\n\n` +
+      `<b>FinTrackApp Bot</b>\n\n` +
+      `Подключите Telegram в личном кабинете приложения.\n\n` +
       `Команды:\n` +
-      `/link email password — привязать аккаунт\n` +
       `/unlink — отвязать аккаунт\n` +
       `/workspaces — список пространств\n` +
       `/ws номер — выбрать пространство\n` +
@@ -107,59 +122,6 @@ async function handleStart(chatId: number) {
       `/accounts — список счетов и балансы\n` +
       `/transfer от на сумма [описание] — перевод\n` +
       `/recent — последние 10 операций`,
-  );
-}
-
-async function handleLink(chatId: number, telegramId: number, args: string[]) {
-  if (args.length < 2) {
-    return await sendMessage(chatId, 'Использование: /link email password');
-  }
-
-  const [email, password] = args;
-
-  // Check if already linked
-  const existing = await getTelegramUser(telegramId);
-  if (existing) {
-    return await sendMessage(chatId, 'Аккаунт уже привязан. Используйте /unlink чтобы отвязать.');
-  }
-
-  // Sign in to verify credentials
-  const { data: authData, error: authError } = await supabaseAdmin.auth.signInWithPassword({
-    email,
-    password,
-  });
-
-  if (authError || !authData.user) {
-    return await sendMessage(chatId, `Ошибка входа: ${authError?.message || 'неверные данные'}`);
-  }
-
-  // Save link
-  const { error: insertError } = await supabaseAdmin
-    .from('telegram_users')
-    .insert({
-      telegram_id: telegramId,
-      user_id: authData.user.id,
-    });
-
-  if (insertError) {
-    return await sendMessage(chatId, `Ошибка привязки: ${insertError.message}`);
-  }
-
-  // Set default workspace to first available
-  const workspaces = await getUserWorkspaces(authData.user.id);
-  if (workspaces.length > 0) {
-    await supabaseAdmin
-      .from('telegram_users')
-      .update({ default_workspace_id: workspaces[0].workspace_id })
-      .eq('telegram_id', telegramId);
-  }
-
-  await sendMessage(
-    chatId,
-    `Аккаунт привязан: ${authData.user.email}\n` +
-      (workspaces.length > 0
-        ? `Пространство по умолчанию: ${(workspaces[0] as any).workspaces?.name || workspaces[0].workspace_id}`
-        : 'Нет доступных пространств.'),
   );
 }
 
@@ -511,19 +473,14 @@ Deno.serve(async (req) => {
 
     // Commands that don't require linking
     if (command === '/start') {
-      await handleStart(chatId);
-      return new Response('OK', { status: 200 });
-    }
-
-    if (command === '/link') {
-      await handleLink(chatId, telegramId, args);
+      await handleStart(chatId, telegramId, args, message.from);
       return new Response('OK', { status: 200 });
     }
 
     // All other commands require linked account
     const tgUser = await getTelegramUser(telegramId);
     if (!tgUser) {
-      await sendMessage(chatId, 'Аккаунт не привязан. Используйте /link email password');
+      await sendMessage(chatId, 'Аккаунт не привязан. Откройте личный кабинет ФинУчёта и нажмите «Подключить Telegram».');
       return new Response('OK', { status: 200 });
     }
 
