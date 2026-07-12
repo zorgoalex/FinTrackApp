@@ -11,8 +11,9 @@ import useAccounts from '../hooks/useAccounts';
 import AddOperationModal from '../components/AddOperationModal';
 import EditOperationModal from '../components/EditOperationModal';
 import QuickButtonsSettings from '../components/QuickButtonsSettings';
+import OperationCommentsModal from '../components/OperationCommentsModal';
 import MonthPicker from '../components/MonthPicker';
-import { Pencil, Trash2, ChevronDown, X, Plus, Settings, Wallet, Download, Upload, Search, SlidersHorizontal, MoreHorizontal } from 'lucide-react';
+import { Pencil, Trash2, ChevronDown, X, Plus, Settings, Wallet, Download, Upload, Search, SlidersHorizontal, MoreHorizontal, MessageSquare } from 'lucide-react';
 import { formatSignedAmount, formatUnsignedAmount, formatGroupDate } from '../utils/formatters';
 import { getMonthRange } from '../utils/dateRange';
 import { buildOperationsCSV, downloadOperationsCSV } from '../utils/export';
@@ -100,6 +101,7 @@ export function OperationPage() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [actionMenuId, setActionMenuId] = useState(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [commentsOperation, setCommentsOperation] = useState(null);
 
   useEffect(() => {
     if (!actionMenuId) return undefined;
@@ -849,8 +851,9 @@ export function OperationPage() {
                           {formatSignedAmount(operation.type, operation.amount, operation.currency || currencySymbol)}
                         </span>
                       </div>
-                      {(canEditRecord(operation) || canDeleteRecord(operation)) && (
-                        <div className="relative shrink-0" onTouchEnd={(event) => event.stopPropagation()}>
+                      <div className="flex shrink-0 items-center gap-1" onTouchEnd={(event) => event.stopPropagation()}>
+                        <button type="button" onClick={(event) => { event.stopPropagation(); setCommentsOperation(operation); }} className="flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-xl text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700" aria-label={`Комментарии к операции (${operation.comment_count || 0})`}><MessageSquare size={18} />{operation.comment_count > 0 && <span className="text-xs font-medium">{operation.comment_count}</span>}</button>
+                        {(canEditRecord(operation) || canDeleteRecord(operation)) && <div className="relative">
                           <button
                             type="button"
                             onClick={(event) => { event.stopPropagation(); setActionMenuId(id => id === operation.id ? null : operation.id); }}
@@ -864,8 +867,8 @@ export function OperationPage() {
                               {canDeleteRecord(operation) && <button type="button" onClick={(event) => { event.stopPropagation(); setActionMenuId(null); handleDelete(operation); }} className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"><Trash2 size={16} />Удалить</button>}
                             </div>
                           )}
-                        </div>
-                      )}
+                        </div>}
+                      </div>
                     </div>
                   );
                 }
@@ -945,8 +948,9 @@ export function OperationPage() {
                       )}
                     </div>
 
-                    {(canEditRecord(operation) || canDeleteRecord(operation)) && (
-                      <div className="relative shrink-0" onTouchEnd={(event) => event.stopPropagation()}>
+                    <div className="flex shrink-0 items-start gap-1" onTouchEnd={(event) => event.stopPropagation()}>
+                      <button type="button" onClick={(event) => { event.stopPropagation(); setCommentsOperation(operation); }} className="flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-xl text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700" aria-label={`Комментарии к операции (${operation.comment_count || 0})`}><MessageSquare size={18} />{operation.comment_count > 0 && <span className="text-xs font-medium">{operation.comment_count}</span>}</button>
+                      {(canEditRecord(operation) || canDeleteRecord(operation)) && <div className="relative">
                         <button
                           type="button"
                           onClick={(event) => { event.stopPropagation(); setActionMenuId(id => id === operation.id ? null : operation.id); }}
@@ -960,8 +964,8 @@ export function OperationPage() {
                             {canDeleteRecord(operation) && <button type="button" onClick={(event) => { event.stopPropagation(); setActionMenuId(null); handleDelete(operation); }} className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"><Trash2 size={16} />Удалить</button>}
                           </div>
                         )}
-                      </div>
-                    )}
+                      </div>}
+                    </div>
                   </div>
                 );
               })}
@@ -1008,6 +1012,17 @@ export function OperationPage() {
           workspaceId={workspaceId}
           onClose={() => setEditingOperation(null)}
           onSave={handleEditSave}
+        />
+      )}
+
+      {commentsOperation && (
+        <OperationCommentsModal
+          operation={commentsOperation}
+          workspaceId={workspaceId}
+          canComment={permissions.canCreateOperations}
+          canManage={permissions.canEditAllOperations}
+          onClose={() => setCommentsOperation(null)}
+          onChanged={refresh}
         />
       )}
     </div>

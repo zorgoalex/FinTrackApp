@@ -195,12 +195,22 @@ export default function ImportOperationsModal({
       sessionId = session.id;
       for (let index = 0; index < selectedRows.length; index += 1) {
         const row = selectedRows[index];
-        await onImport({
+        const createdOperation = await onImport({
           ...row,
           import_session_id: sessionId,
           description: row.description || 'Импортированная операция',
           category_id: row.category_id || null,
         }, { refreshAfter: false });
+        if (row.receipt_items_comment && createdOperation?.id) {
+          const { error: commentError } = await supabase.from('operation_comments').insert({
+            workspace_id: workspaceId,
+            operation_id: createdOperation.id,
+            author_id: authData.user.id,
+            body: row.receipt_items_comment,
+            kind: 'receipt_items',
+          });
+          if (commentError) throw commentError;
+        }
         completedCount = index + 1;
         setProgress(completedCount);
       }
@@ -302,6 +312,9 @@ export default function ImportOperationsModal({
                       <select aria-label={`Счёт операции ${index + 1}`} className="input-field" value={row.account_id || ''} onChange={(event) => updateRow(index, { account_id: event.target.value })}><option value="">Выберите счёт</option>{activeAccounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.currency}</option>)}</select>
                       <select aria-label={`Категория операции ${index + 1}`} className="input-field sm:col-span-2" value={row.category_id || ''} onChange={(event) => updateRow(index, { category_id: event.target.value })}><option value="">Без категории</option>{rowCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select>
                       <input aria-label={`Описание операции ${index + 1}`} className="input-field sm:col-span-2" value={row.description || ''} maxLength={240} onChange={(event) => updateRow(index, { description: event.target.value })} />
+                      {row.receipt_items_comment && <label className="sm:col-span-4 text-xs text-gray-500">Позиции чека — будут сохранены комментарием
+                        <textarea aria-label={`Позиции чека ${index + 1}`} className="input-field mt-1 min-h-28 resize-y" maxLength={5000} value={row.receipt_items_comment} onChange={(event) => updateRow(index, { receipt_items_comment: event.target.value })} />
+                      </label>}
                       {row.currency !== baseCurrency && <label className="sm:col-span-2 text-xs text-gray-500">Курс {row.currency} → {baseCurrency}<input aria-label={`Курс операции ${index + 1}`} type="number" min="0.000001" step="0.000001" className="input-field mt-1" value={row.exchange_rate || ''} onChange={(event) => updateRow(index, { exchange_rate: event.target.value, base_amount: Number(row.amount) * Number(event.target.value) })} /></label>}
                     </div>
                     {needsRate && <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">Нет курса {row.currency} → {baseCurrency}; проверьте сумму в базовой валюте после импорта.</p>}

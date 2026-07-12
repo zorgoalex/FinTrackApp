@@ -182,6 +182,7 @@ export function useOperations(workspaceId, options = {}) {
       // Fetch tags for all operations (two-query approach to avoid PostgREST join RLS issues)
       const opIds = (data || []).map((o) => o.id);
       let tagsByOpId = {};
+      const commentCountByOpId = {};
       if (opIds.length > 0) {
         const { data: tagLinks, error: tagLinksErr } = await supabase
           .from('operation_tags')
@@ -212,11 +213,23 @@ export function useOperations(workspaceId, options = {}) {
             if (tag) tagsByOpId[link.operation_id].push(tag);
           });
         }
+
+        const { data: commentRows, error: commentsError } = await supabase
+          .from('operation_comments')
+          .select('operation_id')
+          .in('operation_id', opIds);
+        if (commentsError) {
+          console.error('useOperations: operation_comments query failed:', commentsError.message, commentsError);
+        }
+        (commentRows || []).forEach((comment) => {
+          commentCountByOpId[comment.operation_id] = (commentCountByOpId[comment.operation_id] || 0) + 1;
+        });
       }
 
       const mappedOperations = (data || []).map((operation) => ({
         ...mapOperationWithDisplayName(operation, authUser),
-        tags: tagsByOpId[operation.id] || []
+        tags: tagsByOpId[operation.id] || [],
+        comment_count: commentCountByOpId[operation.id] || 0,
       }));
 
       if (requestId !== loadRequestRef.current) return;

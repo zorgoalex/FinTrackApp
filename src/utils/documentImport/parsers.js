@@ -66,6 +66,28 @@ function normalizeOcrArtifacts(text) {
     .replace(/([\d ])\s+[TТ](?=\s|$)/giu, '$1 ₸');
 }
 
+function extractReceiptItems(text) {
+  const lines = String(text || '').split(/\r?\n/).map((line) => line.replace(/\s+/g, ' ').trim()).filter(Boolean);
+  const ignored = /итог|всего|скидк|безнал|налич|сдач|ндс|оплат|т[өе]лем|жиын|жалпы|кассир|оператор|фиск|бин|иин|рнм|знм|ккм|чек|дата|время|телефон|consumer|oofd|спасибо/iu;
+  const pricePattern = /(?:=|x\s*)?([1-9][\d ]*[,.]\d{1,2})(?:\s*(?:₸|тг|тенге|KZT|[TТ]))?/iu;
+  const items = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const price = line.match(pricePattern);
+    if (!price || ignored.test(line)) continue;
+    let label = /\p{L}{3}/u.test(line) ? line : lines[index - 1] || '';
+    if (!label || ignored.test(label) || !/\p{L}{3}/u.test(label)) continue;
+    label = label.replace(/^\d{5,}\s*/u, '').trim();
+    const amount = price[1].replace(/\s+/g, ' ');
+    const normalized = redactSensitiveText(label.includes(price[0]) ? label : `${label} — ${amount}`).slice(0, 240);
+    if (normalized && !items.includes(normalized)) items.push(normalized);
+    if (items.length >= 30) break;
+  }
+
+  return items.length ? `Распознано автоматически — проверьте позиции:\n${items.map((item) => `• ${item}`).join('\n')}`.slice(0, 5000) : '';
+}
+
 function parseKaspiStatement(text) {
   const rows = [];
   const regex = new RegExp(`(\\d{2}\\.\\d{2}\\.(?:\\d{4}|\\d{2}))\\s*([+-])\\s*([\\d ]+(?:[,.]\\d{2})?)\\s*(₸|KZT)\\s*(${TYPE_WORDS})\\s*([\\s\\S]*?)(?=\\d{2}\\.\\d{2}\\.(?:\\d{4}|\\d{2})\\s*[+-]|АО [«"]?Kaspi|$)`, 'giu');
@@ -150,6 +172,7 @@ function parseGenericReceipt(text) {
     description: cleanDetails(header, operationWord),
     source_label: operationWord,
     reference,
+    receipt_items_comment: extractReceiptItems(text),
     confidence: dateMatch && meaningfulAmount ? 0.82 : 0.55,
   }];
 }

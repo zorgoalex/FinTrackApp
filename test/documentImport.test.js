@@ -73,3 +73,18 @@ test('keeps an incomplete receipt as an unconfirmed editable draft', async () =>
   assert.equal(result.operations[0].amount, 1150);
   assert.equal(result.operations[0].confidence, 0.55);
 });
+
+test('extracts receipt item lines into a redacted editable comment', async () => {
+  const text = `ПРОДАЖА
+Молоко 1 л =450.00
+Хлеб ржаной =280.00
+ИИН 980806450265
+ИТОГ =730.00
+12.07.2026 10:30`;
+  const result = await parseBankDocumentText(text, 'image');
+  const comment = result.operations[0].receipt_items_comment;
+  assert.match(comment, /Молоко/);
+  assert.match(comment, /Хлеб/);
+  assert.doesNotMatch(comment, /980806450265/);
+  assert.doesNotMatch(comment, /ИТОГ/);
+});

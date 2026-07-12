@@ -18,9 +18,9 @@ The implementation was developed against the local fixtures in `artifacts/import
 1. The browser checks size, extension and binary signature.
 2. PDF text extraction and OCR run locally in the browser. Tesseract language models may be downloaded, but document bytes are not sent with that request.
 3. Raw text is parsed in memory and is not placed in React state, Local Storage, Supabase Storage, logs or analytics.
-4. IIN/BIN, IBAN, cards, phone numbers, email, receipt references and labelled names are redacted before descriptions reach the draft.
-5. The user reviews and edits every draft row. Duplicate candidates are disabled by default.
-6. Only confirmed normalized operations are written to Postgres.
+4. IIN/BIN, IBAN, cards, phone numbers, email, receipt references and labelled names are redacted before descriptions or receipt-item comments reach the draft.
+5. The user reviews and edits every draft row and the optional extracted item comment. Duplicate candidates are disabled by default.
+6. Only confirmed normalized operations and the edited item comment are written to Postgres.
 7. Import audit stores source type, bank, counts, SHA-256 document hash and row fingerprints. It never stores the original filename, file or OCR text.
 
 Hashing is pseudonymisation, not anonymisation: a document hash remains protected workspace metadata. Access is restricted by RLS.
