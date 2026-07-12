@@ -6,6 +6,8 @@ import { useWorkspace } from '../contexts/WorkspaceContext'
 import { usePermissions } from '../hooks/usePermissions'
 import { useTheme } from '../contexts/ThemeContext'
 import WorkspaceSwitcher from './WorkspaceSwitcher'
+import NotificationCenter from './NotificationCenter'
+import useNotifications from '../hooks/useNotifications'
 import { BUILD_LABEL } from '../utils/buildInfo'
 
 export default function Layout() {
@@ -16,6 +18,7 @@ export default function Layout() {
   const { theme, toggleTheme } = useTheme()
   const location = useLocation()
   const navigate = useNavigate()
+  const notifications = useNotifications(workspaceId)
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen)
 
@@ -136,6 +139,7 @@ export default function Layout() {
             </div>
             <div className="flex shrink-0 items-center gap-1 sm:gap-2">
               <div id="page-header-actions" className="flex items-center gap-1"></div>
+              <NotificationCenter notifications={notifications} />
               <button
                 onClick={toggleTheme}
                 className="grid min-h-11 min-w-11 place-items-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
@@ -156,6 +160,8 @@ export default function Layout() {
         <main className="flex-1 pb-20 lg:pb-0">
           <Outlet />
         </main>
+
+        {workspaceId && <div className="fixed right-5 top-4 z-30 hidden lg:block"><NotificationCenter notifications={notifications} /></div>}
 
         {workspaceId && (
           <nav className="fixed inset-x-0 bottom-0 z-40 grid h-16 grid-cols-5 border-t border-gray-200 bg-white/95 px-2 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur-xl dark:border-gray-700 dark:bg-gray-900/95 lg:hidden" aria-label="Основная навигация">
