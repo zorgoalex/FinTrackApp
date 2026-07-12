@@ -27,6 +27,7 @@
 - **Счета** — управление счетами и переводы между ними
 - **Бюджеты** — лимиты по категориям, прогноз до конца месяца, копирование прошлого месяца
 - **AI-ассистент** — read-only аналитика на естественном языке, RBAC-политики и локальный fallback
+- **Распознавание речи** — провайдер-независимый STT-клиент и защищённая Edge Function; основной backend — Groq Whisper Large V3
 - **REST API** — полноценный API для внешних интеграций (CRUD операций, сводки, экспорт)
 - **Telegram-бот** — добавление операций, сводки за день/месяц, привязка аккаунта
 - **Настройки** — переименование, управление участниками, приглашения, удаление пространства
@@ -105,6 +106,9 @@ src/
     useScheduledOperations.js   — CRUD запланированных операций
     useDebts.js                 — CRUD долгов, погашения
     usePermissions.js           — ролевые права
+  services/
+    stt.js                      — нейтральный клиентский контракт STT
+    appStt.js                   — подключение STT-клиента к Supabase Functions
   utils/
     dateRange.js                — утилиты периодов (getMonthRange, formatMonthYear)
     formatters.js               — форматирование сумм, дат
@@ -118,6 +122,8 @@ supabase/
     invite-user/               — Edge Function: приглашение + Resend email
     accept-invitation/         — Edge Function: принятие с rollback
     _shared/                   — cors, email template
+    stt-transcribe/            — защищённый multipart endpoint распознавания речи
+    _shared/stt/               — интерфейс провайдера, registry и Groq-адаптер
 ```
 
 ---
@@ -228,6 +234,45 @@ Edge Function `dispatch-notifications` обрабатывает плановые
 Серверные secrets Supabase: `OPENROUTER_API_KEY` и необязательный `OPENROUTER_MODEL`
 (по умолчанию `openrouter/free`). Если провайдер недоступен, функция возвращает локальную
 детерминированную сводку. Эти значения нельзя добавлять с префиксом `VITE_` или в Vercel.
+
+### Speech-to-Text
+
+Клиентский код вызывает единый метод `sttClient.transcribe(audio, options)` из
+`src/services/appStt.js`. Он не знает модель, API URL или формат ответа конкретного
+провайдера. Edge Function `stt-transcribe` принимает авторизованный `multipart/form-data`
+запрос с полем `audio`, валидирует размер и формат и возвращает стабильный контракт:
+`transcript`, `provider`, `model`, `language`, `duration_seconds`, `segments`, `words`,
+`request_id` и `latency_ms`.
+
+В модалке создания операции кнопка «Продиктовать» записывает до 30 секунд аудио,
+показывает расшифровку и консервативно заполняет черновик: тип, сумму, относительную дату,
+категорию и счета при точном совпадении. Голосовой ввод никогда не сохраняет операцию сам —
+денежные поля остаются на обязательном пользовательском подтверждении.
+
+Первый адаптер использует Groq `whisper-large-v3`, русский язык, температуру `0` и
+`verbose_json`. Аудио обрабатывается в памяти, не сохраняется и не логируется. Поддерживаются
+FLAC, MP3, MP4, MPEG, MPGA, M4A, OGG, WAV и WEBM; прикладной лимит по умолчанию — 18 МБ.
+Клиент не может выбрать модель или передать произвольный provider prompt.
+
+Локальный запуск:
+
+```bash
+npx supabase functions serve stt-transcribe --env-file .env.local
+```
+
+Деплой и серверная конфигурация:
+
+```bash
+npx supabase secrets set \
+  STT_PROVIDER=groq \
+  GROQ_API_KEY=YOUR_GROQ_KEY \
+  GROQ_STT_MODEL=whisper-large-v3
+npx supabase functions deploy stt-transcribe
+```
+
+Необязательные secrets: `STT_TIMEOUT_MS` (по умолчанию `45000`),
+`STT_MAX_FILE_BYTES` (по умолчанию `18874368`) и короткий серверный `STT_PROMPT` с
+финансовой лексикой. `GROQ_API_KEY` нельзя объявлять как `VITE_GROQ_API_KEY`.
 
 ### Мониторинг баланса OpenRouter
 

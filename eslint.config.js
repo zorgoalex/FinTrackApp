@@ -12,10 +12,14 @@ const browserGlobals = {
   document: 'readonly',
   fetch: 'readonly',
   FileReader: 'readonly',
+  FormData: 'readonly',
   localStorage: 'readonly',
+  MediaRecorder: 'readonly',
   navigator: 'readonly',
   prompt: 'readonly',
   setTimeout: 'readonly',
+  setInterval: 'readonly',
+  clearInterval: 'readonly',
   URL: 'readonly',
   window: 'readonly',
 };
@@ -47,6 +51,15 @@ export default [
       'react-hooks/exhaustive-deps': 'off',
       'react-refresh/only-export-components': 'off',
       'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+    },
+  },
+  {
+    files: ['test/**/*.js'],
+    languageOptions: {
+      globals: {
+        Blob: 'readonly',
+        FormData: 'readonly',
+      },
     },
   },
   {

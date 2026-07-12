@@ -13,6 +13,8 @@ import TagInput from './TagInput';
 import DebtSelector from './DebtSelector';
 import { categoryTypeForOperation, operationTypesForWorkspace } from '../utils/operationTypes';
 import OperationAllocationsEditor, { allocationsMatchTotal } from './OperationAllocationsEditor';
+import VoiceOperationInput from './VoiceOperationInput';
+import { parseVoiceOperationTranscript } from '../utils/voiceOperationParser';
 
 const OPERATION_TYPES = {
   income:   { label: 'Доход',    color: 'text-green-600',  bg: 'bg-green-600 hover:bg-green-700' },
@@ -242,6 +244,24 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
     }
   };
 
+  const handleVoiceTranscript = (transcript) => {
+    const parsed = parseVoiceOperationTranscript(transcript, {
+      fallbackType: form.type,
+      categories,
+      accounts: activeAccounts,
+    });
+    setForm((current) => {
+      const typeChanged = Boolean(parsed.patch.type && parsed.patch.type !== current.type);
+      return {
+        ...current,
+        ...(typeChanged ? { categoryId: '', allocations: [] } : {}),
+        ...parsed.patch,
+      };
+    });
+    setError(parsed.hasCriticalAmount ? '' : 'Речь распознана, но сумму определить не удалось — укажите её вручную');
+    return parsed;
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-backdrop-in">
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 w-full max-w-md max-h-[90vh] overflow-y-auto animate-modal-in">
@@ -274,6 +294,8 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
               ))}
             </select>
           </div>
+
+          <VoiceOperationInput disabled={loading} onTranscript={handleVoiceTranscript} />
 
           {/* Счёт (for non-transfer) */}
           {form.type !== 'transfer' && activeAccounts.length > 1 && (
