@@ -52,6 +52,13 @@ export default function VoiceOperationInput({ disabled = false, onTranscript }) 
 
   const isRecording = status === 'recording';
   const busy = disabled || processing || status === 'requesting';
+  const triggerLabel = processing
+    ? 'Распознаю запись'
+    : status === 'requesting'
+      ? 'Запрашиваю доступ к микрофону'
+      : transcript
+        ? 'Записать операцию заново'
+        : 'Продиктовать операцию';
 
   return (
     <section className="rounded-xl border border-indigo-200 bg-indigo-50/70 p-3 dark:border-indigo-800 dark:bg-indigo-950/30" aria-label="Голосовой ввод операции">
@@ -61,9 +68,8 @@ export default function VoiceOperationInput({ disabled = false, onTranscript }) 
           <p className="text-xs text-indigo-700/80 dark:text-indigo-300/70">Продиктуйте тип, сумму, категорию и счёт</p>
         </div>
         {!isRecording && (
-          <button type="button" onClick={beginRecording} disabled={busy} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50" aria-label="Начать запись операции">
-            {busy ? <Loader2 size={17} className="animate-spin" /> : <Mic size={17} />}
-            {processing ? 'Распознаю…' : status === 'requesting' ? 'Микрофон…' : transcript ? 'Повторить' : 'Продиктовать'}
+          <button type="button" onClick={beginRecording} disabled={busy} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-indigo-600 text-white shadow-sm transition-colors hover:bg-indigo-700 disabled:opacity-50" aria-label={triggerLabel} title={triggerLabel}>
+            {busy ? <Loader2 size={20} className="animate-spin" /> : <Mic size={20} />}
           </button>
         )}
       </div>
