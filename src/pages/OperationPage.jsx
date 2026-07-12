@@ -13,8 +13,9 @@ import AddOperationModal from '../components/AddOperationModal';
 import EditOperationModal from '../components/EditOperationModal';
 import QuickButtonsSettings from '../components/QuickButtonsSettings';
 import OperationCommentsModal from '../components/OperationCommentsModal';
+import SplitOperationModal from '../components/SplitOperationModal';
 import MonthPicker from '../components/MonthPicker';
-import { Pencil, Trash2, ChevronDown, X, Plus, Settings, Wallet, Download, Upload, Search, SlidersHorizontal, MoreHorizontal, MessageSquare, CheckCircle2, ShieldCheck, RotateCcw, ListChecks } from 'lucide-react';
+import { Pencil, Trash2, ChevronDown, X, Plus, Settings, Wallet, Download, Upload, Search, SlidersHorizontal, MoreHorizontal, MessageSquare, CheckCircle2, ShieldCheck, RotateCcw, ListChecks, Split } from 'lucide-react';
 import { formatSignedAmount, formatUnsignedAmount, formatGroupDate } from '../utils/formatters';
 import { getMonthRange } from '../utils/dateRange';
 import { buildOperationsCSV, downloadOperationsCSV } from '../utils/export';
@@ -76,6 +77,7 @@ export function OperationPage() {
     updateOperation,
     deleteOperation,
     transitionOperationStatus,
+    splitOperation,
     totalCount,
     hasMore,
     loadMore,
@@ -124,6 +126,7 @@ export function OperationPage() {
   const [actionMenuId, setActionMenuId] = useState(null);
   const [importOpen, setImportOpen] = useState(false);
   const [commentsOperation, setCommentsOperation] = useState(null);
+  const [splittingOperation, setSplittingOperation] = useState(null);
 
   useEffect(() => {
     if (!actionMenuId) return undefined;
@@ -475,6 +478,10 @@ export function OperationPage() {
       setExporting(false);
     }
   };
+
+  const canSplitRecord = (operation) => canEditRecord(operation)
+    && operation.type !== 'transfer'
+    && !operation.debt_id;
 
   const canTransitionRecord = (operation) => {
     if (!operation || operation.type === 'transfer') return false;
@@ -1014,6 +1021,7 @@ export function OperationPage() {
                           {actionMenuId === operation.id && (
                             <div className="absolute right-0 top-12 z-20 min-w-44 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl dark:border-gray-700 dark:bg-gray-800">
                               {canEditRecord(operation) && <button type="button" onClick={(event) => { event.stopPropagation(); setActionMenuId(null); setEditingOperation(operation); }} className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-700"><Pencil size={16} />Редактировать</button>}
+                              {canSplitRecord(operation) && <button type="button" onClick={(event) => { event.stopPropagation(); setActionMenuId(null); setSplittingOperation(operation); }} className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-primary-700 hover:bg-primary-50 dark:text-primary-300 dark:hover:bg-primary-950/30"><Split size={16} />Разделить / перенести</button>}
                               {canTransitionRecord(operation) && operation.status === 'new' && <button type="button" onClick={(event) => { event.stopPropagation(); handleStatusTransition(operation, 'verified'); }} className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-blue-700 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950/30"><CheckCircle2 size={16} />Подтвердить</button>}
                               {permissions.hasManagementRights && operation.status === 'verified' && <button type="button" onClick={(event) => { event.stopPropagation(); handleStatusTransition(operation, 'reconciled'); }} className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30"><ShieldCheck size={16} />Сверить</button>}
                               {permissions.hasManagementRights && operation.status === 'verified' && <button type="button" onClick={(event) => { event.stopPropagation(); handleStatusTransition(operation, 'new'); }} className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/30"><RotateCcw size={16} />Вернуть в новые</button>}
@@ -1074,6 +1082,7 @@ export function OperationPage() {
                             parts.push(<span key="cat" className="text-orange-500 font-medium">{catName}</span>);
                           }
                           if (operation.operation_allocations?.length > 0) parts.push(<span key="split" className="rounded bg-primary-50 px-1.5 py-0.5 text-xs font-medium text-primary-700 dark:bg-primary-950/40 dark:text-primary-300">{operation.operation_allocations.length} части</span>);
+                          if (operation.split_group_id) parts.push(<span key="physical-split" className="rounded bg-violet-50 px-1.5 py-0.5 text-xs font-medium text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">часть разделения</span>);
                           const counterpartyName = counterpartyMap.get(operation.counterparty_id)?.display_name;
                           if (counterpartyName) parts.push(<span key="counterparty" className="font-medium text-cyan-700 dark:text-cyan-300">{counterpartyName}</span>);
                           parts.push(
@@ -1120,6 +1129,7 @@ export function OperationPage() {
                         {actionMenuId === operation.id && (
                           <div className="absolute right-0 top-12 z-20 min-w-44 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl dark:border-gray-700 dark:bg-gray-800">
                             {canEditRecord(operation) && <button type="button" onClick={(event) => { event.stopPropagation(); setActionMenuId(null); setEditingOperation(operation); }} className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-700"><Pencil size={16} />Редактировать</button>}
+                            {canSplitRecord(operation) && <button type="button" onClick={(event) => { event.stopPropagation(); setActionMenuId(null); setSplittingOperation(operation); }} className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-primary-700 hover:bg-primary-50 dark:text-primary-300 dark:hover:bg-primary-950/30"><Split size={16} />Разделить / перенести</button>}
                             {canTransitionRecord(operation) && operation.status === 'new' && <button type="button" onClick={(event) => { event.stopPropagation(); handleStatusTransition(operation, 'verified'); }} className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-blue-700 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950/30"><CheckCircle2 size={16} />Подтвердить</button>}
                             {permissions.hasManagementRights && operation.status === 'verified' && <button type="button" onClick={(event) => { event.stopPropagation(); handleStatusTransition(operation, 'reconciled'); }} className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30"><ShieldCheck size={16} />Сверить</button>}
                             {permissions.hasManagementRights && operation.status === 'verified' && <button type="button" onClick={(event) => { event.stopPropagation(); handleStatusTransition(operation, 'new'); }} className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/30"><RotateCcw size={16} />Вернуть в новые</button>}
@@ -1186,6 +1196,14 @@ export function OperationPage() {
           canManage={permissions.canEditAllOperations}
           onClose={() => setCommentsOperation(null)}
           onChanged={refresh}
+        />
+      )}
+
+      {splittingOperation && (
+        <SplitOperationModal
+          operation={splittingOperation}
+          onClose={() => setSplittingOperation(null)}
+          onSplit={splitOperation}
         />
       )}
     </div>

@@ -1,0 +1,29 @@
+{
+  "name": "ФинУчёт — FinTrackApp",
+  "short_name": "ФинУчёт",
+  "description": "Учёт доходов, расходов и денежных планов",
+  "lang": "ru",
+  "start_url": "/workspaces?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f9fafb",
+  "theme_color": "#2563eb",
+  "categories": ["finance", "business", "productivity"],
+  "icons": [
+    {
+      "src": "/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Добавить расход",
+      "short_name": "Новый расход",
+      "url": "/operations?new=expense&source=pwa-shortcut",
+      "icons": [{ "src": "/app-icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    }
+  ]
+}

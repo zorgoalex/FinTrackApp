@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../contexts/AuthContext';
+import { cacheReference, getCachedReference } from '../utils/offlineStore';
 
 export function useAccounts(workspaceId) {
   const [accounts, setAccounts] = useState([]);
@@ -23,10 +24,17 @@ export function useAccounts(workspaceId) {
 
       if (loadErr) throw loadErr;
       setAccounts(data || []);
+      await cacheReference('accounts', workspaceId, data || []);
     } catch (e) {
       console.error('useAccounts: load error', e);
-      setError(e.message || 'Ошибка загрузки счетов');
-      setAccounts([]);
+      const cached = await getCachedReference('accounts', workspaceId).catch(() => null);
+      if (cached) {
+        setAccounts(cached);
+        setError(null);
+      } else {
+        setError(e.message || 'Ошибка загрузки счетов');
+        setAccounts([]);
+      }
     } finally {
       setLoading(false);
     }

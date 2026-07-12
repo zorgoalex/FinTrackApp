@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../contexts/AuthContext';
+import { enqueueOfflineExpense, isOfflineExpenseType, OFFLINE_SYNC_COMPLETED } from '../utils/offlineStore';
 
 const EMPTY_PERIOD_SUMMARY = {
   income: 0,
@@ -110,12 +111,8 @@ function calculateSummary(operations) {
 }
 
 async function getAuthUser() {
-  const { data, error } = await supabase.auth.getUser();
-  if (error) {
-    return null;
-  }
-
-  return data?.user || null;
+  const { data: sessionData } = await supabase.auth.getSession();
+  return sessionData?.session?.user || null;
 }
 
 export function useOperations(workspaceId, options = {}) {
@@ -184,7 +181,7 @@ export function useOperations(workspaceId, options = {}) {
         (async () => {
           let query = supabase
             .from('operations')
-            .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id, counterparty_id, account_id, transfer_group_id, transfer_direction, linked_operation_id, debt_id, debt_applied_amount, currency, exchange_rate, base_amount, import_session_id, import_fingerprint, import_confidence, status, verified_at, verified_by, reconciled_at, reconciled_by, operation_allocations(id, amount, base_amount, category_id, counterparty_id, position)', { count: 'exact' })
+            .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id, counterparty_id, account_id, transfer_group_id, transfer_direction, linked_operation_id, split_group_id, debt_id, debt_applied_amount, currency, exchange_rate, base_amount, import_session_id, import_fingerprint, import_confidence, status, verified_at, verified_by, reconciled_at, reconciled_by, operation_allocations(id, amount, base_amount, category_id, counterparty_id, position)', { count: 'exact' })
             .eq('workspace_id', workspaceId);
           if (dateFrom) query = query.gte('operation_date', dateFrom);
           if (dateTo) query = query.lte('operation_date', dateTo);
@@ -295,6 +292,12 @@ export function useOperations(workspaceId, options = {}) {
       return null;
     }
 
+    if (typeof navigator !== 'undefined' && !navigator.onLine && !isOfflineExpenseType(type)) {
+      const offlineError = new Error('Офлайн можно добавить только расход. Доходы и переводы требуют соединения.');
+      setError(offlineError.message);
+      throw offlineError;
+    }
+
     // Handle transfer type separately via RPC
     if (type === 'transfer') {
       try {
@@ -371,27 +374,41 @@ export function useOperations(workspaceId, options = {}) {
     const amount = Number(data?.amount) || 0;
     const baseAmount = data?.base_amount ? Number(data.base_amount) : amount;
 
+    const createParams = {
+      p_workspace_id: workspaceId,
+      p_amount: amount,
+      p_type: type,
+      p_description: data?.description || '',
+      p_operation_date: data?.operation_date || new Date().toISOString().slice(0, 10),
+      p_category_id: data?.category_id || null,
+      p_counterparty_id: data?.counterparty_id || null,
+      p_account_id: data?.account_id || null,
+      p_currency: data?.currency || 'KZT',
+      p_exchange_rate: data?.exchange_rate ? Number(data.exchange_rate) : 1,
+      p_base_amount: baseAmount,
+      p_debt_id: data?.debt_id || null,
+      p_debt_applied_amount: data?.debt_applied_amount ? Number(data.debt_applied_amount) : null,
+      p_allocations: buildAllocationsPayload(data?.allocations, amount, baseAmount),
+      p_tag_names: tagNames,
+    };
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      const queued = await enqueueOfflineExpense({ workspaceId, payload: createParams });
+      setError(null);
+      return {
+        id: queued.client_request_id,
+        ...data,
+        workspace_id: workspaceId,
+        user_id: userId,
+        offline_pending: true,
+      };
+    }
+
     try {
       setLoading(true);
       setError(null);
 
-      const { data: insertedData, error: insertError } = await supabase.rpc('create_operation_with_allocations', {
-        p_workspace_id: workspaceId,
-        p_amount: amount,
-        p_type: type,
-        p_description: data?.description || '',
-        p_operation_date: data?.operation_date || new Date().toISOString().slice(0, 10),
-        p_category_id: data?.category_id || null,
-        p_counterparty_id: data?.counterparty_id || null,
-        p_account_id: data?.account_id || null,
-        p_currency: data?.currency || 'KZT',
-        p_exchange_rate: data?.exchange_rate ? Number(data.exchange_rate) : 1,
-        p_base_amount: baseAmount,
-        p_debt_id: data?.debt_id || null,
-        p_debt_applied_amount: data?.debt_applied_amount ? Number(data.debt_applied_amount) : null,
-        p_allocations: buildAllocationsPayload(data?.allocations, amount, baseAmount),
-        p_tag_names: tagNames,
-      });
+      const { data: insertedData, error: insertError } = await supabase.rpc('create_operation_with_allocations', createParams);
 
       if (insertError) {
         throw insertError;
@@ -581,6 +598,31 @@ export function useOperations(workspaceId, options = {}) {
     return updated;
   }, [loadSummary, workspaceId]);
 
+  const splitOperation = useCallback(async (id, parts) => {
+    if (!workspaceId || !id) throw new Error('Операция не выбрана');
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      throw new Error('Для разделения операции требуется соединение');
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const { data, error: splitError } = await supabase.rpc('split_operation', {
+        p_operation_id: id,
+        p_parts: parts,
+      });
+      if (splitError) throw splitError;
+      await loadOperations();
+      return data || [];
+    } catch (splitException) {
+      console.error('useOperations: split error', splitException);
+      setError(splitException.message || 'Ошибка разделения операции');
+      throw splitException;
+    } finally {
+      setLoading(false);
+    }
+  }, [loadOperations, workspaceId]);
+
   useEffect(() => {
     setVisibleLimit(pageSize);
   }, [workspaceId, dateFrom, dateTo, pageSize]);
@@ -588,6 +630,14 @@ export function useOperations(workspaceId, options = {}) {
   useEffect(() => {
     loadOperations();
   }, [loadOperations]);
+
+  useEffect(() => {
+    const handleOfflineSync = (event) => {
+      if (event.detail?.workspaceId === workspaceId) loadOperations();
+    };
+    window.addEventListener(OFFLINE_SYNC_COMPLETED, handleOfflineSync);
+    return () => window.removeEventListener(OFFLINE_SYNC_COMPLETED, handleOfflineSync);
+  }, [loadOperations, workspaceId]);
 
   const summary = useMemo(
     () => serverSummary || calculateSummary(operations),
@@ -602,6 +652,7 @@ export function useOperations(workspaceId, options = {}) {
     updateOperation,
     deleteOperation,
     transitionOperationStatus,
+    splitOperation,
     refresh,
     summary,
     totalCount,

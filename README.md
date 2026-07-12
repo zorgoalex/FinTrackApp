@@ -213,15 +213,40 @@ SUPABASE_ACCESS_TOKEN=... npx supabase@latest functions deploy api \
 Центр уведомлений хранит непрочитанные in-app напоминания и индивидуальные настройки
 каждого участника пространства. Пользователь выбирает каналы, типы событий, несколько
 сроков до события, отдельные сообщения или дневную сводку, час доставки и часовой пояс.
-Сейчас работают `in_app`, уведомления браузера при открытом приложении и `telegram`;
-модель каналов расширяется строковыми идентификаторами без изменения схемы для будущих
-`email`, `whatsapp` и других провайдеров.
+Работают `in_app`, `telegram`, настоящий Web Push через service worker и `email` через
+Resend. Web Push продолжает доставку после закрытия вкладки; недействительные подписки
+удаляются после ответа push-провайдера `404/410`. Для каждого канала сохраняются время
+успешной доставки и последняя ошибка, поэтому повторный запуск cron доставляет только
+незавершённые сообщения.
 
 Edge Function `dispatch-notifications` обрабатывает плановые платежи, регулярные операции
 и сроки задолженностей. Она вызывается Supabase Cron раз в час на пятой минуте, а повторные
 уведомления блокируются уникальным ключом события и срока напоминания. Серверные secrets:
-`NOTIFICATION_CRON_SECRET` и `TELEGRAM_BOT_TOKEN`; в Vercel они не нужны. Секрет cron
-хранится в Supabase Vault и передаётся функции заголовком `x-cron-secret`.
+`NOTIFICATION_CRON_SECRET`, `TELEGRAM_BOT_TOKEN`, `RESEND_API_KEY`,
+`NOTIFICATION_FROM_EMAIL`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` и `VAPID_SUBJECT`;
+в Vercel они не нужны. Публичная часть того же VAPID-ключа задаётся в Vercel как
+`VITE_WEB_PUSH_PUBLIC_KEY`. Секрет cron хранится в Supabase Vault и передаётся функции
+заголовком `x-cron-secret`.
+
+VAPID-пару можно создать командой `npx web-push generate-vapid-keys`. После применения
+миграции `20260713020000_pwa_push_email.sql` нужно задать secrets и развернуть dispatcher:
+
+```bash
+npx supabase secrets set VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... \
+  VAPID_SUBJECT=mailto:admin@example.com RESEND_API_KEY=... \
+  NOTIFICATION_FROM_EMAIL="FinTrackApp <notifications@example.com>"
+npx supabase functions deploy dispatch-notifications --no-verify-jwt
+```
+
+### PWA и offline-расходы
+
+Production build содержит manifest и service worker, устанавливается как PWA и кеширует
+application shell. Последние успешно загруженные workspace, счета и категории хранятся в
+IndexedDB. Без сети пользователь может добавить расход или зарплату сотрудникам: запись
+получает клиентский UUID и остаётся в локальной очереди. При восстановлении соединения
+`create_offline_expense` атомарно проверяет права и финансовые справочники и дедуплицирует
+повторы. Конфликт не удаляет локальные данные — он показывается в общей offline-панели,
+где запись можно повторить или удалить вручную. Доходы и переводы offline запрещены.
 
 ### AI-ассистент
 

@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from './AuthContext';
 import { useAuth } from './AuthContext';
+import { cacheReference, getCachedReference } from '../utils/offlineStore';
 
 const WorkspaceContext = createContext({});
 
@@ -60,7 +61,9 @@ export function WorkspaceProvider({ children }) {
 
   const loadAllWorkspaces = async () => {
     if (!user) return;
-    
+    const cachedWorkspaces = await getCachedReference('workspaces', user.id).catch(() => null);
+    if (cachedWorkspaces) setAllWorkspaces(cachedWorkspaces);
+
     try {
       console.log('WorkspaceContext: Loading all workspaces for user', user.id);
       
@@ -122,6 +125,7 @@ export function WorkspaceProvider({ children }) {
       
       console.log('WorkspaceContext: All workspaces loaded', workspaces);
       setAllWorkspaces(workspaces);
+      await cacheReference('workspaces', user.id, workspaces);
       
     } catch (err) {
       console.error('WorkspaceContext: Error loading all workspaces', err);
@@ -130,7 +134,12 @@ export function WorkspaceProvider({ children }) {
 
   const loadWorkspace = async () => {
     if (!user || !workspaceId) return;
-    
+    const cachedWorkspace = await getCachedReference('workspace', `${user.id}:${workspaceId}`).catch(() => null);
+    if (cachedWorkspace) {
+      setCurrentWorkspace(cachedWorkspace);
+      setUserRole(cachedWorkspace.userRole || null);
+    }
+
     try {
       setLoading(true);
       setError('');
@@ -147,6 +156,7 @@ export function WorkspaceProvider({ children }) {
       
       if (memberError) {
         console.error('WorkspaceContext: Member access error', memberError);
+        if (!navigator.onLine && cachedWorkspace) return;
         setError('Нет доступа к рабочему пространству');
         return;
       }
@@ -175,6 +185,7 @@ export function WorkspaceProvider({ children }) {
       console.log('WorkspaceContext: Workspace loaded', workspace);
       setCurrentWorkspace(workspace);
       setUserRole(memberData?.role || 'viewer');
+      await cacheReference('workspace', `${user.id}:${workspaceId}`, workspace);
       
       // Fire-and-forget: don't wait for lastAccessed update
       updateLastAccessed().catch(e => console.error('updateLastAccessed error', e));

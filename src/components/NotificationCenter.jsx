@@ -15,8 +15,8 @@ const EVENT_OPTIONS = [
 const CHANNEL_OPTIONS = [
   { value: 'in_app', label: 'В приложении' },
   { value: 'telegram', label: 'Telegram-бот' },
-  { value: 'browser', label: 'Уведомления браузера' },
-  { value: 'email', label: 'E-mail', disabled: true, hint: 'Подключение позже' },
+  { value: 'browser', label: 'Web Push', hint: 'Даже когда приложение закрыто' },
+  { value: 'email', label: 'E-mail' },
   { value: 'whatsapp', label: 'WhatsApp', disabled: true, hint: 'Подключение позже' },
 ];
 
@@ -54,6 +54,12 @@ export default function NotificationCenter({ notifications }) {
     if (result.error) setError(result.error); else setDraft((current) => ({ ...current, channels: [...new Set([...(current.channels || []), 'browser'])] }));
   };
 
+  const disableBrowser = async () => {
+    setError('');
+    const result = await notifications.disableBrowser();
+    if (result.error) setError(result.error); else setDraft((current) => ({ ...current, channels: (current.channels || []).filter((channel) => channel !== 'browser') }));
+  };
+
   return (
     <div className="relative">
       <button
@@ -85,7 +91,7 @@ export default function NotificationCenter({ notifications }) {
               >
                 {CHANNEL_OPTIONS.map((option) => {
                   const telegramUnavailable = option.value === 'telegram' && !notifications.telegramLinked;
-                  return <Toggle key={option.value} label={option.label} hint={telegramUnavailable ? 'Сначала привяжите аккаунт в боте' : option.value === 'browser' ? 'Пока приложение открыто' : option.hint} checked={draft.channels?.includes(option.value)} disabled={option.disabled || telegramUnavailable} onChange={(checked) => option.value === 'browser' && checked ? enableBrowser() : toggleListValue('channels', option.value)} />;
+                  return <Toggle key={option.value} label={option.label} hint={telegramUnavailable ? 'Сначала привяжите аккаунт в боте' : option.hint} checked={draft.channels?.includes(option.value)} disabled={option.disabled || telegramUnavailable} onChange={(checked) => option.value === 'browser' ? (checked ? enableBrowser() : disableBrowser()) : toggleListValue('channels', option.value)} />;
                 })}
               </SettingsSpoiler>
 

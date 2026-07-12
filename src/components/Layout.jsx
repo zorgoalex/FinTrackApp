@@ -9,6 +9,7 @@ import WorkspaceSwitcher from './WorkspaceSwitcher'
 import NotificationCenter from './NotificationCenter'
 import useNotifications from '../hooks/useNotifications'
 import { BUILD_LABEL } from '../utils/buildInfo'
+import OfflineQueueStatus from './OfflineQueueStatus'
 
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -155,6 +156,8 @@ export default function Layout() {
             </div>
           </div>
         </header>
+
+        {workspaceId && <OfflineQueueStatus workspaceId={workspaceId} />}
 
         {/* Main Content */}
         <main className="min-w-0 flex-1 pb-20 lg:pb-0">

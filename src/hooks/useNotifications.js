@@ -17,7 +17,6 @@ export function useNotifications(workspaceId) {
   const [telegramLinked, setTelegramLinked] = useState(false);
   const [loading, setLoading] = useState(false);
   const initialized = useRef(false);
-  const knownIds = useRef(new Set());
 
   const load = useCallback(async () => {
     if (!workspaceId || !user) return;
@@ -31,12 +30,6 @@ export function useNotifications(workspaceId) {
     if (!preferencesResult.data && !preferencesResult.error) {
       await supabase.from('notification_preferences').upsert({ ...nextPreferences, workspace_id: workspaceId, user_id: user.id }, { onConflict: 'workspace_id,user_id' });
     }
-    if (initialized.current && nextPreferences.channels?.includes('browser') && typeof window.Notification !== 'undefined' && window.Notification.permission === 'granted') {
-      nextItems.filter((item) => !item.read_at && !knownIds.current.has(item.id)).forEach((item) => {
-        new window.Notification(item.title, { body: item.body, tag: item.id });
-      });
-    }
-    knownIds.current = new Set(nextItems.map((item) => item.id));
     initialized.current = true;
     setItems(nextItems);
     setPreferences(nextPreferences);
@@ -66,13 +59,66 @@ export function useNotifications(workspaceId) {
   }, [user, workspaceId]);
 
   const enableBrowser = useCallback(async () => {
-    if (typeof window.Notification === 'undefined') return { error: 'Этот браузер не поддерживает уведомления' };
+    if (typeof window.Notification === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+      return { error: 'Этот браузер не поддерживает Web Push' };
+    }
+    const publicKey = import.meta.env.VITE_WEB_PUSH_PUBLIC_KEY?.trim();
+    if (!publicKey) return { error: 'Web Push ещё не настроен на сервере' };
     const permission = await window.Notification.requestPermission();
     if (permission !== 'granted') return { error: 'Браузер не разрешил уведомления' };
-    return savePreferences({ ...preferences, channels: [...new Set([...(preferences.channels || []), 'browser'])] });
-  }, [preferences, savePreferences]);
+    try {
+      const registration = await navigator.serviceWorker.register('/sw.js');
+      const existing = await registration.pushManager.getSubscription();
+      const subscription = existing || await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      });
+      const serialized = subscription.toJSON();
+      const { error: subscriptionError } = await supabase.rpc('upsert_push_subscription', {
+        p_workspace_id: workspaceId,
+        p_endpoint: subscription.endpoint,
+        p_p256dh: serialized.keys?.p256dh || '',
+        p_auth: serialized.keys?.auth || '',
+        p_user_agent: navigator.userAgent,
+      });
+      if (subscriptionError) throw subscriptionError;
+      return savePreferences({ ...preferences, channels: [...new Set([...(preferences.channels || []), 'browser'])] });
+    } catch (pushError) {
+      return { error: pushError.message || 'Не удалось создать Web Push подписку' };
+    }
+  }, [preferences, savePreferences, workspaceId]);
 
-  return { items, unreadCount: items.filter((item) => !item.read_at).length, preferences, telegramLinked, loading, load, savePreferences, markAllRead, enableBrowser };
+  const disableBrowser = useCallback(async () => {
+    try {
+      const registration = await navigator.serviceWorker.getRegistration();
+      const subscription = await registration?.pushManager.getSubscription();
+      if (subscription) {
+        await supabase.rpc('delete_push_subscription', {
+          p_workspace_id: workspaceId,
+          p_endpoint: subscription.endpoint,
+        });
+        const { count } = await supabase.from('push_subscriptions')
+          .select('id', { count: 'exact', head: true })
+          .eq('endpoint', subscription.endpoint);
+        if (!count) await subscription.unsubscribe();
+      }
+      return savePreferences({
+        ...preferences,
+        channels: (preferences.channels || []).filter((channel) => channel !== 'browser'),
+      });
+    } catch (pushError) {
+      return { error: pushError.message || 'Не удалось отключить Web Push' };
+    }
+  }, [preferences, savePreferences, workspaceId]);
+
+  return { items, unreadCount: items.filter((item) => !item.read_at).length, preferences, telegramLinked, loading, load, savePreferences, markAllRead, enableBrowser, disableBrowser };
+}
+
+function urlBase64ToUint8Array(value) {
+  const padding = '='.repeat((4 - value.length % 4) % 4);
+  const base64 = (value + padding).replaceAll('-', '+').replaceAll('_', '/');
+  const raw = window.atob(base64);
+  return Uint8Array.from([...raw].map((character) => character.charCodeAt(0)));
 }
 
 export default useNotifications;

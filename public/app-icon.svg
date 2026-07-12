@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="ФинУчёт">
+  <rect width="512" height="512" rx="112" fill="#2563eb"/>
+  <path d="M128 146c0-22 18-40 40-40h176c22 0 40 18 40 40v220c0 22-18 40-40 40H168c-22 0-40-18-40-40V146Z" fill="#fff"/>
+  <path d="M174 170h164M174 226h104" stroke="#2563eb" stroke-width="28" stroke-linecap="round"/>
+  <path d="M176 310h160M256 256v108" stroke="#16a34a" stroke-width="30" stroke-linecap="round"/>
+</svg>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../contexts/AuthContext';
+import { cacheReference, getCachedReference } from '../utils/offlineStore';
 
 export function useCategories(workspaceId) {
   const [categories, setCategories] = useState([]);
@@ -22,10 +23,17 @@ export function useCategories(workspaceId) {
 
       if (loadErr) throw loadErr;
       setCategories(data || []);
+      await cacheReference('categories', workspaceId, data || []);
     } catch (e) {
       console.error('useCategories: load error', e);
-      setError(e.message || 'Ошибка загрузки категорий');
-      setCategories([]);
+      const cached = await getCachedReference('categories', workspaceId).catch(() => null);
+      if (cached) {
+        setCategories(cached);
+        setError(null);
+      } else {
+        setError(e.message || 'Ошибка загрузки категорий');
+        setCategories([]);
+      }
     } finally {
       setLoading(false);
     }
