@@ -270,9 +270,9 @@ export default function WorkspacePage() {
   }
 
   return (
-    <div className="min-h-screen relative">
-      <div className="mx-auto max-w-7xl p-4 lg:px-8 lg:py-7">
-        <div className="space-y-5 mb-20">
+    <div className="relative min-h-screen min-w-0 max-w-full">
+      <div className="mx-auto min-w-0 max-w-7xl p-4 lg:px-8 lg:py-7">
+        <div className="mb-20 min-w-0 space-y-5">
           <header className="hidden items-end justify-between gap-6 sm:flex">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-600 dark:text-primary-400">Рабочее пространство</p>
@@ -291,15 +291,15 @@ export default function WorkspacePage() {
               <div className="h-7 w-40 rounded bg-gray-200 dark:bg-gray-700" />
             </div>
           ) : (
-            <section className="card sm:hidden" aria-labelledby="mobile-month-summary">
+            <section className="card min-w-0 max-w-full overflow-hidden sm:hidden" aria-labelledby="mobile-month-summary">
               <div className="flex items-start justify-between gap-3">
-                <div>
+                <div className="min-w-0">
                   <p id="mobile-month-summary" className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Итог месяца</p>
                   <p className={`mt-1 text-2xl font-bold tabular-nums ${monthTotalColor}`}>
                     {formatSignedAmount(summary?.month?.total || 0)}
                   </p>
                 </div>
-                <button onClick={openAnalytics} className="min-h-10 rounded-lg px-3 text-sm font-medium text-primary-600 dark:text-primary-400">
+                <button onClick={openAnalytics} className="min-h-10 shrink-0 rounded-lg px-3 text-sm font-medium text-primary-600 dark:text-primary-400">
                   Аналитика
                 </button>
               </div>

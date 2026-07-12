@@ -59,7 +59,7 @@ export default function Layout() {
           <X size={24} className="text-gray-600 dark:text-gray-400" />
         </button>
       </div>
-      <nav className="flex-1 p-4">
+      <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
         <ul className="space-y-1">
           {menuItems.map((item) => {
             const Icon = item.icon
@@ -83,7 +83,7 @@ export default function Layout() {
           })}
         </ul>
       </nav>
-      <div className="border-t border-gray-200 px-4 pt-4 pb-[calc(5rem+env(safe-area-inset-bottom))] space-y-3 dark:border-gray-700 lg:pb-4">
+      <div className="shrink-0 border-t border-gray-200 px-4 pt-4 pb-[calc(5rem+env(safe-area-inset-bottom))] space-y-3 dark:border-gray-700 lg:pb-4">
         <button
           onClick={toggleTheme}
           className="flex items-center gap-2 w-full py-2 px-3 rounded-xl text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
@@ -127,7 +127,7 @@ export default function Layout() {
         <SidebarContent />
       </div>
 
-      <div className="flex-1 flex flex-col lg:pl-64">
+      <div className="flex min-w-0 flex-1 flex-col lg:pl-64">
         {/* Mobile Header */}
         <header className="glass border-b border-gray-200 dark:border-gray-700 px-4 py-3 sticky top-0 z-30 lg:hidden shadow-sm">
           <div className="flex items-center justify-between">
@@ -157,7 +157,7 @@ export default function Layout() {
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 pb-20 lg:pb-0">
+        <main className="min-w-0 flex-1 pb-20 lg:pb-0">
           <Outlet />
         </main>
 
