@@ -12,6 +12,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import TagInput from './TagInput';
 import DebtSelector from './DebtSelector';
 import { categoryTypeForOperation, operationTypesForWorkspace } from '../utils/operationTypes';
+import OperationAllocationsEditor, { allocationsMatchTotal } from './OperationAllocationsEditor';
 
 const OPERATION_TYPES = {
   income:   { label: 'Доход',    color: 'text-green-600',  bg: 'bg-green-600 hover:bg-green-700' },
@@ -64,6 +65,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
       debtId:        prefillDebt?.id || '',
       debtAppliedAmount: '',
       exchangeRate:  '',
+      allocations:   [],
     };
   });
 
@@ -182,6 +184,10 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
         }
       }
     }
+    if (form.type !== 'transfer' && !allocationsMatchTotal(form.allocations, form.amount)) {
+      setError('Сумма частей должна точно совпадать с суммой операции');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -212,8 +218,8 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
               amount,
               description:    form.description,
               operation_date: form.operationDate,
-              category_id:    form.categoryId || null,
-              counterparty_id: form.counterpartyId || null,
+              category_id:    form.allocations.length >= 2 ? null : (form.categoryId || null),
+              counterparty_id: form.allocations.length >= 2 ? null : (form.counterpartyId || null),
               account_id:     form.accountId || defaultAccount?.id || null,
               tagNames:       (tagInputRef.current?.getAllTags() ?? form.selectedTags).map((t) => t.name),
               debt_id:        form.debtId || null,
@@ -221,6 +227,9 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
               currency:       operationCurrency,
               exchange_rate:  needsExchangeRate ? exchangeRate : null,
               base_amount:    Math.round(baseAmount * 100) / 100,
+              allocations:    form.allocations.map(({ amount: allocationAmount, category_id, counterparty_id }) => ({
+                amount: Number(allocationAmount), category_id: category_id || null, counterparty_id: counterparty_id || null,
+              })),
             };
           })();
       const saved = await onSave(payload);
@@ -256,7 +265,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
               value={form.type}
               onChange={(e) => {
                 const newType = e.target.value;
-                setForm((prev) => ({ ...prev, type: newType, categoryId: '' }));
+                setForm((prev) => ({ ...prev, type: newType, categoryId: '', allocations: [] }));
               }}
               className="input-field"
             >
@@ -377,6 +386,8 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
               {counterparties.map((item) => <option key={item.id} value={item.id}>{item.display_name}</option>)}
             </select>
           </div>}
+
+          {form.type !== 'transfer' && <OperationAllocationsEditor operationType={form.type} totalAmount={form.amount} currency={operationCurrency} categories={categories} counterparties={counterparties} allocations={form.allocations} onChange={(allocations) => setForm((current) => ({ ...current, allocations }))} />}
 
           {/* Сумма */}
           <div>

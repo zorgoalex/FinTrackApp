@@ -87,6 +87,7 @@ export function buildOperationsCSV(
     'Счёт',
     'Контрагент',
     'Категория',
+    'Распределение',
     'Теги',
     'Описание'
   ];
@@ -102,6 +103,7 @@ export function buildOperationsCSV(
     accountNames.get(operation.account_id) || '',
     counterpartyNames.get(operation.counterparty_id) || '',
     categoryNames.get(operation.category_id) || '',
+    (operation.operation_allocations || []).map((allocation) => `${categoryNames.get(allocation.category_id) || 'Без категории'}: ${allocation.amount}`).join(' | '),
     (operation.tags || []).map((tag) => tag.name).join(', '),
     operation.description || ''
   ]);

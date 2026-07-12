@@ -26,7 +26,7 @@ test('builds a detailed operations CSV with lookup names and safe cells', () => 
   });
 
   assert.ok(csv.startsWith('\uFEFFДата;Тип;'));
-  assert.match(csv, /2026-07-11;Расход;Сверена;;1250\.5;KZT;1;1250\.5;Карта;Магазин;Продукты;Дом, Срочно;/);
+  assert.match(csv, /2026-07-11;Расход;Сверена;;1250\.5;KZT;1;1250\.5;Карта;Магазин;Продукты;;Дом, Срочно;/);
   assert.match(csv, /"'=HYPERLINK\(""https:\/\/example\.com""\)"/);
 });
 

@@ -33,11 +33,22 @@ export function computeAnalytics(operations, categories = [], tags = []) {
   // Category breakdown
   const categoryMap = new Map();
   logicalOperations.forEach(op => {
-    if (!op.category_id) return;
-    const existing = categoryMap.get(op.category_id) || { amount: 0, count: 0 };
-    existing.amount += Number(op.base_amount ?? op.amount ?? 0);
-    existing.count += 1;
-    categoryMap.set(op.category_id, existing);
+    const allocations = op.operation_allocations || [];
+    const categoryAmounts = new Map();
+    if (allocations.length > 0) {
+      allocations.forEach((allocation) => {
+        if (!allocation.category_id) return;
+        categoryAmounts.set(allocation.category_id, (categoryAmounts.get(allocation.category_id) || 0) + Number(allocation.base_amount ?? allocation.amount ?? 0));
+      });
+    } else if (op.category_id) {
+      categoryAmounts.set(op.category_id, Number(op.base_amount ?? op.amount ?? 0));
+    }
+    categoryAmounts.forEach((amount, categoryId) => {
+      const existing = categoryMap.get(categoryId) || { amount: 0, count: 0 };
+      existing.amount += amount;
+      existing.count += 1;
+      categoryMap.set(categoryId, existing);
+    });
   });
 
   const categoryBreakdown = Array.from(categoryMap.entries())

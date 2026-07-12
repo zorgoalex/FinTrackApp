@@ -420,7 +420,7 @@ export function OperationPage() {
       for (let from = 0; ; from += pageSize) {
         const { data, error: operationsError } = await supabase
           .from('operations')
-          .select('id, amount, type, description, operation_date, category_id, counterparty_id, account_id, transfer_direction, currency, exchange_rate, base_amount, status')
+          .select('id, amount, type, description, operation_date, category_id, counterparty_id, account_id, transfer_direction, currency, exchange_rate, base_amount, status, operation_allocations(category_id, counterparty_id, amount, base_amount, position)')
           .eq('workspace_id', workspaceId)
           .gte('operation_date', dateFrom)
           .lte('operation_date', dateTo)
@@ -983,6 +983,7 @@ export function OperationPage() {
                           if (catName) {
                             parts.push(<span key="cat" className="text-orange-500 font-medium">{catName}</span>);
                           }
+                          if (operation.operation_allocations?.length > 0) parts.push(<span key="split" className="rounded bg-primary-50 px-1.5 py-0.5 text-xs font-medium text-primary-700 dark:bg-primary-950/40 dark:text-primary-300">{operation.operation_allocations.length} части</span>);
                           const counterpartyName = counterpartyMap.get(operation.counterparty_id)?.display_name;
                           if (counterpartyName) parts.push(<span key="counterparty" className="font-medium text-cyan-700 dark:text-cyan-300">{counterpartyName}</span>);
                           parts.push(

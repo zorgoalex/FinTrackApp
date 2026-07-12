@@ -12,6 +12,8 @@ import { usePermissions } from '../hooks/usePermissions';
 import TagInput from './TagInput';
 import DebtSelector from './DebtSelector';
 import { categoryTypeForOperation } from '../utils/operationTypes';
+import { supabase } from '../contexts/AuthContext';
+import OperationAllocationsEditor, { allocationsMatchTotal } from './OperationAllocationsEditor';
 
 const OPERATION_TYPES = {
   income:   { label: 'Доход',    color: 'text-green-600',  bg: 'bg-green-600 hover:bg-green-700' },
@@ -57,7 +59,22 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
     debtId:            operation.debt_id || '',
     debtAppliedAmount: operation.debt_applied_amount ? String(operation.debt_applied_amount) : '',
     exchangeRate:      operation.exchange_rate ? String(operation.exchange_rate) : '',
+    allocations:       [],
   });
+
+  useEffect(() => {
+    if (isTransfer) return;
+    let active = true;
+    supabase.from('operation_allocations')
+      .select('id, amount, category_id, counterparty_id')
+      .eq('operation_id', operation.id)
+      .order('created_at')
+      .then(({ data, error: allocationsError }) => {
+        if (!active || allocationsError || !data?.length) return;
+        setForm((current) => ({ ...current, allocations: data.map((item) => ({ ...item, key: item.id, amount: String(item.amount) })) }));
+      });
+    return () => { active = false; };
+  }, [isTransfer, operation.id]);
 
   const selectedAccount = useMemo(
     () => activeAccounts.find(account => account.id === form.accountId),
@@ -132,6 +149,10 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
       setError('Введите корректную сумму');
       return;
     }
+    if (!isTransfer && !allocationsMatchTotal(form.allocations, form.amount)) {
+      setError('Сумма частей должна точно совпадать с суммой операции');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -150,11 +171,12 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
             const exchangeRate = needsExchangeRate ? parseAmount(form.exchangeRate) : 1;
             const baseAmount = needsExchangeRate && Number.isFinite(exchangeRate) ? amount * exchangeRate : amount;
             return {
+              type:           operation.type,
               amount,
               description:    form.description,
               operation_date: form.operationDate,
-              category_id:    form.categoryId || null,
-              counterparty_id: form.counterpartyId || null,
+              category_id:    form.allocations.length >= 2 ? null : (form.categoryId || null),
+              counterparty_id: form.allocations.length >= 2 ? null : (form.counterpartyId || null),
               account_id:     form.accountId || undefined,
               tagNames:       (tagInputRef.current?.getAllTags() ?? form.selectedTags).map((t) => t.name),
               debt_id:        form.debtId || null,
@@ -162,6 +184,9 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
               currency:       operationCurrency,
               exchange_rate:  needsExchangeRate ? exchangeRate : null,
               base_amount:    Math.round(baseAmount * 100) / 100,
+              allocations:    form.allocations.map(({ amount: allocationAmount, category_id, counterparty_id }) => ({
+                amount: Number(allocationAmount), category_id: category_id || null, counterparty_id: counterparty_id || null,
+              })),
             };
           })();
       await onSave(operation.id, payload);
@@ -291,6 +316,8 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
               {counterparties.filter((item) => !item.is_archived || item.id === form.counterpartyId).map((item) => <option key={item.id} value={item.id}>{item.display_name}{item.is_archived ? ' (архив)' : ''}</option>)}
             </select>
           </div>}
+
+          {!isTransfer && <OperationAllocationsEditor operationType={operation.type} totalAmount={form.amount} currency={operationCurrency} categories={categories} counterparties={counterparties} allocations={form.allocations} onChange={(allocations) => setForm((current) => ({ ...current, allocations }))} />}
 
           {/* Сумма */}
           <div>

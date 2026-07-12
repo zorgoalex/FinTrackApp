@@ -46,6 +46,26 @@ function mapOperationWithDisplayName(operation, authUser) {
   };
 }
 
+function buildAllocationsPayload(allocations, amount, baseAmount) {
+  if (!Array.isArray(allocations) || allocations.length < 2) return [];
+  const total = Number(amount);
+  const baseTotal = Number(baseAmount);
+  let allocatedBase = 0;
+  return allocations.map((allocation, index) => {
+    const allocationAmount = Math.round(Number(allocation.amount) * 100) / 100;
+    const allocationBase = index === allocations.length - 1
+      ? Math.round((baseTotal - allocatedBase) * 100) / 100
+      : Math.round((allocationAmount / total) * baseTotal * 100) / 100;
+    allocatedBase += allocationBase;
+    return {
+      category_id: allocation.category_id || null,
+      counterparty_id: allocation.counterparty_id || null,
+      amount: allocationAmount,
+      base_amount: allocationBase,
+    };
+  });
+}
+
 function calculateSummary(operations) {
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -164,7 +184,7 @@ export function useOperations(workspaceId, options = {}) {
         (async () => {
           let query = supabase
             .from('operations')
-            .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id, counterparty_id, account_id, transfer_group_id, transfer_direction, linked_operation_id, debt_id, debt_applied_amount, currency, exchange_rate, base_amount, import_session_id, import_fingerprint, import_confidence, status, verified_at, verified_by, reconciled_at, reconciled_by', { count: 'exact' })
+            .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id, counterparty_id, account_id, transfer_group_id, transfer_direction, linked_operation_id, debt_id, debt_applied_amount, currency, exchange_rate, base_amount, import_session_id, import_fingerprint, import_confidence, status, verified_at, verified_by, reconciled_at, reconciled_by, operation_allocations(id, amount, base_amount, category_id, counterparty_id, position)', { count: 'exact' })
             .eq('workspace_id', workspaceId);
           if (dateFrom) query = query.gte('operation_date', dateFrom);
           if (dateTo) query = query.lte('operation_date', dateTo);
@@ -347,72 +367,34 @@ export function useOperations(workspaceId, options = {}) {
       }
     }
 
-    const payload = {
-      workspace_id: workspaceId,
-      user_id: userId,
-      amount: Number(data?.amount) || 0,
-      type,
-      description: data?.description || '',
-      operation_date: data?.operation_date || new Date().toISOString().slice(0, 10),
-      category_id: data?.category_id || null,
-      counterparty_id: data?.counterparty_id || null,
-      account_id: data?.account_id || null,
-      debt_id: data?.debt_id || null,
-      debt_applied_amount: data?.debt_applied_amount ? Number(data.debt_applied_amount) : null,
-      currency: data?.currency || 'KZT',
-      exchange_rate: data?.exchange_rate ? Number(data.exchange_rate) : null,
-      base_amount: data?.base_amount ? Number(data.base_amount) : Number(data?.amount) || 0,
-      import_session_id: data?.import_session_id || null,
-      import_fingerprint: data?.import_fingerprint || null,
-      import_confidence: data?.import_confidence ?? null,
-      status: data?.status || (data?.import_session_id ? 'new' : 'verified'),
-    };
-
     const tagNames = data?.tagNames || [];
+    const amount = Number(data?.amount) || 0;
+    const baseAmount = data?.base_amount ? Number(data.base_amount) : amount;
 
     try {
       setLoading(true);
       setError(null);
 
-      const { data: insertedData, error: insertError } = await supabase
-        .from('operations')
-        .insert([payload])
-        .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id, counterparty_id, account_id, transfer_group_id, transfer_direction, linked_operation_id, debt_id, debt_applied_amount, currency, exchange_rate, base_amount, import_session_id, import_fingerprint, import_confidence, status, verified_at, verified_by, reconciled_at, reconciled_by')
-        .single();
+      const { data: insertedData, error: insertError } = await supabase.rpc('create_operation_with_allocations', {
+        p_workspace_id: workspaceId,
+        p_amount: amount,
+        p_type: type,
+        p_description: data?.description || '',
+        p_operation_date: data?.operation_date || new Date().toISOString().slice(0, 10),
+        p_category_id: data?.category_id || null,
+        p_counterparty_id: data?.counterparty_id || null,
+        p_account_id: data?.account_id || null,
+        p_currency: data?.currency || 'KZT',
+        p_exchange_rate: data?.exchange_rate ? Number(data.exchange_rate) : 1,
+        p_base_amount: baseAmount,
+        p_debt_id: data?.debt_id || null,
+        p_debt_applied_amount: data?.debt_applied_amount ? Number(data.debt_applied_amount) : null,
+        p_allocations: buildAllocationsPayload(data?.allocations, amount, baseAmount),
+        p_tag_names: tagNames,
+      });
 
       if (insertError) {
         throw insertError;
-      }
-
-      // Create tags and link them
-      if (tagNames.length > 0 && insertedData?.id) {
-        const tagIds = (await Promise.all(tagNames.map(async (tagName) => {
-          const trimmed = tagName.trim();
-          if (!trimmed) return null;
-          const { data: existing } = await supabase
-            .from('tags')
-            .select('id')
-            .eq('workspace_id', workspaceId)
-            .eq('name', trimmed)
-            .maybeSingle();
-          if (existing?.id) return existing.id;
-          const { data: inserted, error: insertErr } = await supabase
-            .from('tags')
-            .insert({ workspace_id: workspaceId, name: trimmed, color: '#6B7280' })
-            .select('id')
-            .single();
-          if (insertErr) {
-            console.error('useOperations: tag insert error', insertErr);
-            return null;
-          }
-          return inserted?.id;
-        }))).filter(Boolean);
-        if (tagIds.length > 0) {
-          const { error: linkErr } = await supabase
-            .from('operation_tags')
-            .insert(tagIds.map((tagId) => ({ operation_id: insertedData.id, tag_id: tagId })));
-          if (linkErr) console.error('useOperations: operation_tags insert error', linkErr);
-        }
       }
 
       if (refreshAfter) await loadOperations();
@@ -493,72 +475,32 @@ export function useOperations(workspaceId, options = {}) {
       }
     }
 
-    const payload = {};
-    if (data.amount !== undefined) payload.amount = Number(data.amount) || 0;
-    if (data.description !== undefined) payload.description = data.description;
-    if (data.operation_date !== undefined) payload.operation_date = data.operation_date;
-    if (data.category_id !== undefined) payload.category_id = data.category_id || null;
-    if (data.counterparty_id !== undefined) payload.counterparty_id = data.counterparty_id || null;
-    if (data.account_id !== undefined) payload.account_id = data.account_id;
-    if (data.debt_id !== undefined) payload.debt_id = data.debt_id || null;
-    if (data.debt_applied_amount !== undefined) payload.debt_applied_amount = data.debt_applied_amount ? Number(data.debt_applied_amount) : null;
-    if (data.currency !== undefined) payload.currency = data.currency;
-    if (data.exchange_rate !== undefined) payload.exchange_rate = data.exchange_rate ? Number(data.exchange_rate) : null;
-    if (data.base_amount !== undefined) payload.base_amount = data.base_amount ? Number(data.base_amount) : null;
-
     try {
       setLoading(true);
       setError(null);
 
-      const { error: updateError } = await supabase
-        .from('operations')
-        .update(payload)
-        .eq('id', id)
-        .eq('workspace_id', workspaceId);
+      const amount = Number(data.amount) || 0;
+      const baseAmount = data.base_amount ? Number(data.base_amount) : amount;
+      const { error: updateError } = await supabase.rpc('update_operation_with_allocations', {
+        p_operation_id: id,
+        p_amount: amount,
+        p_type: data.type,
+        p_description: data.description || '',
+        p_operation_date: data.operation_date,
+        p_category_id: data.category_id || null,
+        p_counterparty_id: data.counterparty_id || null,
+        p_account_id: data.account_id,
+        p_currency: data.currency || 'KZT',
+        p_exchange_rate: data.exchange_rate ? Number(data.exchange_rate) : 1,
+        p_base_amount: baseAmount,
+        p_debt_id: data.debt_id || null,
+        p_debt_applied_amount: data.debt_applied_amount ? Number(data.debt_applied_amount) : null,
+        p_allocations: buildAllocationsPayload(data.allocations, amount, baseAmount),
+        p_tag_names: data.tagNames ?? null,
+      });
 
       if (updateError) {
         throw updateError;
-      }
-
-      // Update tags if provided
-      if (data.tagNames !== undefined) {
-        // Remove existing tag links
-        const { error: delErr } = await supabase
-          .from('operation_tags')
-          .delete()
-          .eq('operation_id', id);
-        if (delErr) console.error('useOperations: operation_tags delete error', delErr);
-
-        // Create new tag links (SELECT-then-INSERT to avoid upsert UPDATE policy requirement)
-        if (data.tagNames.length > 0) {
-          const tagIds = (await Promise.all(data.tagNames.map(async (tagName) => {
-            const trimmed = tagName.trim();
-            if (!trimmed) return null;
-            const { data: existing } = await supabase
-              .from('tags')
-              .select('id')
-              .eq('workspace_id', workspaceId)
-              .eq('name', trimmed)
-              .maybeSingle();
-            if (existing?.id) return existing.id;
-            const { data: inserted, error: insertErr } = await supabase
-              .from('tags')
-              .insert({ workspace_id: workspaceId, name: trimmed, color: '#6B7280' })
-              .select('id')
-              .single();
-            if (insertErr) {
-              console.error('useOperations: tag insert error (update)', insertErr);
-              return null;
-            }
-            return inserted?.id;
-          }))).filter(Boolean);
-          if (tagIds.length > 0) {
-            const { error: linkErr } = await supabase
-              .from('operation_tags')
-              .insert(tagIds.map((tagId) => ({ operation_id: id, tag_id: tagId })));
-            if (linkErr) console.error('useOperations: operation_tags insert error (update)', linkErr);
-          }
-        }
       }
 
       await loadOperations();

@@ -81,3 +81,22 @@ test('counts a transfer pair as one user operation and aggregates its tags once'
   assert.equal(result.tagBreakdown[0].count, 1);
   assert.equal(result.tagBreakdown[0].amount, 100);
 });
+
+test('uses split allocations for category analytics without double counting parent', () => {
+  const result = computeAnalytics([{
+    id: 'split-1', type: 'expense', amount: 100, base_amount: 100, category_id: 'legacy',
+    operation_allocations: [
+      { category_id: 'rent', amount: 60, base_amount: 60 },
+      { category_id: 'services', amount: 40, base_amount: 40 },
+    ],
+  }], [
+    { id: 'legacy', name: 'Legacy', type: 'expense' },
+    { id: 'rent', name: 'Rent', type: 'expense' },
+    { id: 'services', name: 'Services', type: 'expense' },
+  ]);
+
+  assert.deepEqual(result.categoryBreakdown.map((item) => [item.categoryId, item.amount]), [
+    ['rent', 60], ['services', 40],
+  ]);
+  assert.equal(result.totalExpense, 100);
+});
