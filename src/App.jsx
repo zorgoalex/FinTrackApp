@@ -24,6 +24,7 @@ const InvitationAcceptPage = lazy(() => import('./pages/InvitationAcceptPage'));
 const DebtsPage = lazy(() => import('./pages/DebtsPage'));
 const BudgetsPage = lazy(() => import('./pages/BudgetsPage'));
 const AssistantPage = lazy(() => import('./pages/AssistantPage'));
+const CashflowPage = lazy(() => import('./pages/CashflowPage'));
 
 function LoadingFallback() {
   return (
@@ -141,6 +142,16 @@ const router = createBrowserRouter([
     ]
   },
   {
+    path: '/cashflow',
+    element: protectedLayoutWithWorkspace,
+    children: [
+      {
+        index: true,
+        element: <CashflowPage />
+      }
+    ]
+  },
+  {
     path: '/assistant',
     element: protectedLayoutWithWorkspace,
     children: [
@@ -166,7 +177,7 @@ function App() {
       <ThemeProvider>
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
           <Suspense fallback={<LoadingFallback />}>
-            <RouterProvider router={router} />
+            <RouterProvider router={router} future={{ v7_startTransition: true }} />
           </Suspense>
         </div>
       </ThemeProvider>

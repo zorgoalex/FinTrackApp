@@ -13,6 +13,7 @@ const WORKSPACE_TABLES = [
   ['budgets', 'budgets'],
   ['import_sessions', 'importSessions'],
   ['category_rules', 'categoryRules'],
+  ['cashflow_plans', 'cashflowPlans'],
   ['operation_comments', 'operationComments'],
 ];
 

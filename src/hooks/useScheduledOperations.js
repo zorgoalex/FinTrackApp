@@ -18,7 +18,7 @@ export function useScheduledOperations(workspaceId) {
       const [itemsResult, historyResult] = await Promise.all([
         supabase
           .from('scheduled_operations')
-          .select('id, workspace_id, user_id, amount, type, description, category_id, account_id, frequency, next_date, is_active, created_at, currency, last_error, last_error_at')
+          .select('id, workspace_id, user_id, amount, type, description, category_id, account_id, frequency, next_date, anchor_month, anchor_day, is_active, created_at, currency, last_error, last_error_at')
           .eq('workspace_id', workspaceId)
           .order('next_date', { ascending: true }),
         supabase
