@@ -139,7 +139,7 @@ export default function WorkspaceSwitcher() {
       {/* Выпадающий список */}
       {isOpen && (
         <div
-          className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-50"
+          className="absolute left-0 top-full z-50 mt-1 w-72 max-w-[calc(100vw-5rem)] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800 lg:right-0 lg:w-auto lg:max-w-none"
           onClick={(e) => e.stopPropagation()}
           onTouchEnd={(e) => e.stopPropagation()}
         >
@@ -179,7 +179,7 @@ export default function WorkspaceSwitcher() {
                   >
                     <Building2 
                       size={16} 
-                      className={isActive ? 'text-primary-600 dark:text-primary-400' : 'text-gray-400 dark:text-gray-500'}
+                      className={`shrink-0 ${isActive ? 'text-primary-600 dark:text-primary-400' : 'text-gray-400 dark:text-gray-500'}`}
                     />
                     <div className="flex-1 min-w-0">
                       <div className={`text-sm ${workspaceRole === 'owner' ? 'font-bold' : 'font-medium'} truncate ${
@@ -201,7 +201,7 @@ export default function WorkspaceSwitcher() {
                       )}
                     </div>
                     {isActive && (
-                      <div className="w-2 h-2 bg-primary-600 dark:bg-primary-400 rounded-full"></div>
+                      <div className="h-2 w-2 shrink-0 rounded-full bg-primary-600 dark:bg-primary-400"></div>
                     )}
                   </button>
                 );
@@ -217,10 +217,10 @@ export default function WorkspaceSwitcher() {
           <div className="border-t border-gray-100 dark:border-gray-700 p-2">
             <button
               onClick={handleCreateNew}
-              className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-md transition-colors"
+              className="flex w-full min-w-0 items-center space-x-2 rounded-md px-3 py-2 text-sm text-primary-600 transition-colors hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-primary-900/30"
             >
-              <Plus size={16} />
-              <span>Создать новое пространство</span>
+              <Plus size={16} className="shrink-0" />
+              <span className="min-w-0 whitespace-normal text-left">Создать новое пространство</span>
             </button>
             
             <button
@@ -228,10 +228,10 @@ export default function WorkspaceSwitcher() {
                 setIsOpen(false);
                 navigate('/workspaces');
               }}
-              className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md transition-colors"
+              className="flex w-full min-w-0 items-center space-x-2 rounded-md px-3 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-800"
             >
-              <Users size={16} />
-              <span>Управление пространствами</span>
+              <Users size={16} className="shrink-0" />
+              <span className="min-w-0 whitespace-normal text-left">Управление пространствами</span>
             </button>
           </div>
         </div>
