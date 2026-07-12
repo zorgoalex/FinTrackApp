@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
-import { Menu, X, Home, Settings, BarChart3, Calendar, CalendarClock, CreditCard, LogOut, BookOpen, Sun, Moon, Receipt, Target, PlusCircle, MoreHorizontal, Sparkles } from 'lucide-react'
+import { Menu, X, Home, Settings, BarChart3, Calendar, CalendarClock, CreditCard, LogOut, BookOpen, Sun, Moon, Receipt, Target, PlusCircle, MoreHorizontal, Sparkles, ChevronDown } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useWorkspace } from '../contexts/WorkspaceContext'
 import { usePermissions } from '../hooks/usePermissions'
@@ -59,7 +59,7 @@ export default function Layout() {
           <X size={24} className="text-gray-600 dark:text-gray-400" />
         </button>
       </div>
-      <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
+      <ScrollableSidebarNav>
         <ul className="space-y-1">
           {menuItems.map((item) => {
             const Icon = item.icon
@@ -69,7 +69,7 @@ export default function Layout() {
                 <Link
                   to={item.path}
                   onClick={() => sidebarOpen && toggleSidebar()}
-                  className={`flex items-center space-x-3 py-2.5 px-3 rounded-xl transition-all duration-200 ${
+                  className={`flex items-center space-x-3 rounded-xl px-3 py-2.5 text-[0.7rem] transition-all duration-200 ${
                     active
                       ? 'bg-primary-50 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 font-medium shadow-sm'
                       : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
@@ -82,7 +82,7 @@ export default function Layout() {
             )
           })}
         </ul>
-      </nav>
+      </ScrollableSidebarNav>
       <div className="shrink-0 border-t border-gray-200 px-4 pt-4 pb-[calc(5rem+env(safe-area-inset-bottom))] space-y-3 dark:border-gray-700 lg:pb-4">
         <button
           onClick={toggleTheme}
@@ -190,6 +190,66 @@ export default function Layout() {
           </nav>
         )}
       </div>
+    </div>
+  )
+}
+
+function ScrollableSidebarNav({ children }) {
+  const navRef = useRef(null)
+  const [canScrollDown, setCanScrollDown] = useState(false)
+
+  useEffect(() => {
+    const nav = navRef.current
+    if (!nav) return undefined
+
+    const updateScrollIndicator = () => {
+      setCanScrollDown(nav.scrollTop + nav.clientHeight < nav.scrollHeight - 2)
+    }
+
+    updateScrollIndicator()
+    const resizeObserver = typeof window.ResizeObserver === 'undefined'
+      ? null
+      : new window.ResizeObserver(updateScrollIndicator)
+    resizeObserver?.observe(nav)
+    window.addEventListener('resize', updateScrollIndicator)
+
+    return () => {
+      resizeObserver?.disconnect()
+      window.removeEventListener('resize', updateScrollIndicator)
+    }
+  }, [children])
+
+  const scrollToMoreItems = () => {
+    const nav = navRef.current
+    if (!nav) return
+    nav.scrollBy({ top: Math.max(nav.clientHeight * 0.6, 120), behavior: 'smooth' })
+  }
+
+  return (
+    <div className="relative min-h-0 flex-1">
+      <nav
+        ref={navRef}
+        onScroll={() => {
+          const nav = navRef.current
+          if (nav) setCanScrollDown(nav.scrollTop + nav.clientHeight < nav.scrollHeight - 2)
+        }}
+        className="h-full overflow-y-auto overscroll-contain p-4 pb-12"
+      >
+        {children}
+      </nav>
+      {canScrollDown && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center bg-gradient-to-t from-white via-white/95 to-transparent pb-2 pt-8 dark:from-gray-900 dark:via-gray-900/95">
+          <button
+            type="button"
+            onClick={scrollToMoreItems}
+            className="pointer-events-auto flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-600 shadow-md dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
+            aria-label="Показать следующие пункты меню"
+          >
+            <ChevronDown size={14} aria-hidden="true" />
+            Ещё ниже
+          </button>
+        </div>
+      )}
     </div>
   )
 }
