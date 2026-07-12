@@ -14,7 +14,7 @@ import EditOperationModal from '../components/EditOperationModal';
 import QuickButtonsSettings from '../components/QuickButtonsSettings';
 import OperationCommentsModal from '../components/OperationCommentsModal';
 import MonthPicker from '../components/MonthPicker';
-import { Pencil, Trash2, ChevronDown, X, Plus, Settings, Wallet, Download, Upload, Search, SlidersHorizontal, MoreHorizontal, MessageSquare, CheckCircle2, ShieldCheck, RotateCcw } from 'lucide-react';
+import { Pencil, Trash2, ChevronDown, X, Plus, Settings, Wallet, Download, Upload, Search, SlidersHorizontal, MoreHorizontal, MessageSquare, CheckCircle2, ShieldCheck, RotateCcw, ListChecks } from 'lucide-react';
 import { formatSignedAmount, formatUnsignedAmount, formatGroupDate } from '../utils/formatters';
 import { getMonthRange } from '../utils/dateRange';
 import { buildOperationsCSV, downloadOperationsCSV } from '../utils/export';
@@ -104,6 +104,13 @@ export function OperationPage() {
   const [filterCategory, setFilterCategory] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterTags, setFilterTags] = useState([]);
+  const [bulkMode, setBulkMode] = useState(false);
+  const [selectedOperationIds, setSelectedOperationIds] = useState([]);
+  const [bulkCategory, setBulkCategory] = useState('');
+  const [bulkTag, setBulkTag] = useState('');
+  const [bulkStatus, setBulkStatus] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkError, setBulkError] = useState('');
   const [showTagDropdown, setShowTagDropdown] = useState(false);
   const tagDropdownRef = useRef(null);
   const [sortField, setSortField] = useState('date');
@@ -491,6 +498,53 @@ export function OperationPage() {
     }
   };
 
+  const toggleBulkSelection = (operationId) => {
+    setSelectedOperationIds((current) => current.includes(operationId)
+      ? current.filter((id) => id !== operationId)
+      : [...current, operationId]);
+  };
+
+  const handleBulkApply = async () => {
+    if (!selectedOperationIds.length) return;
+    const setCategory = Boolean(bulkCategory);
+    const replaceTags = bulkTag === '__clear';
+    const tagIds = bulkTag && !replaceTags ? [bulkTag] : replaceTags ? [] : null;
+    if (!setCategory && !bulkStatus && tagIds === null && !replaceTags) {
+      setBulkError('Выберите хотя бы одно изменение');
+      return;
+    }
+    let reason = null;
+    if (bulkStatus && selectedOperationIds.some((id) => {
+      const current = operations.find((operation) => operation.id === id)?.status;
+      return ['verified', 'reconciled'].includes(current) && current !== bulkStatus;
+    })) {
+      reason = window.prompt('Укажите причину отмены статуса:');
+      if (!reason) return;
+    }
+    setBulkBusy(true);
+    setBulkError('');
+    const { error: updateError } = await supabase.rpc('bulk_update_operations', {
+      p_workspace_id: workspaceId,
+      p_operation_ids: selectedOperationIds,
+      p_category_id: bulkCategory === '__clear' ? null : bulkCategory || null,
+      p_set_category: setCategory,
+      p_status: bulkStatus || null,
+      p_reason: reason,
+      p_tag_ids: tagIds,
+      p_replace_tags: replaceTags,
+    });
+    if (updateError) setBulkError(updateError.message || 'Не удалось массово изменить операции');
+    else {
+      setSelectedOperationIds([]);
+      setBulkCategory('');
+      setBulkTag('');
+      setBulkStatus('');
+      setBulkMode(false);
+      await refresh();
+    }
+    setBulkBusy(false);
+  };
+
   if (!workspaceId) {
     return (
       <div className="max-w-2xl mx-auto p-4">
@@ -838,6 +892,15 @@ export function OperationPage() {
 
         {/* View mode toggle — compact radio buttons */}
         <div className="flex items-center gap-1 shrink-0">
+          {permissions.hasManagementRights && (
+            <button
+              type="button"
+              onClick={() => { setBulkMode((value) => !value); setSelectedOperationIds([]); setBulkError(''); }}
+              className={`grid min-h-11 min-w-11 place-items-center rounded-lg ${bulkMode ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+              aria-label={bulkMode ? 'Выйти из массового выбора' : 'Массовое редактирование'}
+              title="Массовое редактирование"
+            ><ListChecks size={18} /></button>
+          )}
           <button
             onClick={() => handleViewMode('detailed')}
             className={`min-h-11 px-3 py-2 rounded-lg text-xs transition-colors ${
@@ -861,6 +924,22 @@ export function OperationPage() {
         </div>
       </div>
       </div>
+
+      {bulkMode && (
+        <div className="mb-3 rounded-xl border border-indigo-200 bg-indigo-50 p-3 dark:border-indigo-900 dark:bg-indigo-950/30" data-testid="bulk-operation-toolbar">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-sm font-medium text-indigo-900 dark:text-indigo-200">Выбрано: {selectedOperationIds.length}</span>
+            <button type="button" onClick={() => setSelectedOperationIds(visibleOperations.filter((operation) => operation.type !== 'transfer').map((operation) => operation.id))} className="min-h-11 text-sm text-indigo-700 dark:text-indigo-300">Выбрать все на экране</button>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <select className="input-field min-h-11" value={bulkCategory} onChange={(event) => setBulkCategory(event.target.value)} aria-label="Массовая категория"><option value="">Категорию не менять</option><option value="__clear">Очистить категорию</option>{categories.filter((category) => !category.is_archived).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select>
+            <select className="input-field min-h-11" value={bulkTag} onChange={(event) => setBulkTag(event.target.value)} aria-label="Массовый тег"><option value="">Теги не менять</option><option value="__clear">Очистить все теги</option>{tags.filter((tag) => !tag.is_archived).map((tag) => <option key={tag.id} value={tag.id}>Добавить #{tag.name}</option>)}</select>
+            <select className="input-field min-h-11" value={bulkStatus} onChange={(event) => setBulkStatus(event.target.value)} aria-label="Массовый статус"><option value="">Статус не менять</option>{Object.entries(OPERATION_STATUSES).map(([value, status]) => <option key={value} value={value}>{status.label}</option>)}</select>
+          </div>
+          {bulkError && <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">{bulkError}</p>}
+          <button type="button" onClick={handleBulkApply} disabled={bulkBusy || selectedOperationIds.length === 0} className="btn-primary mt-3 min-h-11 disabled:opacity-50">{bulkBusy ? 'Применяем...' : 'Применить массово'}</button>
+        </div>
+      )}
 
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
         {loading && operations.length === 0 ? (
@@ -900,6 +979,7 @@ export function OperationPage() {
                       onDoubleClick={() => canEditRecord(operation) && setEditingOperation(operation)}
                       onTouchEnd={() => handleDoubleTap(operation)}
                     >
+                      {bulkMode && operation.type !== 'transfer' && <input type="checkbox" checked={selectedOperationIds.includes(operation.id)} onChange={() => toggleBulkSelection(operation.id)} onClick={(event) => event.stopPropagation()} className="h-5 w-5 shrink-0 rounded border-gray-300 text-indigo-600" aria-label={`Выбрать операцию ${operation.description || operation.id}`} />}
                       <div className="flex items-center gap-3 min-w-0">
                         <span className="text-sm text-gray-500 dark:text-gray-400 shrink-0">
                           {formatOperationDate(operation.operation_date || operation.created_at)}
@@ -945,6 +1025,7 @@ export function OperationPage() {
                     onDoubleClick={() => canEditRecord(operation) && setEditingOperation(operation)}
                     onTouchEnd={() => handleDoubleTap(operation)}
                   >
+                    {bulkMode && operation.type !== 'transfer' && <input type="checkbox" checked={selectedOperationIds.includes(operation.id)} onChange={() => toggleBulkSelection(operation.id)} onClick={(event) => event.stopPropagation()} className="mt-1 h-5 w-5 shrink-0 rounded border-gray-300 text-indigo-600" aria-label={`Выбрать операцию ${operation.description || operation.id}`} />}
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
                         <span className="text-sm text-gray-500 dark:text-gray-400">
