@@ -9,40 +9,147 @@ const TYPE_MAP = new Map([
   ['employee salary', 'employee_salary'],
 ]);
 
+const FIELD_ALIASES = {
+  date: ['дата', 'date'],
+  type: ['тип', 'type'],
+  amount: ['сумма', 'amount'],
+  debit: ['дебет', 'debit', 'расход', 'списание', 'withdrawal'],
+  credit: ['кредит', 'credit', 'приход', 'зачисление', 'deposit'],
+  currency: ['валюта', 'currency'],
+  rate: ['курс', 'exchange rate', 'exchange_rate'],
+  baseAmount: ['сумма в базовой валюте', 'base amount', 'base_amount'],
+  account: ['счёт', 'счет', 'account'],
+  category: ['категория', 'category'],
+  tags: ['теги', 'tags'],
+  description: ['описание', 'description', 'назначение платежа', 'details'],
+  counterparty: ['контрагент', 'counterparty', 'получатель', 'payee', 'merchant'],
+};
+
 function normalize(value) {
   return String(value ?? '').trim().toLocaleLowerCase('ru-RU');
 }
 
-function parseDelimitedLine(line, delimiter) {
-  const cells = [];
+function parseDelimitedRecords(text, delimiter) {
+  const records = [];
+  let cells = [];
   let current = '';
   let quoted = false;
-  for (let index = 0; index < line.length; index += 1) {
-    const char = line[index];
+  const source = String(text ?? '').replace(/\r\n?/g, '\n');
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index];
     if (char === '"') {
-      if (quoted && line[index + 1] === '"') {
+      if (quoted && source[index + 1] === '"') {
         current += '"';
         index += 1;
       } else {
         quoted = !quoted;
       }
     } else if (char === delimiter && !quoted) {
-      cells.push(current);
+      cells.push(current.trim());
+      current = '';
+    } else if (char === '\n' && !quoted) {
+      cells.push(current.trim());
+      if (cells.some((cell) => cell !== '')) records.push(cells);
+      cells = [];
       current = '';
     } else {
       current += char;
     }
   }
-  cells.push(current);
-  return cells.map((cell) => cell.trim());
+  cells.push(current.trim());
+  if (cells.some((cell) => cell !== '')) records.push(cells);
+  return records;
 }
 
-function parseAmount(value) {
-  const normalized = String(value ?? '')
-    .replace(/\s/g, '')
-    .replace(',', '.');
+function delimiterScore(text, delimiter, sampleStart = 0) {
+  const records = parseDelimitedRecords(text, delimiter).slice(sampleStart, sampleStart + 8);
+  if (!records.length) return -1;
+  const widths = records.map((record) => record.length);
+  const maxWidth = Math.max(...widths);
+  const consistent = widths.filter((width) => width === maxWidth).length;
+  return maxWidth > 1 ? maxWidth * 10 + consistent : 0;
+}
+
+export function detectCSVDelimiter(text, { headerRow = 1 } = {}) {
+  const sampleStart = typeof headerRow === 'number' && headerRow > 0 ? headerRow - 1 : 0;
+  return [';', ',', '\t', '|'].reduce((best, delimiter) => {
+    const score = delimiterScore(text, delimiter, sampleStart);
+    return score > best.score ? { delimiter, score } : best;
+  }, { delimiter: ';', score: -1 }).delimiter;
+}
+
+function headerRowIndex(headerRow) {
+  if (headerRow === false || headerRow === 0 || headerRow === null) return -1;
+  if (headerRow === true || headerRow === undefined) return 0;
+  const parsed = Number(headerRow);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed - 1 : 0;
+}
+
+function suggestedField(header, baseCurrency) {
+  const normalized = normalize(header);
+  if (normalized === `сумма в ${normalize(baseCurrency)}`) return 'baseAmount';
+  return Object.entries(FIELD_ALIASES).find(([, aliases]) => aliases.includes(normalized))?.[0] || null;
+}
+
+export function inspectOperationsCSV(text, { baseCurrency = 'KZT', format = {}, headerRow, delimiter } = {}) {
+  const cleanText = String(text ?? '').replace(/^\uFEFF/, '');
+  const resolvedHeaderRow = headerRow ?? format.headerRow ?? 1;
+  const resolvedDelimiter = delimiter ?? format.delimiter;
+  const detectedDelimiter = resolvedDelimiter && resolvedDelimiter !== 'auto'
+    ? resolvedDelimiter
+    : detectCSVDelimiter(cleanText, { headerRow: resolvedHeaderRow });
+  const records = parseDelimitedRecords(cleanText, detectedDelimiter);
+  const headerIndex = headerRowIndex(resolvedHeaderRow);
+  const headers = headerIndex >= 0 && records[headerIndex] ? records[headerIndex] : [];
+  const columns = headers.map((header, index) => ({
+    index,
+    header,
+    normalizedHeader: normalize(header),
+    suggestedField: suggestedField(header, baseCurrency),
+  }));
+  const suggestedMapping = {};
+  columns.forEach(({ index, suggestedField: field }) => {
+    if (field && suggestedMapping[field] === undefined) suggestedMapping[field] = index;
+  });
+  return {
+    delimiter: detectedDelimiter,
+    headerRow: headerIndex < 0 ? false : headerIndex + 1,
+    headers,
+    columns,
+    suggestedMapping,
+    dataRowCount: Math.max(0, records.length - (headerIndex >= 0 ? headerIndex + 1 : 0)),
+  };
+}
+
+function resolveSelector(selector, headers) {
+  if (Number.isInteger(selector)) return selector;
+  if (selector && typeof selector === 'object') {
+    if (Number.isInteger(selector.index)) return selector.index;
+    if (selector.header !== undefined) return resolveSelector(selector.header, headers);
+  }
+  if (typeof selector === 'string') {
+    const wanted = normalize(selector);
+    return headers.findIndex((header) => normalize(header) === wanted);
+  }
+  return -1;
+}
+
+function parseNumber(value, { decimalSeparator = 'auto', thousandsSeparator } = {}) {
+  let normalized = String(value ?? '').trim().replace(/[\s\u00a0]/g, '');
+  if (!normalized) return NaN;
+  if (thousandsSeparator) normalized = normalized.split(thousandsSeparator).join('');
+  if (decimalSeparator === ',') normalized = normalized.replace(/\./g, '').replace(',', '.');
+  else if (decimalSeparator === '.') normalized = normalized.replace(/,/g, '');
+  else {
+    const comma = normalized.lastIndexOf(',');
+    const dot = normalized.lastIndexOf('.');
+    if (comma >= 0 && dot >= 0) {
+      const decimal = comma > dot ? ',' : '.';
+      normalized = normalized.replace(decimal === ',' ? /\./g : /,/g, '').replace(decimal, '.');
+    } else if (comma >= 0) normalized = normalized.replace(',', '.');
+  }
   const result = Number(normalized);
-  return Number.isFinite(result) ? Math.abs(result) : NaN;
+  return Number.isFinite(result) ? result : NaN;
 }
 
 function parseDate(value) {
@@ -53,46 +160,77 @@ function parseDate(value) {
   return `${match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
 }
 
-export function parseOperationsCSV(text, { categories = [], accounts = [], baseCurrency = 'KZT', workspaceType = 'business' } = {}) {
-  const cleanText = String(text ?? '').replace(/^\uFEFF/, '');
-  const lines = cleanText.split(/\r?\n/).filter((line) => line.trim());
-  if (lines.length < 2) return { rows: [], errors: ['CSV не содержит операций'] };
-
-  const delimiter = (lines[0].match(/;/g) || []).length >= (lines[0].match(/,/g) || []).length ? ';' : ',';
-  const headers = parseDelimitedLine(lines[0], delimiter).map(normalize);
-  const column = (...names) => headers.findIndex((header) => names.includes(header));
-  const indexes = {
-    date: column('дата', 'date'),
-    type: column('тип', 'type'),
-    amount: column('сумма', 'amount'),
-    currency: column('валюта', 'currency'),
-    rate: column('курс', 'exchange rate', 'exchange_rate'),
-    baseAmount: column(`сумма в ${normalize(baseCurrency)}`, 'сумма в базовой валюте', 'base amount', 'base_amount'),
-    account: column('счёт', 'счет', 'account'),
-    category: column('категория', 'category'),
-    tags: column('теги', 'tags'),
-    description: column('описание', 'description'),
-  };
-  const missing = ['date', 'type', 'amount'].filter((key) => indexes[key] < 0);
-  if (missing.length) {
-    return { rows: [], errors: ['Нужны обязательные колонки: Дата, Тип, Сумма'] };
+function resolveType(rawType, workspaceType) {
+  const normalized = normalize(rawType);
+  if (normalized === 'зарплата' || normalized === 'salary') {
+    return workspaceType === 'personal' ? 'personal_salary' : 'employee_salary';
   }
+  return TYPE_MAP.get(normalized);
+}
 
+export function parseOperationsCSV(text, options = {}) {
+  const {
+    categories = [], accounts = [], baseCurrency = 'KZT', workspaceType = 'business',
+    mapping = {}, format = {}, headerRow, delimiter, defaultType,
+  } = options;
+  const cleanText = String(text ?? '').replace(/^\uFEFF/, '');
+  const resolvedHeaderRow = headerRow ?? format.headerRow ?? 1;
+  const resolvedDelimiter = delimiter ?? format.delimiter;
+  const csvDelimiter = resolvedDelimiter && resolvedDelimiter !== 'auto'
+    ? resolvedDelimiter
+    : detectCSVDelimiter(cleanText, { headerRow: resolvedHeaderRow });
+  const records = parseDelimitedRecords(cleanText, csvDelimiter);
+  const headerIndex = headerRowIndex(resolvedHeaderRow);
+  const headers = headerIndex >= 0 && records[headerIndex] ? records[headerIndex] : [];
+  const dataStart = headerIndex >= 0 ? headerIndex + 1 : 0;
+  if (records.length <= dataStart) return { rows: [], errors: ['CSV не содержит операций'] };
+  const autoMapping = inspectOperationsCSV(cleanText, {
+    baseCurrency, format: { headerRow: resolvedHeaderRow, delimiter: csvDelimiter },
+  }).suggestedMapping;
+  const effectiveMapping = { ...autoMapping, ...mapping };
+  const indexes = Object.fromEntries(Object.keys(FIELD_ALIASES).map((field) => [
+    field, resolveSelector(effectiveMapping[field], headers),
+  ]));
+  const amountMode = format.amountMode || (
+    indexes.debit >= 0 || indexes.credit >= 0 ? 'debitCredit' : 'amountAndType'
+  );
+  const fallbackType = resolveType(defaultType ?? format.defaultType, workspaceType);
+  const required = ['date'];
+  if (amountMode === 'debitCredit') required.push('debit', 'credit');
+  else required.push('amount');
+  if (amountMode === 'amountAndType' && !fallbackType) required.push('type');
+  if (required.some((key) => indexes[key] < 0)) {
+    const legacy = amountMode === 'amountAndType' && !Object.keys(mapping).length;
+    return { rows: [], errors: [legacy
+      ? 'Нужны обязательные колонки: Дата, Тип, Сумма'
+      : `Не настроены обязательные колонки: ${required.filter((key) => indexes[key] < 0).join(', ')}`] };
+  }
   const accountMap = new Map(accounts.map((item) => [normalize(item.name), item]));
   const categoryMap = new Map(categories.map((item) => [`${normalize(item.type)}:${normalize(item.name)}`, item]));
   const rows = [];
   const errors = [];
-
-  lines.slice(1).forEach((line, offset) => {
-    const lineNumber = offset + 2;
-    const cells = parseDelimitedLine(line, delimiter);
+  records.slice(dataStart).forEach((cells, offset) => {
+    const lineNumber = dataStart + offset + 1;
     const get = (key) => indexes[key] >= 0 ? cells[indexes[key]] ?? '' : '';
-    const rawType = normalize(get('type'));
-    const type = rawType === 'зарплата' || rawType === 'salary'
-      ? (workspaceType === 'personal' ? 'personal_salary' : 'employee_salary')
-      : TYPE_MAP.get(rawType);
+    let type = fallbackType || resolveType(get('type'), workspaceType);
+    let rawAmount;
+    if (amountMode === 'debitCredit') {
+      const debit = parseNumber(get('debit'), format);
+      const credit = parseNumber(get('credit'), format);
+      const hasDebit = Number.isFinite(debit) && debit !== 0;
+      const hasCredit = Number.isFinite(credit) && credit !== 0;
+      if (hasDebit !== hasCredit) {
+        type = hasDebit ? 'expense' : 'income';
+        rawAmount = hasDebit ? debit : credit;
+      } else rawAmount = NaN;
+    } else {
+      rawAmount = parseNumber(get('amount'), format);
+      if (amountMode === 'signed' && Number.isFinite(rawAmount) && !fallbackType) {
+        type = rawAmount < 0 ? 'expense' : 'income';
+      }
+    }
+    const amount = Math.abs(rawAmount);
     const date = parseDate(get('date'));
-    const amount = parseAmount(get('amount'));
     const account = get('account') ? accountMap.get(normalize(get('account'))) : null;
     const categoryType = type === 'personal_salary' ? 'income' : type === 'employee_salary' ? 'expense' : type;
     const category = get('category') ? categoryMap.get(`${categoryType}:${normalize(get('category'))}`) : null;
@@ -107,9 +245,9 @@ export function parseOperationsCSV(text, { categories = [], accounts = [], baseC
       return;
     }
 
-    const rate = parseAmount(get('rate'));
-    const baseAmount = parseAmount(get('baseAmount'));
-    rows.push({
+    const rate = Math.abs(parseNumber(get('rate'), format));
+    const baseAmount = Math.abs(parseNumber(get('baseAmount'), format));
+    const row = {
       type,
       operation_date: date,
       amount,
@@ -121,7 +259,9 @@ export function parseOperationsCSV(text, { categories = [], accounts = [], baseC
       tagNames: get('tags').split(',').map((tag) => tag.trim()).filter(Boolean),
       description: get('description'),
       sourceLine: lineNumber,
-    });
+    };
+    if (indexes.counterparty >= 0) row.counterpartyName = get('counterparty');
+    rows.push(row);
   });
 
   return { rows, errors };

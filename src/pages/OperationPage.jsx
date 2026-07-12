@@ -536,7 +536,6 @@ export function OperationPage() {
           workspaceType={currentWorkspace?.workspace_type}
           accounts={accounts}
           baseCurrency={currentWorkspace?.base_currency || 'KZT'}
-          onImport={addOperation}
           onRefresh={refresh}
         />
       </Suspense>}

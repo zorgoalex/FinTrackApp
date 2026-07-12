@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { AlertTriangle, BrainCircuit, Camera, CheckCircle2, FileSearch, FileUp, Lock, ShieldCheck, X } from 'lucide-react';
 import { supabase } from '../contexts/AuthContext';
 import { useCurrencies } from '../hooks/useCurrencies';
-import { parseOperationsCSV } from '../utils/importOperations';
+import { inspectOperationsCSV, parseOperationsCSV } from '../utils/importOperations';
 import { categoryTypeForOperation, operationTypesForWorkspace, OPERATION_TYPE_META } from '../utils/operationTypes';
 import { buildRulePattern, suggestCategory } from '../utils/documentImport/categories';
 import { extractDocument } from '../utils/documentImport/extract';
@@ -26,7 +26,6 @@ export default function ImportOperationsModal({
   accounts,
   baseCurrency,
   workspaceType,
-  onImport,
   onRefresh,
 }) {
   const inputRef = useRef(null);
@@ -42,6 +41,12 @@ export default function ImportOperationsModal({
   const [processingProgress, setProcessingProgress] = useState(null);
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [csvSetup, setCsvSetup] = useState(null);
+  const [csvMapping, setCsvMapping] = useState({});
+  const [csvFormat, setCsvFormat] = useState({ headerRow: 1, delimiter: 'auto', amountMode: 'amountAndType', defaultType: '' });
+  const [csvTemplates, setCsvTemplates] = useState([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [templateName, setTemplateName] = useState('');
 
   const activeAccounts = useMemo(() => accounts.filter((account) => !account.is_archived), [accounts]);
   const selectedRows = rows.filter((row) => row.selected);
@@ -51,6 +56,10 @@ export default function ImportOperationsModal({
     || !(Number(row.amount) > 0)
     || (row.currency !== baseCurrency && !(Number(row.exchange_rate) > 0))
   ).length;
+  const currentCsvInspection = useMemo(() => csvSetup ? inspectOperationsCSV(csvSetup.rawText, {
+    baseCurrency,
+    format: csvFormat,
+  }) : null, [baseCurrency, csvFormat, csvSetup]);
 
   if (!open) return null;
 
@@ -62,6 +71,12 @@ export default function ImportOperationsModal({
     setFatalError('');
     setProgress(0);
     setProcessingProgress(null);
+    setCsvSetup(null);
+    setCsvMapping({});
+    setCsvFormat({ headerRow: 1, delimiter: 'auto', amountMode: 'amountAndType', defaultType: '' });
+    setCsvTemplates([]);
+    setSelectedTemplateId('');
+    setTemplateName('');
     if (inputRef.current) inputRef.current.value = '';
     if (cameraInputRef.current) cameraInputRef.current.value = '';
   };
@@ -144,10 +159,30 @@ export default function ImportOperationsModal({
       let operations;
       let bank = extracted.parsed?.bank || 'unknown';
       if (extracted.sourceKind === 'csv') {
-        const csvResult = parseOperationsCSV(extracted.rawText, { categories, accounts, baseCurrency, workspaceType });
-        operations = csvResult.rows;
-        setErrors(csvResult.errors);
-        bank = 'csv';
+        const inspection = inspectOperationsCSV(extracted.rawText, { baseCurrency });
+        const format = {
+          headerRow: inspection.headerRow || 1,
+          delimiter: inspection.delimiter,
+          amountMode: inspection.suggestedMapping.debit !== undefined || inspection.suggestedMapping.credit !== undefined
+            ? 'debitCredit'
+            : 'amountAndType',
+          defaultType: '',
+        };
+        const { data: savedTemplates } = await supabase.from('import_templates')
+          .select('id, name, mapping, settings, updated_at')
+          .eq('workspace_id', workspaceId)
+          .eq('is_archived', false)
+          .order('updated_at', { ascending: false });
+        setCsvTemplates(savedTemplates || []);
+        setCsvMapping(inspection.suggestedMapping);
+        setCsvFormat(format);
+        setCsvSetup({ rawText: extracted.rawText, extracted, inspection });
+        setDocumentMeta({
+          bank: 'csv', sourceKind: 'csv', documentHash: extracted.documentHash,
+          sensitiveData: extracted.sensitiveData, detectedCount: inspection.dataRowCount,
+          mappingPending: true,
+        });
+        return;
       } else {
         operations = extracted.parsed?.operations || [];
       }
@@ -179,6 +214,64 @@ export default function ImportOperationsModal({
     }
   };
 
+  const applyCsvTemplate = (templateId) => {
+    setSelectedTemplateId(templateId);
+    const template = csvTemplates.find((item) => item.id === templateId);
+    if (!template) return;
+    setCsvMapping(template.mapping || {});
+    setCsvFormat((current) => ({ ...current, ...(template.settings || {}) }));
+  };
+
+  const buildCsvPreview = async () => {
+    if (!csvSetup) return;
+    setProcessing(true);
+    setFatalError('');
+    try {
+      const csvResult = parseOperationsCSV(csvSetup.rawText, {
+        categories, accounts, baseCurrency, workspaceType,
+        mapping: csvMapping,
+        format: csvFormat,
+      });
+      if (!csvResult.rows.length) throw new Error(csvResult.errors[0] || 'В CSV не найдены операции');
+      setErrors(csvResult.errors);
+      const { data: categoryRules, error: rulesError } = await supabase
+        .from('category_rules')
+        .select('id, operation_type, pattern, category_id, priority, is_active')
+        .eq('workspace_id', workspaceId)
+        .eq('is_active', true)
+        .order('priority')
+        .order('updated_at', { ascending: false });
+      if (rulesError) throw rulesError;
+      const byName = new Map(counterparties.filter((item) => !item.is_archived).map((item) => [item.display_name.trim().toLocaleLowerCase('ru-RU'), item.id]));
+      const operations = csvResult.rows.map((row) => ({
+        ...row,
+        counterparty_id: row.counterparty_id || byName.get(String(row.counterpartyName || '').trim().toLocaleLowerCase('ru-RU')) || '',
+      }));
+      const enriched = await enrichRows(operations, 'csv', 'csv', csvSetup.extracted.documentHash, categoryRules || []);
+      setRows(enriched.rows);
+      setDocumentMeta({
+        bank: 'csv', sourceKind: 'csv', documentHash: csvSetup.extracted.documentHash,
+        sensitiveData: csvSetup.extracted.sensitiveData,
+        documentImportedBefore: enriched.documentImportedBefore,
+        detectedCount: csvResult.rows.length,
+      });
+      if (templateName.trim()) {
+        const { data: savedTemplate, error: templateError } = await supabase.from('import_templates').insert({
+          workspace_id: workspaceId,
+          name: templateName.trim(),
+          mapping: csvMapping,
+          settings: csvFormat,
+        }).select('id').single();
+        if (templateError) throw new Error(`Предпросмотр готов, но шаблон не сохранён: ${templateError.message}`);
+        setSelectedTemplateId(savedTemplate.id);
+      }
+    } catch (previewError) {
+      setFatalError(previewError.message || 'Не удалось применить сопоставление CSV');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   const updateRow = (index, patch) => {
     setRows((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row));
   };
@@ -187,64 +280,44 @@ export default function ImportOperationsModal({
     if (!selectedRows.length || invalidSelectedCount) return;
     setImporting(true);
     setFatalError('');
-    let sessionId = null;
-    let completedCount = 0;
     try {
-      const { data: authData } = await supabase.auth.getUser();
-      const duplicateCount = rows.filter((row) => row.duplicate).length;
-      const { data: session, error: sessionError } = await supabase.from('import_sessions').insert({
-        workspace_id: workspaceId,
-        created_by: authData.user.id,
-        source_kind: documentMeta.sourceKind,
-        bank: documentMeta.bank,
-        document_hash: documentMeta.documentHash,
-        detected_count: documentMeta.detectedCount,
-        confirmed_count: selectedRows.length,
-        duplicate_count: duplicateCount,
-        status: 'confirmed',
-      }).select('id').single();
-      if (sessionError) throw sessionError;
-      sessionId = session.id;
-      for (let index = 0; index < selectedRows.length; index += 1) {
-        const row = selectedRows[index];
-        const createdOperation = await onImport({
-          ...row,
-          import_session_id: sessionId,
-          description: row.description || 'Импортированная операция',
-          category_id: row.category_id || null,
-        }, { refreshAfter: false });
-        if (row.receipt_items_comment && createdOperation?.id) {
-          const { error: commentError } = await supabase.from('operation_comments').insert({
-            workspace_id: workspaceId,
-            operation_id: createdOperation.id,
-            author_id: authData.user.id,
-            body: row.receipt_items_comment,
-            kind: 'receipt_items',
-          });
-          if (commentError) throw commentError;
-        }
-        completedCount = index + 1;
-        setProgress(completedCount);
-      }
-      const rulesToSave = Array.from(new Map(selectedRows
-        .filter((row) => row.remember_rule && row.rule_pattern && row.category_id)
-        .map((row) => [`${row.type}:${row.rule_pattern}`, row])).values());
-      for (const row of rulesToSave) {
-        const { error: ruleError } = await supabase.rpc('save_category_rule', {
-          p_workspace_id: workspaceId,
-          p_operation_type: row.type,
-          p_pattern: row.rule_pattern,
-          p_category_id: row.category_id,
-        });
-        if (ruleError) throw ruleError;
-      }
+      const rpcRows = rows.map((row) => ({
+        selected: Boolean(row.selected || row.duplicate),
+        type: row.type,
+        amount: Number(row.amount),
+        operation_date: row.operation_date,
+        currency: row.currency || baseCurrency,
+        exchange_rate: Number(row.exchange_rate) || 1,
+        base_amount: Number(row.base_amount) || Number(row.amount),
+        account_id: row.account_id,
+        category_id: row.category_id || null,
+        counterparty_id: row.counterparty_id || null,
+        description: row.description || 'Импортированная операция',
+        import_fingerprint: row.import_fingerprint,
+        import_confidence: row.import_confidence ?? null,
+        receipt_items_comment: row.receipt_items_comment || null,
+        remember_rule: Boolean(row.remember_rule),
+        rule_pattern: row.rule_pattern || null,
+        tagNames: row.tagNames || [],
+      }));
+      const { data: result, error: importError } = await supabase.rpc('confirm_import', {
+        p_workspace_id: workspaceId,
+        p_source_kind: documentMeta.sourceKind,
+        p_bank: documentMeta.bank || 'unknown',
+        p_document_hash: documentMeta.documentHash,
+        p_rows: rpcRows,
+        p_template_id: selectedTemplateId || null,
+        p_metadata: { parser: 'local-redacted', redacted_types: (documentMeta.sensitiveData || []).map((item) => item.type || item.label) },
+        p_request_id: globalThis.crypto.randomUUID(),
+      });
+      if (importError) throw importError;
+      setProgress(result?.confirmed_count || 0);
       await onRefresh();
       resetDocument();
       setPrivacyAccepted(false);
       onClose();
     } catch (error) {
-      if (sessionId) await supabase.from('import_sessions').update({ status: 'partial', confirmed_count: completedCount }).eq('id', sessionId);
-      setFatalError(`Импорт остановлен после ${completedCount} операций: ${error.message || 'ошибка сохранения'}`);
+      setFatalError(`Импорт не выполнен, изменения отменены: ${error.message || 'ошибка сохранения'}`);
     } finally {
       setImporting(false);
     }
@@ -295,6 +368,34 @@ export default function ImportOperationsModal({
         )}
 
         {fatalError && <div role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-400">{fatalError}</div>}
+
+        {csvSetup && rows.length === 0 && currentCsvInspection && (
+          <div className="mt-4 space-y-4">
+            <div className="rounded-xl border border-primary-200 bg-primary-50 p-3 text-sm text-primary-900 dark:border-primary-900 dark:bg-primary-950/30 dark:text-primary-200">
+              <p className="font-semibold">Сопоставьте колонки выписки</p>
+              <p className="mt-1">Настройку можно сохранить и повторно использовать для CSV этого банка.</p>
+            </div>
+            {csvTemplates.length > 0 && <label className="block text-sm font-medium">Сохранённый шаблон
+              <select className="input-field mt-1" value={selectedTemplateId} onChange={(event) => applyCsvTemplate(event.target.value)}><option value="">Автоопределение</option>{csvTemplates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}</select>
+            </label>}
+            <div className="grid gap-3 sm:grid-cols-3">
+              <label className="text-xs text-gray-500">Строка заголовков<input type="number" min="1" max="50" className="input-field mt-1" value={csvFormat.headerRow || 1} onChange={(event) => setCsvFormat((current) => ({ ...current, headerRow: Number(event.target.value) || 1 }))} /></label>
+              <label className="text-xs text-gray-500">Разделитель<select className="input-field mt-1" value={csvFormat.delimiter || 'auto'} onChange={(event) => setCsvFormat((current) => ({ ...current, delimiter: event.target.value }))}><option value="auto">Автоматически</option><option value=";">Точка с запятой</option><option value=",">Запятая</option><option value={'\t'}>Табуляция</option><option value="|">Вертикальная черта</option></select></label>
+              <label className="text-xs text-gray-500">Как указана сумма<select className="input-field mt-1" value={csvFormat.amountMode} onChange={(event) => setCsvFormat((current) => ({ ...current, amountMode: event.target.value }))}><option value="amountAndType">Сумма + тип</option><option value="signed">Сумма со знаком</option><option value="debitCredit">Списание и зачисление</option></select></label>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {[
+                ['date', 'Дата *'], ['type', 'Тип'], ['amount', 'Сумма'], ['debit', 'Списание'],
+                ['credit', 'Зачисление'], ['currency', 'Валюта'], ['rate', 'Курс'],
+                ['account', 'Счёт'], ['category', 'Категория'], ['counterparty', 'Контрагент'],
+                ['description', 'Описание'], ['tags', 'Теги'],
+              ].map(([field, label]) => <label key={field} className="text-xs text-gray-500">{label}<select className="input-field mt-1" value={csvMapping[field] ?? ''} onChange={(event) => setCsvMapping((current) => ({ ...current, [field]: event.target.value === '' ? undefined : Number(event.target.value) }))}><option value="">Не использовать</option>{currentCsvInspection.headers.map((header, index) => <option key={`${field}-${index}`} value={index}>{header || `Колонка ${index + 1}`}</option>)}</select></label>)}
+            </div>
+            {csvFormat.amountMode === 'amountAndType' && csvMapping.type === undefined && <label className="block text-xs text-gray-500">Тип всех операций<select className="input-field mt-1" value={csvFormat.defaultType || ''} onChange={(event) => setCsvFormat((current) => ({ ...current, defaultType: event.target.value }))}><option value="">Берётся из колонки</option><option value="expense">Расход</option><option value="income">Доход</option><option value="employee_salary">Зарплата сотрудникам</option><option value="personal_salary">Личная зарплата</option></select></label>}
+            <label className="block text-xs text-gray-500">Сохранить как новый шаблон (необязательно)<input className="input-field mt-1" value={templateName} onChange={(event) => setTemplateName(event.target.value)} maxLength={80} placeholder="Например, Kaspi Business CSV" /></label>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between"><button type="button" className="btn-secondary min-h-11" onClick={resetDocument}>Выбрать другой файл</button><button type="button" className="btn-primary min-h-11" disabled={processing} onClick={buildCsvPreview}>{processing ? 'Формируем…' : 'Показать предпросмотр'}</button></div>
+          </div>
+        )}
 
         {documentMeta && rows.length > 0 && (
           <div className="space-y-4">
