@@ -13,6 +13,7 @@ test('builds a detailed operations CSV with lookup names and safe cells', () => 
       exchange_rate: 1,
       base_amount: 1250.5,
       account_id: 'account-1',
+      counterparty_id: 'counterparty-1',
       category_id: 'category-1',
       tags: [{ name: 'Дом' }, { name: 'Срочно' }],
       description: '=HYPERLINK("https://example.com")'
@@ -20,11 +21,12 @@ test('builds a detailed operations CSV with lookup names and safe cells', () => 
   ], {
     categories: [{ id: 'category-1', name: 'Продукты' }],
     accounts: [{ id: 'account-1', name: 'Карта' }],
+    counterparties: [{ id: 'counterparty-1', display_name: 'Магазин' }],
     baseCurrency: 'KZT'
   });
 
   assert.ok(csv.startsWith('\uFEFFДата;Тип;'));
-  assert.match(csv, /2026-07-11;Расход;Сверена;;1250\.5;KZT;1;1250\.5;Карта;Продукты;Дом, Срочно;/);
+  assert.match(csv, /2026-07-11;Расход;Сверена;;1250\.5;KZT;1;1250\.5;Карта;Магазин;Продукты;Дом, Срочно;/);
   assert.match(csv, /"'=HYPERLINK\(""https:\/\/example\.com""\)"/);
 });
 

@@ -5,6 +5,7 @@ import useCategories from '../hooks/useCategories';
 import useTags from '../hooks/useTags';
 import useAccounts from '../hooks/useAccounts';
 import useDebts from '../hooks/useDebts';
+import useCounterparties from '../hooks/useCounterparties';
 import { useCurrencies } from '../hooks/useCurrencies';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { usePermissions } from '../hooks/usePermissions';
@@ -31,6 +32,7 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
   const { tags } = useTags(workspaceId);
   const { accounts } = useAccounts(workspaceId);
   const { activeDebts } = useDebts(workspaceId);
+  const { counterparties } = useCounterparties(workspaceId, { includeArchived: true });
   const { currencyCode: baseCurrency, currencySymbol: baseSymbol } = useWorkspace();
   const { getRate } = useCurrencies(workspaceId);
   const { canEditDirectories } = usePermissions();
@@ -47,6 +49,7 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
     description:   operation.description || '',
     operationDate: operation.operation_date || '',
     categoryId:    operation.category_id || '',
+    counterpartyId: operation.counterparty_id || '',
     selectedTags:  operation.tags || [],
     accountId:     operation.account_id || '',
     fromAccountId: isTransfer && operation.transfer_direction === 'out' ? (operation.account_id || '') : '',
@@ -151,6 +154,7 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
               description:    form.description,
               operation_date: form.operationDate,
               category_id:    form.categoryId || null,
+              counterparty_id: form.counterpartyId || null,
               account_id:     form.accountId || undefined,
               tagNames:       (tagInputRef.current?.getAllTags() ?? form.selectedTags).map((t) => t.name),
               debt_id:        form.debtId || null,
@@ -279,6 +283,14 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
                 </div>
               )}
             </div>}
+
+          {!isTransfer && counterparties.length > 0 && <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Контрагент</label>
+            <select value={form.counterpartyId} onChange={set('counterpartyId')} className="input-field">
+              <option value="">Без контрагента</option>
+              {counterparties.filter((item) => !item.is_archived || item.id === form.counterpartyId).map((item) => <option key={item.id} value={item.id}>{item.display_name}{item.is_archived ? ' (архив)' : ''}</option>)}
+            </select>
+          </div>}
 
           {/* Сумма */}
           <div>

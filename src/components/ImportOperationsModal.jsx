@@ -22,6 +22,7 @@ export default function ImportOperationsModal({
   onClose,
   workspaceId,
   categories,
+  counterparties = [],
   accounts,
   baseCurrency,
   workspaceType,
@@ -104,6 +105,7 @@ export default function ImportOperationsModal({
         selected: Boolean(operation.operation_date && Number(operation.amount) > 0 && (operation.confidence ?? 0.7) >= 0.68),
         duplicate: false,
         category_id: operation.category_id || suggestCategory(operation, categories, categoryRules),
+        counterparty_id: operation.counterparty_id || '',
         account_id: operation.account_id || account?.id || '',
         exchange_rate: rate || null,
         base_amount: rate ? Math.round(Number(operation.amount) * rate * 100) / 100 : Number(operation.amount),
@@ -333,6 +335,7 @@ export default function ImportOperationsModal({
                       <div className="flex gap-2"><input aria-label={`Сумма операции ${index + 1}`} type="number" min="0.01" step="0.01" className="input-field min-w-0" value={row.amount} onChange={(event) => updateRow(index, { amount: event.target.value, base_amount: Number(event.target.value) * (Number(row.exchange_rate) || 1) })} /><span className="self-center text-xs font-medium text-gray-500">{row.currency}</span></div>
                       <select aria-label={`Счёт операции ${index + 1}`} className="input-field" value={row.account_id || ''} onChange={(event) => updateRow(index, { account_id: event.target.value })}><option value="">Выберите счёт</option>{activeAccounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.currency}</option>)}</select>
                       <select aria-label={`Категория операции ${index + 1}`} className="input-field sm:col-span-2" value={row.category_id || ''} onChange={(event) => updateRow(index, { category_id: event.target.value })}><option value="">Без категории</option>{rowCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select>
+                      <select aria-label={`Контрагент операции ${index + 1}`} className="input-field sm:col-span-2" value={row.counterparty_id || ''} onChange={(event) => updateRow(index, { counterparty_id: event.target.value })}><option value="">Без контрагента</option>{counterparties.filter((item) => !item.is_archived).map((item) => <option key={item.id} value={item.id}>{item.display_name}</option>)}</select>
                       <input aria-label={`Описание операции ${index + 1}`} className="input-field sm:col-span-2" value={row.description || ''} maxLength={240} onChange={(event) => updateRow(index, { description: event.target.value })} />
                       {row.receipt_items_comment && <label className="sm:col-span-4 text-xs text-gray-500">Позиции чека — будут сохранены комментарием
                         <textarea aria-label={`Позиции чека ${index + 1}`} className="input-field mt-1 min-h-28 resize-y" maxLength={5000} value={row.receipt_items_comment} onChange={(event) => updateRow(index, { receipt_items_comment: event.target.value })} />

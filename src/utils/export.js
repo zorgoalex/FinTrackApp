@@ -60,11 +60,12 @@ function escapeCSVCell(value) {
  */
 export function buildOperationsCSV(
   operations,
-  { categories = [], accounts = [], baseCurrency = 'KZT' } = {}
+  { categories = [], accounts = [], counterparties = [], baseCurrency = 'KZT' } = {}
 ) {
   const BOM = '\uFEFF';
   const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
   const accountNames = new Map(accounts.map((account) => [account.id, account.name]));
+  const counterpartyNames = new Map(counterparties.map((item) => [item.id, item.display_name]));
   const typeLabels = {
     income: 'Доход',
     expense: 'Расход',
@@ -84,6 +85,7 @@ export function buildOperationsCSV(
     'Курс',
     `Сумма в ${baseCurrency}`,
     'Счёт',
+    'Контрагент',
     'Категория',
     'Теги',
     'Описание'
@@ -98,6 +100,7 @@ export function buildOperationsCSV(
     operation.exchange_rate ?? 1,
     operation.base_amount ?? operation.amount ?? 0,
     accountNames.get(operation.account_id) || '',
+    counterpartyNames.get(operation.counterparty_id) || '',
     categoryNames.get(operation.category_id) || '',
     (operation.tags || []).map((tag) => tag.name).join(', '),
     operation.description || ''

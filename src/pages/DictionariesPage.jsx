@@ -8,11 +8,13 @@ import { useTags } from '../hooks/useTags';
 import { useAccounts } from '../hooks/useAccounts';
 import { useCurrencies } from '../hooks/useCurrencies';
 import { OPERATION_TYPE_META } from '../utils/operationTypes';
+import CounterpartiesTab from '../components/CounterpartiesTab';
 
 const TABS = [
   { key: 'categories', label: 'Категории' },
   { key: 'tags', label: 'Теги' },
   { key: 'accounts', label: 'Счета' },
+  { key: 'counterparties', label: 'Контрагенты' },
   { key: 'rules', label: 'Правила' },
 ];
 
@@ -42,7 +44,7 @@ export default function DictionariesPage() {
       <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">Справочники</h1>
 
       {/* Tabs */}
-      <div className="grid grid-cols-4 border-b border-gray-200 dark:border-gray-700 mb-4" role="tablist" aria-label="Разделы справочников">
+      <div className="grid grid-cols-2 gap-x-1 border-b border-gray-200 dark:border-gray-700 mb-4 sm:grid-cols-5" role="tablist" aria-label="Разделы справочников">
         {TABS.map((tab) => (
           <button
             key={tab.key}
@@ -66,6 +68,8 @@ export default function DictionariesPage() {
         <TagsTab workspaceId={workspaceId} canEdit={hasManagementRights} />
       ) : activeTab === 'accounts' ? (
         <AccountsTab workspaceId={workspaceId} canEdit={hasManagementRights} />
+      ) : activeTab === 'counterparties' ? (
+        <CounterpartiesTab workspaceId={workspaceId} canEdit={hasManagementRights} />
       ) : (
         <CategoryRulesTab workspaceId={workspaceId} canEdit={hasManagementRights} />
       )}

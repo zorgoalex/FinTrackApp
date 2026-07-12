@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { normalizeAmountInput, formatAmountInput } from '../utils/formatters';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { useCurrencies } from '../hooks/useCurrencies';
+import { useCounterparties } from '../hooks/useCounterparties';
 
 const DIRECTIONS = [
   { value: 'i_owe', label: 'Я должен' },
@@ -17,11 +18,13 @@ function todayDateString() {
 export default function DebtFormModal({ debt, onClose, onSave }) {
   const { workspaceId, currencyCode, currencySymbol } = useWorkspace();
   const { currencies } = useCurrencies(workspaceId);
+  const { counterparties } = useCounterparties(workspaceId, { includeArchived: true });
   const isEdit = !!debt;
 
   const [form, setForm] = useState({
     title: '',
     counterparty: '',
+    counterparty_id: '',
     direction: 'i_owe',
     currency: currencyCode,
     initial_amount: '',
@@ -38,6 +41,7 @@ export default function DebtFormModal({ debt, onClose, onSave }) {
       setForm({
         title: debt.title || '',
         counterparty: debt.counterparty || '',
+        counterparty_id: debt.counterparty_id || '',
         direction: debt.direction || 'i_owe',
         currency: debt.currency || currencyCode,
         initial_amount: String(debt.initial_amount || ''),
@@ -72,6 +76,7 @@ export default function DebtFormModal({ debt, onClose, onSave }) {
       await onSave({
         title: form.title,
         counterparty: form.counterparty,
+        counterparty_id: form.counterparty_id || null,
         direction: form.direction,
         currency: form.currency,
         initial_amount: amount,
@@ -134,15 +139,11 @@ export default function DebtFormModal({ debt, onClose, onSave }) {
           {/* Counterparty */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Контрагент</label>
-            <input
-              type="text"
-              value={form.counterparty}
-              onChange={set('counterparty')}
-              className="input-field"
-              placeholder="Банк, ФИО, компания..."
-              required
-              aria-label="Контрагент"
-            />
+            <select value={form.counterparty_id} onChange={(event) => { const selected = counterparties.find((item) => item.id === event.target.value); setForm((current) => ({ ...current, counterparty_id: event.target.value, counterparty: selected?.display_name || '' })); }} className="input-field" aria-label="Контрагент">
+              <option value="">Выберите из справочника</option>
+              {counterparties.filter((item) => !item.is_archived || item.id === form.counterparty_id).map((item) => <option key={item.id} value={item.id}>{item.display_name}{item.is_archived ? ' (архив)' : ''}</option>)}
+            </select>
+            {counterparties.length === 0 && <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">Сначала добавьте контрагента в справочниках.</p>}
           </div>
 
           {/* Amount */}

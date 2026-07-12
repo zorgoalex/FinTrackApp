@@ -34,7 +34,7 @@ export function useDebts(workspaceId) {
     [debts]
   );
 
-  const createDebt = useCallback(async ({ title, counterparty, direction, initial_amount, opened_on, due_on, notes, currency }) => {
+  const createDebt = useCallback(async ({ title, counterparty, counterparty_id, direction, initial_amount, opened_on, due_on, notes, currency }) => {
     if (!workspaceId || !user) return null;
     try {
       const { data, error: insertErr } = await supabase
@@ -44,6 +44,7 @@ export function useDebts(workspaceId) {
           created_by: user.id,
           title: title.trim(),
           counterparty: counterparty.trim(),
+          counterparty_id: counterparty_id || null,
           direction,
           initial_amount: Number(initial_amount),
           opened_on: opened_on || new Date().toISOString().slice(0, 10),
@@ -70,6 +71,7 @@ export function useDebts(workspaceId) {
       const updates = {};
       if (patch.title !== undefined) updates.title = patch.title.trim();
       if (patch.counterparty !== undefined) updates.counterparty = patch.counterparty.trim();
+      if (patch.counterparty_id !== undefined) updates.counterparty_id = patch.counterparty_id || null;
       if (patch.initial_amount !== undefined) updates.initial_amount = Number(patch.initial_amount);
       if (patch.due_on !== undefined) updates.due_on = patch.due_on || null;
       if (patch.notes !== undefined) updates.notes = patch.notes || null;

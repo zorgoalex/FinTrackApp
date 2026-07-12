@@ -8,6 +8,7 @@ import useOperations from '../hooks/useOperations';
 import useCategories from '../hooks/useCategories';
 import useTags from '../hooks/useTags';
 import useAccounts from '../hooks/useAccounts';
+import useCounterparties from '../hooks/useCounterparties';
 import AddOperationModal from '../components/AddOperationModal';
 import EditOperationModal from '../components/EditOperationModal';
 import QuickButtonsSettings from '../components/QuickButtonsSettings';
@@ -85,6 +86,7 @@ export function OperationPage() {
   const { categories } = useCategories(workspaceId);
   const { tags } = useTags(workspaceId);
   const { accounts } = useAccounts(workspaceId);
+  const { counterparties } = useCounterparties(workspaceId, { includeArchived: true });
 
   const categoryMap = useMemo(() => {
     const map = new Map();
@@ -192,6 +194,7 @@ export function OperationPage() {
     accounts.forEach(a => map.set(a.id, a));
     return map;
   }, [accounts]);
+  const counterpartyMap = useMemo(() => new Map(counterparties.map((item) => [item.id, item])), [counterparties]);
 
   const visibleOperations = useMemo(() => {
     // Filter out 'in' direction transfers (keep 'out' only to avoid duplicates)
@@ -243,7 +246,8 @@ export function OperationPage() {
           : '';
         const accountName = accountMap.get(operation.account_id)?.name || '';
         const tagNames = (operation.tags || []).map((tag) => tag.name).join(' ');
-        return [operation.description, categoryName, accountName, tagNames]
+        const counterpartyName = counterpartyMap.get(operation.counterparty_id)?.display_name || '';
+        return [operation.description, categoryName, accountName, counterpartyName, tagNames]
           .filter(Boolean)
           .some((value) => String(value).toLocaleLowerCase('ru-RU').includes(normalizedSearch));
       });
@@ -265,7 +269,7 @@ export function OperationPage() {
       }
       return sortDir === 'asc' ? valA - valB : valB - valA;
     });
-  }, [operations, filterType, filterCategory, filterStatus, filterTags, sortField, sortDir, visibleAccountIds, searchQuery, categoryMap, accountMap]);
+  }, [operations, filterType, filterCategory, filterStatus, filterTags, sortField, sortDir, visibleAccountIds, searchQuery, categoryMap, accountMap, counterpartyMap]);
 
   const groupedOperations = useMemo(() => {
     const groups = new Map();
@@ -416,7 +420,7 @@ export function OperationPage() {
       for (let from = 0; ; from += pageSize) {
         const { data, error: operationsError } = await supabase
           .from('operations')
-          .select('id, amount, type, description, operation_date, category_id, account_id, transfer_direction, currency, exchange_rate, base_amount, status')
+          .select('id, amount, type, description, operation_date, category_id, counterparty_id, account_id, transfer_direction, currency, exchange_rate, base_amount, status')
           .eq('workspace_id', workspaceId)
           .gte('operation_date', dateFrom)
           .lte('operation_date', dateTo)
@@ -453,6 +457,7 @@ export function OperationPage() {
       const csv = buildOperationsCSV(rows, {
         categories,
         accounts,
+        counterparties,
         baseCurrency: currentWorkspace?.base_currency || 'KZT'
       });
       downloadOperationsCSV(csv, dateFrom, dateTo);
@@ -527,6 +532,7 @@ export function OperationPage() {
           onClose={() => setImportOpen(false)}
           workspaceId={workspaceId}
           categories={categories}
+          counterparties={counterparties}
           workspaceType={currentWorkspace?.workspace_type}
           accounts={accounts}
           baseCurrency={currentWorkspace?.base_currency || 'KZT'}
@@ -978,6 +984,8 @@ export function OperationPage() {
                           if (catName) {
                             parts.push(<span key="cat" className="text-orange-500 font-medium">{catName}</span>);
                           }
+                          const counterpartyName = counterpartyMap.get(operation.counterparty_id)?.display_name;
+                          if (counterpartyName) parts.push(<span key="counterparty" className="font-medium text-cyan-700 dark:text-cyan-300">{counterpartyName}</span>);
                           parts.push(
                             <span key="author" className="text-gray-400 text-xs">{getAuthorText(operation)}</span>
                           );

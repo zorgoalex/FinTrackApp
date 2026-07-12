@@ -5,6 +5,7 @@ import useCategories from '../hooks/useCategories';
 import useTags from '../hooks/useTags';
 import useAccounts from '../hooks/useAccounts';
 import useDebts from '../hooks/useDebts';
+import useCounterparties from '../hooks/useCounterparties';
 import { useCurrencies } from '../hooks/useCurrencies';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { usePermissions } from '../hooks/usePermissions';
@@ -39,6 +40,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
   const { tags } = useTags(workspaceId);
   const { accounts } = useAccounts(workspaceId);
   const { activeDebts } = useDebts(workspaceId);
+  const { counterparties } = useCounterparties(workspaceId, { includeArchived: false });
   const { currencyCode: baseCurrency, currencySymbol: baseSymbol, currentWorkspace } = useWorkspace();
   const { canEditDirectories } = usePermissions();
   const { getRate } = useCurrencies(workspaceId);
@@ -54,6 +56,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
       description:   '',
       operationDate: todayDateString(),
       categoryId:    '',
+      counterpartyId: '',
       selectedTags:  [],
       accountId:     '',
       fromAccountId: '',
@@ -210,6 +213,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
               description:    form.description,
               operation_date: form.operationDate,
               category_id:    form.categoryId || null,
+              counterparty_id: form.counterpartyId || null,
               account_id:     form.accountId || defaultAccount?.id || null,
               tagNames:       (tagInputRef.current?.getAllTags() ?? form.selectedTags).map((t) => t.name),
               debt_id:        form.debtId || null,
@@ -365,6 +369,14 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
                 </div>
               )}
             </div>}
+
+          {form.type !== 'transfer' && counterparties.length > 0 && <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Контрагент</label>
+            <select aria-label="Контрагент операции" value={form.counterpartyId} onChange={set('counterpartyId')} className="input-field">
+              <option value="">Без контрагента</option>
+              {counterparties.map((item) => <option key={item.id} value={item.id}>{item.display_name}</option>)}
+            </select>
+          </div>}
 
           {/* Сумма */}
           <div>
