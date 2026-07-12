@@ -5,12 +5,21 @@ import { useWorkspace } from '../contexts/WorkspaceContext';
 import DebtFormModal from '../components/DebtFormModal';
 import DebtPaymentModal from '../components/DebtPaymentModal';
 import { formatUnsignedAmount } from '../utils/formatters';
-import { Plus, Pencil, Archive, ArchiveRestore, Trash2, ChevronDown, ChevronUp, Banknote } from 'lucide-react';
+import { getDebtAging, matchesDebtStatus, sortDebtsByUrgency } from '../utils/debtAging';
+import { Plus, Pencil, Archive, ArchiveRestore, Trash2, ChevronDown, ChevronUp, Banknote, AlertTriangle } from 'lucide-react';
 
 const DIRECTION_LABELS = { i_owe: 'Я должен', owed_to_me: 'Мне должны' };
 const DIRECTION_COLORS = {
   i_owe: 'text-red-600 dark:text-red-400',
   owed_to_me: 'text-green-600 dark:text-green-400',
+};
+const AGING_STYLES = {
+  overdue: 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300',
+  due_today: 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300',
+  due_soon: 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300',
+  later: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+  no_due: 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400',
+  closed: 'bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300',
 };
 
 function formatDebtTotals(debts, direction, fallbackCurrency) {
@@ -33,6 +42,7 @@ export function DebtsPage() {
   const { debts, loading, error, createDebt, updateDebt, archiveDebt, unarchiveDebt, deleteDebt, getDebtHistory, refresh } = useDebts(workspaceId);
 
   const [filterDirection, setFilterDirection] = useState(null);
+  const [filterStatus, setFilterStatus] = useState(null);
   const [showArchived, setShowArchived] = useState(false);
   const [formModal, setFormModal] = useState(null); // null | 'add' | debt object
   const [quickPayDebt, setQuickPayDebt] = useState(null); // debt for quick pay modal
@@ -40,12 +50,15 @@ export function DebtsPage() {
   const [debtHistory, setDebtHistory] = useState({});
   const [deleteError, setDeleteError] = useState('');
 
-  const filteredDebts = debts.filter(d => {
+  const filteredDebts = sortDebtsByUrgency(debts.filter(d => {
     if (!showArchived && d.is_archived) return false;
     if (filterDirection && d.direction !== filterDirection) return false;
+    if (!matchesDebtStatus(d, filterStatus)) return false;
     return true;
-  });
+  }));
   const activeDebts = debts.filter(debt => !debt.is_archived && debt.remaining_amount > 0);
+  const overdueDebts = activeDebts.filter(debt => getDebtAging(debt).key === 'overdue');
+  const urgentDebts = activeDebts.filter(debt => matchesDebtStatus(debt, 'urgent'));
 
   const toggleExpand = useCallback(async (debtId) => {
     if (expandedDebtId === debtId) {
@@ -115,6 +128,20 @@ export function DebtsPage() {
         </div>
       )}
 
+      {!loading && overdueDebts.length > 0 && (
+        <button
+          type="button"
+          onClick={() => { setFilterStatus('overdue'); setShowArchived(false); }}
+          className="flex w-full items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-3 text-left dark:border-red-900 dark:bg-red-950/30"
+        >
+          <AlertTriangle className="mt-0.5 shrink-0 text-red-600 dark:text-red-400" size={18} />
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-red-800 dark:text-red-200">Просрочено обязательств: {overdueDebts.length}</span>
+            <span className="mt-0.5 block text-xs text-red-700 dark:text-red-300">К оплате: {formatDebtTotals(overdueDebts, 'i_owe', currencyCode)} · К получению: {formatDebtTotals(overdueDebts, 'owed_to_me', currencyCode)}</span>
+          </span>
+        </button>
+      )}
+
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
         {[
@@ -149,6 +176,28 @@ export function DebtsPage() {
         </button>
       </div>
 
+      <div className="flex gap-2 overflow-x-auto pb-1" aria-label="Фильтр по сроку">
+        {[
+          { key: null, label: 'Все сроки' },
+          { key: 'urgent', label: `Срочные${urgentDebts.length ? ` · ${urgentDebts.length}` : ''}` },
+          { key: 'overdue', label: `Просрочены${overdueDebts.length ? ` · ${overdueDebts.length}` : ''}` },
+          { key: 'no_due', label: 'Без срока' },
+        ].map(({ key, label }) => (
+          <button
+            key={String(key)}
+            type="button"
+            onClick={() => setFilterStatus(key)}
+            className={`min-h-11 shrink-0 rounded-full border px-3 py-2 text-sm font-medium transition-colors ${
+              filterStatus === key
+                ? 'border-primary-600 bg-primary-600 text-white dark:border-primary-500 dark:bg-primary-500'
+                : 'border-gray-300 bg-white text-gray-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {deleteError && (
         <div className="text-red-600 dark:text-red-400 text-sm bg-red-50 dark:bg-red-900/20 rounded-lg p-3">{deleteError}</div>
       )}
@@ -178,6 +227,7 @@ export function DebtsPage() {
             ? 'bg-red-500 dark:bg-red-400'
             : 'bg-green-500 dark:bg-green-400';
           const isPaidOff = debt.remaining_amount <= 0;
+          const aging = getDebtAging(debt);
 
           return (
             <div
@@ -194,12 +244,11 @@ export function DebtsPage() {
                       </span>
                       {debt.is_archived && <span className="text-xs bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 px-1.5 py-0.5 rounded">архив</span>}
                       {isPaidOff && !debt.is_archived && <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-1.5 py-0.5 rounded">погашен</span>}
+                      {!debt.is_archived && !isPaidOff && <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${AGING_STYLES[aging.key]}`}>{aging.label}</span>}
                     </div>
                     <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{debt.title}</h3>
                     <p className="text-xs text-gray-500 dark:text-gray-400">{debt.counterparty}</p>
-                    {debt.due_on && (
-                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">до {new Date(debt.due_on).toLocaleDateString('ru-RU')}</p>
-                    )}
+                    {debt.due_on && <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">до {new Date(`${debt.due_on}T12:00:00`).toLocaleDateString('ru-RU')}</p>}
                   </div>
                   <div className="text-right shrink-0">
                     <div className="text-lg font-bold tabular-nums text-gray-900 dark:text-gray-100">

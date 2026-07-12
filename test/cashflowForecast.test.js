@@ -1,6 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { addScheduledDate, buildCashflowForecast, expandScheduled } from '../src/utils/cashflowForecast.js';
+import { addScheduledDate, buildCashflowForecast, expandScheduled, getDebtForecastDate } from '../src/utils/cashflowForecast.js';
+
+test('moves overdue debts to the start of the forecast instead of dropping them', () => {
+  assert.equal(getDebtForecastDate('2026-07-01', '2026-07-12'), '2026-07-12');
+  assert.equal(getDebtForecastDate('2026-07-20', '2026-07-12'), '2026-07-20');
+  assert.equal(getDebtForecastDate(null, '2026-07-12'), null);
+});
 
 test('keeps monthly schedules on the last valid day', () => {
   assert.equal(addScheduledDate('2026-01-31', 'monthly', 31, 1), '2026-02-28');

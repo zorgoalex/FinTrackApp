@@ -9,7 +9,7 @@ import { useCategories } from '../hooks/useCategories';
 import { useCurrencies } from '../hooks/useCurrencies';
 import { useScheduledOperations } from '../hooks/useScheduledOperations';
 import { useDebts } from '../hooks/useDebts';
-import { buildCashflowForecast, expandScheduled } from '../utils/cashflowForecast';
+import { buildCashflowForecast, expandScheduled, getDebtForecastDate } from '../utils/cashflowForecast';
 import { formatBalance, formatUnsignedAmount } from '../utils/formatters';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -73,10 +73,10 @@ export default function CashflowPage() {
       if (!currency || currency === currencyCode) return amount;
       return amount * (Number(getRate(currency, currencyCode, date)) || 1);
     });
-    const debtEvents = activeDebts.filter((debt) => debt.due_on && debt.due_on >= range.from && debt.due_on <= range.to).map((debt) => {
+    const debtEvents = activeDebts.filter((debt) => debt.due_on && debt.due_on <= range.to).map((debt) => {
       const rate = debt.currency === currencyCode ? 1 : Number(getRate(debt.currency, currencyCode, debt.due_on)) || 1;
       return {
-        id: `debt:${debt.id}`, source: 'debt', sourceId: debt.id, date: debt.due_on,
+        id: `debt:${debt.id}`, source: 'debt', sourceId: debt.id, date: getDebtForecastDate(debt.due_on, range.from),
         title: `${debt.title} · ${debt.counterparty}`, direction: debt.direction === 'owed_to_me' ? 'income' : 'expense',
         amount: Number(debt.remaining_amount) * rate, currency: debt.currency,
       };

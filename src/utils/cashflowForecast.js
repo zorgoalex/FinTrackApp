@@ -71,3 +71,8 @@ export function buildCashflowForecast({ openingBalance = 0, plans = [], schedule
     timeline,
   };
 }
+
+export function getDebtForecastDate(dueOn, forecastFrom) {
+  if (!dueOn) return null;
+  return dueOn < forecastFrom ? forecastFrom : dueOn;
+}
