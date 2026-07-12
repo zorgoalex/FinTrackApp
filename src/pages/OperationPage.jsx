@@ -685,6 +685,15 @@ export function OperationPage() {
           <SlidersHorizontal size={16} />
           Фильтры
         </button>
+        {permissions.hasManagementRights && (
+          <button
+            type="button"
+            onClick={() => { setBulkMode((value) => !value); setSelectedOperationIds([]); setBulkError(''); }}
+            className={`grid min-h-11 min-w-11 place-items-center rounded-lg border md:hidden ${bulkMode ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-gray-300 bg-white text-gray-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300'}`}
+            aria-label={bulkMode ? 'Выйти из массового выбора' : 'Массовое редактирование'}
+            title="Массовое редактирование"
+          ><ListChecks size={18} /></button>
+        )}
       </div>
 
       <div id="operation-filters" className={`${filtersOpen ? 'block' : 'hidden'} mb-3 rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800 md:block md:border-0 md:bg-transparent md:p-0 dark:md:bg-transparent`}>
