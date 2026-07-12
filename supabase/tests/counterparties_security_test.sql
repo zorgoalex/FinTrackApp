@@ -220,10 +220,10 @@ SELECT is(
   'merge relinks debts'
 );
 
-SELECT throws_ok(
+SELECT is_empty(
   $$DELETE FROM public.counterparties
-    WHERE id = '41000000-0000-0000-0000-000000000002'$$,
-  '42501', NULL,
+    WHERE id = '41000000-0000-0000-0000-000000000002'
+    RETURNING id$$,
   'authenticated users cannot physically delete counterparties'
 );
 

@@ -228,11 +228,11 @@ AS $$
   )
   SELECT debt.id, debt.workspace_id, debt.created_by, debt.title, debt.counterparty,
     debt.counterparty_id, debt.direction, debt.initial_amount,
-    COALESCE(paid.paid_amount, 0)::numeric,
-    GREATEST(debt.initial_amount - COALESCE(paid.paid_amount, 0), 0)::numeric,
+    COALESCE(paid.paid_amount, 0)::numeric AS paid_amount,
+    GREATEST(debt.initial_amount - COALESCE(paid.paid_amount, 0), 0)::numeric AS remaining_amount,
     CASE WHEN debt.initial_amount = 0 THEN 100
       ELSE ROUND(LEAST(COALESCE(paid.paid_amount, 0) / debt.initial_amount, 1) * 100, 2)
-    END::numeric,
+    END::numeric AS progress_pct,
     debt.opened_on, debt.due_on, debt.notes, debt.is_archived,
     debt.created_at, debt.updated_at, debt.currency
   FROM public.debts debt

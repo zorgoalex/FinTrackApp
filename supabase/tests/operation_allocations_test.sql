@@ -1,7 +1,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
-SELECT plan(12);
+SELECT plan(13);
 
 INSERT INTO auth.users(id, email) VALUES
   ('13000000-0000-0000-0000-000000000001', 'split-owner@example.test'),

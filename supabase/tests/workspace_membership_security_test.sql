@@ -91,8 +91,8 @@ SELECT throws_ok(
       'Owner'
     )
     ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = EXCLUDED.role$$,
-  'P0001',
-  'Участник не может изменить собственную роль или восстановить доступ',
+  '42501',
+  NULL,
   'invitation path cannot grant Owner'
 );
 
