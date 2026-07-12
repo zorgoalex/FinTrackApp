@@ -83,7 +83,7 @@ export default function Layout() {
           })}
         </ul>
       </nav>
-      <div className="p-4 border-t border-gray-200 dark:border-gray-700 space-y-3">
+      <div className="border-t border-gray-200 px-4 pt-4 pb-[calc(5rem+env(safe-area-inset-bottom))] space-y-3 dark:border-gray-700 lg:pb-4">
         <button
           onClick={toggleTheme}
           className="flex items-center gap-2 w-full py-2 px-3 rounded-xl text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
