@@ -83,7 +83,7 @@ BEGIN
   SELECT wm.workspace_id INTO v_workspace_id
   FROM public.workspace_members wm
   WHERE wm.user_id = v_link.user_id AND wm.is_active
-  ORDER BY wm.created_at
+  ORDER BY COALESCE(wm.last_accessed_at, wm.joined_at, wm.invited_at) DESC
   LIMIT 1;
 
   DELETE FROM public.telegram_users WHERE telegram_id = p_telegram_id OR user_id = v_link.user_id;

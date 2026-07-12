@@ -96,6 +96,7 @@ async function handleStart(chatId: number, telegramId: number, args: string[], s
       p_first_name: sender.first_name || null,
     });
     if (error) {
+      console.error('Telegram link consume failed:', error);
       await sendMessage(chatId, 'Ссылка привязки недействительна или истекла. Создайте новую ссылку в личном кабинете ФинУчёта.');
       return;
     }
