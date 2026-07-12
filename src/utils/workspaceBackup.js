@@ -1,21 +1,28 @@
 const BACKUP_FORMAT = 'fintrack-workspace-backup';
-const BACKUP_VERSION = 1;
+const BACKUP_VERSION = 2;
 const PAGE_SIZE = 1000;
 
 const WORKSPACE_TABLES = [
   ['accounts', 'accounts'],
   ['categories', 'categories'],
   ['tags', 'tags'],
+  ['counterparties', 'counterparties'],
   ['operations', 'operations'],
+  ['operation_allocations', 'operationAllocations'],
   ['scheduled_operations', 'scheduledOperations'],
   ['debts', 'debts'],
   ['exchange_rates', 'exchangeRates'],
   ['budgets', 'budgets'],
   ['import_sessions', 'importSessions'],
+  ['import_templates', 'importTemplates'],
   ['category_rules', 'categoryRules'],
   ['cashflow_plans', 'cashflowPlans'],
   ['operation_comments', 'operationComments'],
+  ['savings_goals', 'savingsGoals'],
+  ['savings_goal_contributions', 'savingsGoalContributions'],
 ];
+
+const BACKUP_DATA_KEYS = WORKSPACE_TABLES.map(([, key]) => key).concat('operationTags');
 
 async function fetchAllWorkspaceRows(supabase, table, workspaceId) {
   const rows = [];
@@ -56,16 +63,51 @@ export function buildWorkspaceBackupDocument({ workspace, data, exportedAt = new
       accounts: data.accounts || [],
       categories: data.categories || [],
       tags: data.tags || [],
+      counterparties: data.counterparties || [],
       operations: data.operations || [],
+      operationAllocations: data.operationAllocations || [],
       operationTags: data.operationTags || [],
       scheduledOperations: data.scheduledOperations || [],
       debts: data.debts || [],
       exchangeRates: data.exchangeRates || [],
       budgets: data.budgets || [],
       importSessions: data.importSessions || [],
+      importTemplates: data.importTemplates || [],
       operationComments: data.operationComments || [],
+      categoryRules: data.categoryRules || [],
+      cashflowPlans: data.cashflowPlans || [],
+      savingsGoals: data.savingsGoals || [],
+      savingsGoalContributions: data.savingsGoalContributions || [],
     },
   };
+}
+
+export function validateWorkspaceBackupDocument(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Файл не содержит JSON-объект резервной копии');
+  if (value.format !== BACKUP_FORMAT) throw new Error('Неизвестный формат резервной копии');
+  if (value.version !== BACKUP_VERSION) throw new Error(`Нужна резервная копия версии ${BACKUP_VERSION}. Создайте новую копию перед восстановлением`);
+  if (!value.workspace?.id || !value.workspace?.name || !value.data || typeof value.data !== 'object') throw new Error('В резервной копии отсутствуют обязательные разделы');
+
+  const counts = {};
+  for (const key of BACKUP_DATA_KEYS) {
+    const rows = value.data[key] ?? [];
+    if (!Array.isArray(rows)) throw new Error(`Раздел ${key} должен быть массивом`);
+    if (rows.some((row) => !row || typeof row !== 'object' || Array.isArray(row))) throw new Error(`Раздел ${key} содержит некорректную запись`);
+    counts[key] = rows.length;
+  }
+  const totalRows = Object.values(counts).reduce((sum, count) => sum + count, 0);
+  return { backup: value, counts, totalRows };
+}
+
+export async function restoreWorkspaceBackup(supabase, workspaceId, backup, dryRun = true) {
+  const validated = validateWorkspaceBackupDocument(backup);
+  const { data, error } = await supabase.rpc('restore_workspace_backup', {
+    p_workspace_id: workspaceId,
+    p_backup: validated.backup,
+    p_dry_run: dryRun,
+  });
+  if (error) throw new Error(`Не удалось ${dryRun ? 'проверить' : 'восстановить'} копию: ${error.message}`);
+  return data;
 }
 
 export async function createWorkspaceBackup(supabase, workspaceId) {

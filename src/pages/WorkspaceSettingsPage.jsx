@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Mail, Settings, Trash2, UserPlus, Shield, Crown, Eye, User, Coins, Download, Sparkles } from 'lucide-react';
+import { Users, Mail, Settings, Trash2, UserPlus, Shield, Crown, Eye, User, Coins, Download, Sparkles, Upload, RotateCcw } from 'lucide-react';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { supabase } from '../contexts/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import ExchangeRateManager from '../components/ExchangeRateManager';
-import { createWorkspaceBackup, downloadWorkspaceBackup } from '../utils/workspaceBackup';
+import { createWorkspaceBackup, downloadWorkspaceBackup, restoreWorkspaceBackup, validateWorkspaceBackupDocument } from '../utils/workspaceBackup';
 
 const roleIcons = {
   owner: Crown,
@@ -77,6 +77,9 @@ export default function WorkspaceSettingsPage() {
   const [currencySuccess, setCurrencySuccess] = useState(false);
   const [backupLoading, setBackupLoading] = useState(false);
   const [backupError, setBackupError] = useState('');
+  const [restorePreview, setRestorePreview] = useState(null);
+  const [restoreLoading, setRestoreLoading] = useState(false);
+  const [restoreSuccess, setRestoreSuccess] = useState('');
   const [aiPolicies, setAiPolicies] = useState([]);
   const [aiPoliciesLoading, setAiPoliciesLoading] = useState(false);
   const [aiPoliciesError, setAiPoliciesError] = useState('');
@@ -175,6 +178,42 @@ export default function WorkspaceSettingsPage() {
       setBackupError(backupException.message || 'Не удалось создать резервную копию');
     } finally {
       setBackupLoading(false);
+    }
+  };
+
+  const handleBackupFile = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setBackupError('');
+    setRestoreSuccess('');
+    setRestoreLoading(true);
+    try {
+      const parsed = JSON.parse(await file.text());
+      const localPreview = validateWorkspaceBackupDocument(parsed);
+      const serverPreview = await restoreWorkspaceBackup(supabase, currentWorkspace.id, parsed, true);
+      setRestorePreview({ ...localPreview, serverPreview, fileName: file.name });
+    } catch (restoreException) {
+      setRestorePreview(null);
+      setBackupError(restoreException.message || 'Не удалось проверить резервную копию');
+    } finally {
+      setRestoreLoading(false);
+      event.target.value = '';
+    }
+  };
+
+  const handleRestoreBackup = async () => {
+    if (!restorePreview?.backup) return;
+    if (!window.confirm(`Восстановить ${restorePreview.totalRows} записей из «${restorePreview.fileName}»? Совпадающие записи будут обновлены атомарно.`)) return;
+    setRestoreLoading(true);
+    setBackupError('');
+    try {
+      await restoreWorkspaceBackup(supabase, currentWorkspace.id, restorePreview.backup, false);
+      setRestoreSuccess('Данные восстановлены. Обновите открытые экраны, чтобы увидеть изменения.');
+      setRestorePreview(null);
+    } catch (restoreException) {
+      setBackupError(restoreException.message || 'Не удалось восстановить резервную копию');
+    } finally {
+      setRestoreLoading(false);
     }
   };
 
@@ -481,6 +520,25 @@ export default function WorkspaceSettingsPage() {
                   <Download size={16} className="mr-2" />
                   {backupLoading ? 'Создаём копию...' : 'Скачать резервную копию'}
                 </button>
+                {canEditWorkspaceSettings && (
+                  <div className="mt-4 rounded-xl border border-gray-200 p-3 dark:border-gray-700">
+                    <p className="mb-2 text-sm font-medium text-gray-900 dark:text-gray-100">Восстановление с проверкой</p>
+                    <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">Сначала файл проверяется локально и на сервере. Запись выполняется одной транзакцией; при любой ошибке изменения откатываются.</p>
+                    <label className="btn-secondary inline-flex min-h-11 cursor-pointer items-center">
+                      <Upload size={16} className="mr-2" />
+                      {restoreLoading ? 'Проверяем...' : 'Выбрать JSON-копию'}
+                      <input type="file" accept="application/json,.json" className="sr-only" onChange={handleBackupFile} disabled={restoreLoading} />
+                    </label>
+                    {restorePreview && (
+                      <div className="mt-3 rounded-lg bg-gray-50 p-3 text-sm dark:bg-gray-800">
+                        <p className="font-medium text-gray-900 dark:text-gray-100">{restorePreview.fileName}</p>
+                        <p className="mt-1 text-gray-600 dark:text-gray-400">Источник: {restorePreview.backup.workspace.name} · записей: {restorePreview.totalRows}</p>
+                        <button type="button" onClick={handleRestoreBackup} disabled={restoreLoading} className="mt-3 inline-flex min-h-11 items-center rounded-lg bg-amber-600 px-4 py-2 font-medium text-white hover:bg-amber-700 disabled:opacity-50"><RotateCcw size={16} className="mr-2" /> Восстановить атомарно</button>
+                      </div>
+                    )}
+                    {restoreSuccess && <p className="mt-3 text-sm text-green-600 dark:text-green-400">{restoreSuccess}</p>}
+                  </div>
+                )}
               </div>
 
               {/* Опасная зона */}
