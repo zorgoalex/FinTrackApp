@@ -16,6 +16,12 @@ verify_jwt = false
 [functions.telegram-bot]
 verify_jwt = false
 
+[functions.login-user]
+verify_jwt = false
+
+[functions.dispatch-notifications]
+verify_jwt = false
+
 [api]
 enabled = true
 # Port to use for the API URL.
@@ -129,9 +135,9 @@ file_size_limit = "50MiB"
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "http://localhost:3001"
+site_url = "http://127.0.0.1:5173"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://3e3d04b5-d352-4b94-87d3-6289a6f69340.lovableproject.com/**", "https://id-preview--3e3d04b5-d352-4b94-87d3-6289a6f69340.lovable.app/**", "https://preview--project-finance-master.lovable.app/**", "https://project-finance-master.lovable.app/**"]
+additional_redirect_urls = ["http://localhost:5173/**", "http://127.0.0.1:5173/**", "https://fintrackapp-wheat.vercel.app/**", "https://3e3d04b5-d352-4b94-87d3-6289a6f69340.lovableproject.com/**", "https://id-preview--3e3d04b5-d352-4b94-87d3-6289a6f69340.lovable.app/**", "https://preview--project-finance-master.lovable.app/**", "https://project-finance-master.lovable.app/**"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # Path to JWT signing key. DO NOT commit your signing keys file to git.
