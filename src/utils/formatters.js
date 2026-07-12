@@ -20,7 +20,7 @@ export function formatUnsignedAmount(value, symbol = '₸') {
 
 /** Форматирует со знаком типа операции: «+1 234,56 ₽» */
 export function formatSignedAmount(type, value, symbol = '₸') {
-  const signs = { income: '+', expense: '−', salary: '−' };
+  const signs = { income: '+', personal_salary: '+', expense: '−', employee_salary: '−' };
   const sign = signs[type] ?? '';
   return `${sign}${formatUnsignedAmount(value, symbol)}`;
 }
@@ -112,7 +112,7 @@ export function formatMoney(value, currencyCode = 'KZT') {
 
 /** Форматирует со знаком типа операции: «+1 234,56 $» */
 export function formatSignedMoney(type, value, currencyCode = 'KZT') {
-  const signs = { income: '+', expense: '−', salary: '−' };
+  const signs = { income: '+', personal_salary: '+', expense: '−', employee_salary: '−' };
   const sign = signs[type] ?? '';
   return `${sign}${formatMoney(value, currencyCode)}`;
 }

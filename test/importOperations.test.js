@@ -34,3 +34,9 @@ test('reports invalid and transfer rows without importing them', () => {
   assert.match(result.errors[0], /неподдерживаемый тип/);
   assert.match(result.errors[1], /некорректная дата/);
 });
+
+test('maps an ambiguous legacy salary by workspace mode', () => {
+  const csv = 'Дата;Тип;Сумма\n01.07.2026;Зарплата;100';
+  assert.equal(parseOperationsCSV(csv, { workspaceType: 'personal' }).rows[0].type, 'personal_salary');
+  assert.equal(parseOperationsCSV(csv, { workspaceType: 'business' }).rows[0].type, 'employee_salary');
+});

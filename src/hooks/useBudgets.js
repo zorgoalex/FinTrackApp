@@ -31,7 +31,7 @@ export default function useBudgets(workspaceId, month) {
           .from('operations')
           .select('category_id, base_amount, amount')
           .eq('workspace_id', workspaceId)
-          .in('type', ['expense', 'salary'])
+          .in('type', ['expense', 'employee_salary'])
           .gte('operation_date', month)
           .lt('operation_date', monthEndString)
           .not('category_id', 'is', null),

@@ -3,19 +3,21 @@ import assert from 'node:assert/strict';
 
 import { computeAnalytics } from '../src/utils/analytics/aggregations.js';
 
-test('computes income, expenses and salary in workspace base currency', () => {
+test('computes both salary directions in workspace base currency', () => {
   const result = computeAnalytics([
     { type: 'income', amount: 10, base_amount: 1000 },
     { type: 'expense', amount: 5, base_amount: 300 },
-    { type: 'salary', amount: 2, base_amount: 200 },
+    { type: 'personal_salary', amount: 2, base_amount: 200 },
+    { type: 'employee_salary', amount: 2, base_amount: 250 },
     { type: 'transfer', amount: 5000, base_amount: 5000 },
   ]);
 
-  assert.equal(result.totalIncome, 1000);
+  assert.equal(result.totalIncome, 1200);
   assert.equal(result.totalExpense, 300);
-  assert.equal(result.totalSalary, 200);
-  assert.equal(result.balance, 500);
-  assert.equal(result.operationCount, 4);
+  assert.equal(result.totalSalary, 250);
+  assert.equal(result.totalOutflow, 550);
+  assert.equal(result.balance, 650);
+  assert.equal(result.operationCount, 5);
 });
 
 test('falls back to operation amount and aggregates categories and tags', () => {

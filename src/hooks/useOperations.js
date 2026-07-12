@@ -8,7 +8,7 @@ const EMPTY_PERIOD_SUMMARY = {
   total: 0
 };
 
-const ALLOWED_TYPES = ['income', 'expense', 'salary', 'transfer'];
+const ALLOWED_TYPES = ['income', 'expense', 'personal_salary', 'employee_salary', 'transfer'];
 
 function toOperationDate(value) {
   if (!value) return null;
@@ -60,7 +60,7 @@ function calculateSummary(operations) {
 
   operations.forEach((operation) => {
     const type = (operation?.type || '').toLowerCase();
-    if (!['income', 'expense', 'salary'].includes(type)) {
+    if (!['income', 'expense', 'personal_salary', 'employee_salary'].includes(type)) {
       return;
     }
 
@@ -71,11 +71,15 @@ function calculateSummary(operations) {
     }
 
     if (operationDate >= startOfMonth && operationDate < endOfMonth) {
-      summary.month[type] += amount;
+      if (type === 'personal_salary') summary.month.income += amount;
+      else if (type === 'employee_salary') summary.month.salary += amount;
+      else summary.month[type] += amount;
     }
 
     if (operationDate >= startOfToday && operationDate < endOfToday) {
-      summary.today[type] += amount;
+      if (type === 'personal_salary') summary.today.income += amount;
+      else if (type === 'employee_salary') summary.today.salary += amount;
+      else summary.today[type] += amount;
     }
   });
 

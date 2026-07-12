@@ -27,7 +27,7 @@ function money(value: number | undefined, currency: string) {
 function fallbackAnswer(context: FinancialContext) {
   const currency = context.base_currency || 'KZT';
   const summary = context.summary || {};
-  const topExpense = (context.categories || []).find((category) => ['expense', 'salary'].includes(category.type || ''));
+  const topExpense = (context.categories || []).find((category) => ['expense', 'employee_salary'].includes(category.type || ''));
   const lines = [
     `За выбранный период доходы составили ${money(summary.income, currency)}, расходы — ${money(summary.expense, currency)}.`,
     `Итоговый денежный поток: ${money(summary.net, currency)}; учтено операций: ${summary.operation_count || 0}.`,

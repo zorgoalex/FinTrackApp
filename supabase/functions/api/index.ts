@@ -3,7 +3,7 @@ import { corsHeaders } from '../_shared/cors.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
-const OPERATION_TYPES = new Set(['income', 'expense', 'salary']);
+const OPERATION_TYPES = new Set(['income', 'expense', 'personal_salary', 'employee_salary']);
 
 function jsonResponse(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -125,7 +125,7 @@ async function validateTags(
 async function getWorkspaces(supabase: ReturnType<typeof createClient>) {
   const { data, error } = await supabase
     .from('workspace_members')
-    .select('workspace_id, role, workspaces(id, name, is_personal, created_at)')
+    .select('workspace_id, role, workspaces(id, name, is_personal, workspace_type, created_at)')
     .eq('is_active', true);
 
   if (error) return errorResponse(error.message, 500);
@@ -190,7 +190,7 @@ async function exportOperations(
 ) {
   const dateFrom = url.searchParams.get('dateFrom');
   const dateTo = url.searchParams.get('dateTo');
-  const type = url.searchParams.get('type'); // income, expense, salary
+  const type = url.searchParams.get('type');
   const categoryId = url.searchParams.get('category_id');
   const sortBy = url.searchParams.get('sortBy') || 'operation_date'; // operation_date, amount, created_at
   const sortOrder = url.searchParams.get('sortOrder') || 'desc'; // asc, desc
@@ -242,7 +242,7 @@ async function createOperation(
     return errorResponse('amount and type are required', 400);
   }
   if (!OPERATION_TYPES.has(operationType)) {
-    return errorResponse('type must be income, expense or salary; use /transfers for transfers', 400);
+    return errorResponse('type must be income, expense, personal_salary or employee_salary; use /transfers for transfers', 400);
   }
   if (!validDate(operationDate)) return errorResponse('operation_date must use YYYY-MM-DD', 400);
   if (!await validateCategory(supabase, workspaceId, category_id)) {

@@ -35,7 +35,7 @@ async function getTelegramUser(telegramId: number) {
 async function getUserWorkspaces(userId: string) {
   const { data } = await supabaseAdmin
     .from('workspace_members')
-    .select('workspace_id, role, workspaces(id, name, is_personal)')
+    .select('workspace_id, role, workspaces(id, name, is_personal, workspace_type)')
     .eq('user_id', userId)
     .eq('is_active', true);
   return data || [];
@@ -58,9 +58,9 @@ async function getOperationsSummary(
   let salary = 0;
   for (const op of data || []) {
     const amount = Number(op.base_amount ?? op.amount ?? 0);
-    if (op.type === 'income') income += amount;
+    if (op.type === 'income' || op.type === 'personal_salary') income += amount;
     else if (op.type === 'expense') expense += amount;
-    else if (op.type === 'salary') salary += amount;
+    else if (op.type === 'employee_salary') salary += amount;
   }
   return { income, expense, salary, balance: income - expense - salary };
 }
@@ -214,7 +214,7 @@ async function handleBalance(chatId: number, workspaceId: string) {
     `<b>Баланс за месяц:</b>\n` +
       `Доходы: ${formatMoney(summary.income)}\n` +
       `Расходы: ${formatMoney(summary.expense)}\n` +
-      `Зарплаты: ${formatMoney(summary.salary)}\n` +
+      `Зарплаты сотрудникам: ${formatMoney(summary.salary)}\n` +
       `Баланс: ${formatMoney(summary.balance)}`,
   );
 }
@@ -227,7 +227,7 @@ async function handleToday(chatId: number, workspaceId: string) {
     `<b>Сегодня (${today}):</b>\n` +
       `Доходы: ${formatMoney(summary.income)}\n` +
       `Расходы: ${formatMoney(summary.expense)}\n` +
-      `Зарплаты: ${formatMoney(summary.salary)}\n` +
+      `Зарплаты сотрудникам: ${formatMoney(summary.salary)}\n` +
       `Баланс: ${formatMoney(summary.balance)}`,
   );
 }
@@ -393,7 +393,7 @@ async function handleRecent(chatId: number, workspaceId: string) {
   const filtered = data.filter((op: any) => !(op.type === 'transfer' && op.transfer_direction === 'in')).slice(0, 10);
 
   const lines = filtered.map((op: any) => {
-    const sign = op.type === 'transfer' ? '⇄' : op.type === 'expense' || op.type === 'salary' ? '-' : '+';
+    const sign = op.type === 'transfer' ? '⇄' : op.type === 'expense' || op.type === 'employee_salary' ? '-' : '+';
     const desc = op.description ? ` ${op.description}` : '';
     return `${op.operation_date} ${sign}${formatMoney(Number(op.amount))}${desc}`;
   });

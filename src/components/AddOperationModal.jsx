@@ -10,11 +10,13 @@ import { useWorkspace } from '../contexts/WorkspaceContext';
 import { usePermissions } from '../hooks/usePermissions';
 import TagInput from './TagInput';
 import DebtSelector from './DebtSelector';
+import { categoryTypeForOperation, operationTypesForWorkspace } from '../utils/operationTypes';
 
 const OPERATION_TYPES = {
   income:   { label: 'Доход',    color: 'text-green-600',  bg: 'bg-green-600 hover:bg-green-700' },
   expense:  { label: 'Расход',   color: 'text-red-600',    bg: 'bg-red-600 hover:bg-red-700'   },
-  salary:   { label: 'Зарплата', color: 'text-blue-600',   bg: 'bg-blue-600 hover:bg-blue-700'  },
+  personal_salary: { label: 'Личная зарплата', color: 'text-green-600', bg: 'bg-green-600 hover:bg-green-700' },
+  employee_salary: { label: 'Зарплата сотрудникам', color: 'text-blue-600', bg: 'bg-blue-600 hover:bg-blue-700' },
   transfer: { label: 'Перевод',  color: 'text-purple-600', bg: 'bg-purple-600 hover:bg-purple-700' },
 };
 
@@ -37,7 +39,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
   const { tags } = useTags(workspaceId);
   const { accounts } = useAccounts(workspaceId);
   const { activeDebts } = useDebts(workspaceId);
-  const { currencyCode: baseCurrency, currencySymbol: baseSymbol } = useWorkspace();
+  const { currencyCode: baseCurrency, currencySymbol: baseSymbol, currentWorkspace } = useWorkspace();
   const { canEditDirectories } = usePermissions();
   const { getRate } = useCurrencies(workspaceId);
 
@@ -118,9 +120,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
   // Pre-fill category when categories load and defaultCategory is provided
   useEffect(() => {
     if (defaultCategory && categories.length > 0 && !form.categoryId) {
-      const match = categories.find(
-        (c) => c.name === defaultCategory && c.type === form.type
-      );
+      const match = categories.find((c) => c.name === defaultCategory && c.type === categoryTypeForOperation(form.type));
       if (match) setForm((prev) => ({ ...prev, categoryId: match.id }));
     }
   }, [defaultCategory, categories, form.type, form.categoryId]);
@@ -140,15 +140,13 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const filteredCategories = (form.type === 'salary'
-    ? categories.filter((c) => c.type === 'expense')
-    : categories.filter((c) => c.type === form.type)
-  ).filter((c) => !c.is_archived);
+  const filteredCategories = categories
+    .filter((c) => c.type === categoryTypeForOperation(form.type))
+    .filter((c) => !c.is_archived);
 
   const handleAddCategory = async () => {
     if (!newCatName.trim()) return;
-    // Always use current operation type (income/expense), salary gets 'expense'
-    const catType = form.type === 'income' ? 'income' : 'expense';
+    const catType = categoryTypeForOperation(form.type);
     const created = await addCategory({ name: newCatName.trim(), type: catType });
     if (created) {
       setForm((prev) => ({ ...prev, categoryId: created.id }));
@@ -258,10 +256,9 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
               }}
               className="input-field"
             >
-              <option value="income">Доход</option>
-              <option value="expense">Расход</option>
-              <option value="salary">Зарплата</option>
-              <option value="transfer">Перевод</option>
+              {operationTypesForWorkspace(currentWorkspace?.workspace_type).map((type) => (
+                <option key={type} value={type}>{OPERATION_TYPES[type].label}</option>
+              ))}
             </select>
           </div>
 
@@ -470,7 +467,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
             </div>
 
           {/* Debt selector (expense/income only) */}
-          {form.type !== 'transfer' && form.type !== 'salary' && (
+          {form.type !== 'transfer' && !form.type.endsWith('_salary') && (
             <DebtSelector
               debts={activeDebts}
               operationType={form.type}

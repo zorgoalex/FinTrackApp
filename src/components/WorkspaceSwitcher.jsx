@@ -186,7 +186,7 @@ export default function WorkspaceSwitcher() {
                         isActive ? 'text-primary-900 dark:text-primary-300' : 'text-gray-900 dark:text-gray-100'
                       }`}>
                         {workspace.name}
-                        {workspace.is_personal && (
+                        {workspace.workspace_type === 'personal' && (
                           <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">(Личное)</span>
                         )}
                       </div>

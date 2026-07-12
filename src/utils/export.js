@@ -14,7 +14,7 @@ export function exportToCSV(analytics, dateFrom, dateTo) {
   lines.push('Тип;Сумма');
   lines.push(`Доходы;${analytics.totalIncome}`);
   lines.push(`Расходы;${analytics.totalExpense}`);
-  lines.push(`Зарплаты;${analytics.totalSalary}`);
+  lines.push(`Зарплаты сотрудникам;${analytics.totalSalary}`);
   lines.push(`Баланс;${analytics.balance}`);
   lines.push(`Всего операций;${analytics.operationCount}`);
   lines.push('');
@@ -68,7 +68,8 @@ export function buildOperationsCSV(
   const typeLabels = {
     income: 'Доход',
     expense: 'Расход',
-    salary: 'Зарплата',
+    personal_salary: 'Личная зарплата',
+    employee_salary: 'Зарплата сотрудникам',
     transfer: 'Перевод'
   };
   const directionLabels = { in: 'Входящий', out: 'Исходящий' };
@@ -123,7 +124,7 @@ export function buildTextReport(analytics, dateFrom, dateTo, currencySymbol = '�
   lines.push('');
   lines.push(`Доходы:    ${formatNum(analytics.totalIncome)} ${currencySymbol}`);
   lines.push(`Расходы:   ${formatNum(analytics.totalExpense)} ${currencySymbol}`);
-  lines.push(`Зарплаты:  ${formatNum(analytics.totalSalary)} ${currencySymbol}`);
+  lines.push(`Зарплаты сотрудникам: ${formatNum(analytics.totalSalary)} ${currencySymbol}`);
   lines.push(`Баланс:    ${formatNum(analytics.balance)} ${currencySymbol}`);
   lines.push(`Операций:  ${analytics.operationCount}`);
 

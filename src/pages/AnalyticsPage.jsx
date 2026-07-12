@@ -148,7 +148,7 @@ export default function AnalyticsPage() {
     );
   }
 
-  const { totalIncome, totalExpense, balance, categoryBreakdown, tagBreakdown, operationCount } = analytics;
+  const { totalIncome, totalSalary, totalOutflow, balance, categoryBreakdown, tagBreakdown, operationCount } = analytics;
   const visibleCategoryBreakdown = categoryBreakdown.filter((category) => category.type === categoryFlow);
   const maxCategoryAmount = Math.max(...visibleCategoryBreakdown.map(c => c.amount), 1);
   const maxTagAmount = Math.max(...tagBreakdown.map(t => t.amount), 1);
@@ -298,7 +298,8 @@ export default function AnalyticsPage() {
           {/* Summary cards — 3 in one row */}
           <div className="grid grid-cols-3 gap-2 mb-6" data-testid="summary-cards">
             <SummaryCard label="Доходы" amount={totalIncome} color="text-green-600" bg="bg-green-50 dark:bg-green-900/30" currencySymbol={currencySymbol} />
-            <SummaryCard label="Расходы" amount={totalExpense} color="text-red-600" bg="bg-red-50 dark:bg-red-900/30" currencySymbol={currencySymbol} />
+            <SummaryCard label="Все расходы" amount={totalOutflow} color="text-red-600" bg="bg-red-50 dark:bg-red-900/30" currencySymbol={currencySymbol} />
+            {totalSalary > 0 && <p className="-mt-1 text-center text-xs text-gray-500 dark:text-gray-400">В том числе зарплаты сотрудникам: {formatUnsignedAmount(totalSalary, currencySymbol)}</p>}
             <SummaryCard label="Баланс" amount={balance} color={balance >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'} bg="bg-gray-50 dark:bg-gray-800" currencySymbol={currencySymbol} />
           </div>
 
@@ -307,7 +308,7 @@ export default function AnalyticsPage() {
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">К предыдущему периоду</p>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <ComparisonMetric label="Доходы" current={totalIncome} previous={previousAnalytics.totalIncome} positiveIsGood />
-                <ComparisonMetric label="Расходы" current={totalExpense} previous={previousAnalytics.totalExpense} positiveIsGood={false} />
+                <ComparisonMetric label="Все расходы" current={totalOutflow} previous={previousAnalytics.totalOutflow} positiveIsGood={false} />
               </div>
             </div>
           )}

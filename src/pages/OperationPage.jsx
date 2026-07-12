@@ -21,7 +21,8 @@ import { buildOperationsCSV, downloadOperationsCSV } from '../utils/export';
 const OPERATION_TYPES = {
   income:   { label: 'Доход',    sign: '+', color: 'text-green-600' },
   expense:  { label: 'Расход',   sign: '−', color: 'text-red-600' },
-  salary:   { label: 'Зарплата', sign: '−', color: 'text-blue-600' },
+  personal_salary: { label: 'Личная зарплата', sign: '+', color: 'text-green-600' },
+  employee_salary: { label: 'Зарплата сотрудникам', sign: '−', color: 'text-blue-600' },
   transfer: { label: 'Перевод',  sign: '⇄', color: 'text-purple-600' },
 };
 
@@ -200,7 +201,11 @@ export function OperationPage() {
     });
 
     let filtered = filterType
-      ? base.filter((op) => op.type === filterType)
+      ? base.filter((op) => filterType === 'income'
+        ? ['income', 'personal_salary'].includes(op.type)
+        : filterType === 'expense'
+          ? ['expense', 'employee_salary'].includes(op.type)
+          : op.type === filterType)
       : [...base];
 
     if (filterCategory)
@@ -257,10 +262,10 @@ export function OperationPage() {
       label: formatGroupDate(dateKey === 'no-date' ? null : dateKey),
       operations: ops,
       dayIncome: ops
-        .filter(o => o.type === 'income')
+        .filter(o => o.type === 'income' || o.type === 'personal_salary')
         .reduce((s, o) => s + Number(o.base_amount ?? o.amount ?? 0), 0),
       dayExpense: ops
-        .filter(o => o.type === 'expense' || o.type === 'salary')
+        .filter(o => o.type === 'expense' || o.type === 'employee_salary')
         .reduce((s, o) => s + Number(o.base_amount ?? o.amount ?? 0), 0),
     }));
   }, [visibleOperations]);
@@ -477,6 +482,7 @@ export function OperationPage() {
         open={importOpen}
         onClose={() => setImportOpen(false)}
         categories={categories}
+        workspaceType={currentWorkspace?.workspace_type}
         accounts={accounts}
         baseCurrency={currentWorkspace?.base_currency || 'KZT'}
         onImport={addOperation}

@@ -3,8 +3,10 @@ const TYPE_MAP = new Map([
   ['income', 'income'],
   ['расход', 'expense'],
   ['expense', 'expense'],
-  ['зарплата', 'salary'],
-  ['salary', 'salary'],
+  ['личная зарплата', 'personal_salary'],
+  ['personal salary', 'personal_salary'],
+  ['зарплата сотрудникам', 'employee_salary'],
+  ['employee salary', 'employee_salary'],
 ]);
 
 function normalize(value) {
@@ -51,7 +53,7 @@ function parseDate(value) {
   return `${match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
 }
 
-export function parseOperationsCSV(text, { categories = [], accounts = [], baseCurrency = 'KZT' } = {}) {
+export function parseOperationsCSV(text, { categories = [], accounts = [], baseCurrency = 'KZT', workspaceType = 'business' } = {}) {
   const cleanText = String(text ?? '').replace(/^\uFEFF/, '');
   const lines = cleanText.split(/\r?\n/).filter((line) => line.trim());
   if (lines.length < 2) return { rows: [], errors: ['CSV не содержит операций'] };
@@ -85,11 +87,15 @@ export function parseOperationsCSV(text, { categories = [], accounts = [], baseC
     const lineNumber = offset + 2;
     const cells = parseDelimitedLine(line, delimiter);
     const get = (key) => indexes[key] >= 0 ? cells[indexes[key]] ?? '' : '';
-    const type = TYPE_MAP.get(normalize(get('type')));
+    const rawType = normalize(get('type'));
+    const type = rawType === 'зарплата' || rawType === 'salary'
+      ? (workspaceType === 'personal' ? 'personal_salary' : 'employee_salary')
+      : TYPE_MAP.get(rawType);
     const date = parseDate(get('date'));
     const amount = parseAmount(get('amount'));
     const account = get('account') ? accountMap.get(normalize(get('account'))) : null;
-    const category = get('category') ? categoryMap.get(`${type}:${normalize(get('category'))}`) : null;
+    const categoryType = type === 'personal_salary' ? 'income' : type === 'employee_salary' ? 'expense' : type;
+    const category = get('category') ? categoryMap.get(`${categoryType}:${normalize(get('category'))}`) : null;
     const rowErrors = [];
     if (!type) rowErrors.push('неподдерживаемый тип');
     if (!date) rowErrors.push('некорректная дата');

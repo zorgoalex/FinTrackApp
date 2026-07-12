@@ -16,7 +16,7 @@ export function computeAnalytics(operations, categories = [], tags = []) {
   });
 
   const totalIncome = operations
-    .filter(op => op.type === 'income')
+    .filter(op => op.type === 'income' || op.type === 'personal_salary')
     .reduce((sum, op) => sum + Number(op.base_amount ?? op.amount ?? 0), 0);
 
   const totalExpense = operations
@@ -24,10 +24,11 @@ export function computeAnalytics(operations, categories = [], tags = []) {
     .reduce((sum, op) => sum + Number(op.base_amount ?? op.amount ?? 0), 0);
 
   const totalSalary = operations
-    .filter(op => op.type === 'salary')
+    .filter(op => op.type === 'employee_salary')
     .reduce((sum, op) => sum + Number(op.base_amount ?? op.amount ?? 0), 0);
 
-  const balance = totalIncome - totalExpense - totalSalary;
+  const totalOutflow = totalExpense + totalSalary;
+  const balance = totalIncome - totalOutflow;
 
   // Category breakdown
   const categoryMap = new Map();
@@ -81,6 +82,7 @@ export function computeAnalytics(operations, categories = [], tags = []) {
     totalIncome,
     totalExpense,
     totalSalary,
+    totalOutflow,
     balance,
     operationCount: logicalOperations.length,
     categoryBreakdown,

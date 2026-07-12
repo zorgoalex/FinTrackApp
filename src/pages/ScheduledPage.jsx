@@ -6,6 +6,7 @@ import { useCategories } from '../hooks/useCategories';
 import { useAccounts } from '../hooks/useAccounts';
 import { formatMoney } from '../utils/formatters';
 import { CheckCircle2, Plus, Trash2, Pause, Play, Pencil, X } from 'lucide-react';
+import { categoryTypeForOperation, operationTypesForWorkspace, OPERATION_TYPE_META } from '../utils/operationTypes';
 
 const FREQ_LABELS = {
   daily: 'Ежедневно',
@@ -14,11 +15,12 @@ const FREQ_LABELS = {
   yearly: 'Ежегодно',
 };
 
-const TYPE_LABELS = { income: 'Доход', expense: 'Расход', salary: 'Зарплата' };
+const TYPE_LABELS = Object.fromEntries(Object.entries(OPERATION_TYPE_META).map(([key, value]) => [key, value.label]));
 const TYPE_COLORS = {
   income: 'text-green-600 bg-green-50',
   expense: 'text-red-600 bg-red-50',
-  salary: 'text-blue-600 bg-blue-50',
+  personal_salary: 'text-green-600 bg-green-50',
+  employee_salary: 'text-blue-600 bg-blue-50',
 };
 
 function todayDateString() {
@@ -28,7 +30,7 @@ function todayDateString() {
 
 export default function ScheduledPage() {
   const [searchParams] = useSearchParams();
-  const { workspaceId: wsFromCtx } = useWorkspace();
+  const { workspaceId: wsFromCtx, currentWorkspace } = useWorkspace();
   const workspaceId = searchParams.get('workspaceId') || wsFromCtx;
 
   const { items, history, loading, error, add, update, remove, toggle } = useScheduledOperations(workspaceId);
@@ -46,8 +48,8 @@ export default function ScheduledPage() {
   const pausedItems = items.filter(item => !item.is_active);
 
   const activeCategories = useMemo(
-    () => categories.filter(c => !c.is_archived),
-    [categories]
+    () => categories.filter(c => !c.is_archived && c.type === categoryTypeForOperation(form.type)),
+    [categories, form.type]
   );
 
   const categoryMap = useMemo(() => {
@@ -156,14 +158,14 @@ export default function ScheduledPage() {
               <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Тип</label>
               <select
                 value={form.type}
-                onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
+                onChange={e => setForm(f => ({ ...f, type: e.target.value, category_id: '' }))}
                 className="min-h-11 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 data-testid="scheduled-type"
                 aria-label="Тип операции"
               >
-                <option value="income">Доход</option>
-                <option value="expense">Расход</option>
-                <option value="salary">Зарплата</option>
+                {operationTypesForWorkspace(currentWorkspace?.workspace_type).filter(type => type !== 'transfer').map(type => (
+                  <option key={type} value={type}>{TYPE_LABELS[type]}</option>
+                ))}
               </select>
             </div>
           </div>

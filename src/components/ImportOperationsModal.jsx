@@ -8,6 +8,7 @@ export default function ImportOperationsModal({
   categories,
   accounts,
   baseCurrency,
+  workspaceType,
   onImport,
   onRefresh,
 }) {
@@ -46,7 +47,7 @@ export default function ImportOperationsModal({
       return;
     }
     try {
-      const result = parseOperationsCSV(await file.text(), { categories, accounts, baseCurrency });
+      const result = parseOperationsCSV(await file.text(), { categories, accounts, baseCurrency, workspaceType });
       setRows(result.rows.slice(0, 500));
       setErrors(result.errors);
       if (result.rows.length > 500) {
@@ -80,7 +81,7 @@ export default function ImportOperationsModal({
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
             <h2 id="import-title" className="text-xl font-semibold text-gray-900 dark:text-gray-100">Импорт операций из CSV</h2>
-            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Доходы, расходы и зарплаты. Переводы создавайте через интерфейс.</p>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Доходы, расходы и отдельные виды зарплат. Переводы создавайте через интерфейс.</p>
           </div>
           <button type="button" onClick={close} disabled={importing} className="grid min-h-11 min-w-11 place-items-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Закрыть импорт">
             <X size={20} />

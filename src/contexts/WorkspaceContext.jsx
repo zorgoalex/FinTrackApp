@@ -72,7 +72,7 @@ export function WorkspaceProvider({ children }) {
           is_active,
           joined_at,
           last_accessed_at,
-          workspaces(id, name, is_personal, created_at, base_currency)
+          workspaces(id, name, is_personal, workspace_type, created_at, base_currency)
         `)
         .eq('user_id', user.id)
         .eq('is_active', true);

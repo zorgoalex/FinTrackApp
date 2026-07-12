@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Settings } from 'lucide-react';
+import { Settings, Plus } from 'lucide-react';
 import { supabase } from '../contexts/AuthContext';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -10,8 +10,6 @@ export default function WorkspaceSelectPage() {
   const [workspaces, setWorkspaces] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [creating, setCreating] = useState(false);
-  const [newWorkspaceName, setNewWorkspaceName] = useState('');
 
   useEffect(() => {
     loadWorkspaces();
@@ -32,7 +30,7 @@ export default function WorkspaceSelectPage() {
         .select(`
           workspace_id,
           role,
-          workspaces(name, is_personal, deleted_at)
+          workspaces(name, is_personal, workspace_type, deleted_at)
         `)
         .eq('user_id', user.id);
       
@@ -59,45 +57,6 @@ export default function WorkspaceSelectPage() {
       setError('Не удалось загрузить рабочие пространства');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const createWorkspace = async (e) => {
-    e.preventDefault();
-    if (!newWorkspaceName.trim() || !user) return;
-    
-    try {
-      setCreating(true);
-      setError('');
-      
-      const { data, error } = await supabase
-        .from('workspaces')
-        .insert({
-          name: newWorkspaceName.trim(),
-          owner_id: user.id,
-          is_personal: false
-        })
-        .select()
-        .single();
-      
-      if (error) throw error;
-      
-      // Добавить пользователя как владельца нового workspace
-      await supabase
-        .from('workspace_members')
-        .insert({
-          workspace_id: data.id,
-          user_id: user.id,
-          role: 'Owner'
-        });
-      
-      setNewWorkspaceName('');
-      await loadWorkspaces();
-    } catch (err) {
-      console.error('Error creating workspace:', err);
-      setError('Не удалось создать рабочее пространство');
-    } finally {
-      setCreating(false);
     }
   };
 
@@ -159,7 +118,7 @@ export default function WorkspaceSelectPage() {
                 >
                   <div className="font-medium">{workspace.workspaces.name}</div>
                   <div className="text-sm text-gray-500 dark:text-gray-400">
-                    {workspace.workspaces.is_personal ? 'Личное' : 'Общее'} • {workspace.role}
+                    {workspace.workspaces.workspace_type === 'business' ? 'Бизнес' : 'Личное / семейное'} • {workspace.role}
                   </div>
                 </button>
                 
@@ -178,24 +137,9 @@ export default function WorkspaceSelectPage() {
           </div>
         )}
         
-        <form onSubmit={createWorkspace} className="space-y-3">
-          <h2 className="text-lg font-medium mb-3 text-gray-900 dark:text-gray-100">Создать новое рабочее пространство</h2>
-          <input
-            type="text"
-            className="input-field"
-            placeholder="Название рабочего пространства"
-            value={newWorkspaceName}
-            onChange={(e) => setNewWorkspaceName(e.target.value)}
-            required
-          />
-          <button
-            type="submit"
-            className="btn-primary w-full"
-            disabled={creating || !newWorkspaceName.trim()}
-          >
-            {creating ? 'Создаём...' : 'Создать'}
-          </button>
-        </form>
+        <button onClick={() => navigate('/workspaces/create')} className="btn-primary w-full flex items-center justify-center gap-2">
+          <Plus size={18} /> Создать пространство
+        </button>
         
         <div className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
           <button 

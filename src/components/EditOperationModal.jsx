@@ -10,11 +10,13 @@ import { useWorkspace } from '../contexts/WorkspaceContext';
 import { usePermissions } from '../hooks/usePermissions';
 import TagInput from './TagInput';
 import DebtSelector from './DebtSelector';
+import { categoryTypeForOperation } from '../utils/operationTypes';
 
 const OPERATION_TYPES = {
   income:   { label: 'Доход',    color: 'text-green-600',  bg: 'bg-green-600 hover:bg-green-700' },
   expense:  { label: 'Расход',   color: 'text-red-600',    bg: 'bg-red-600 hover:bg-red-700'   },
-  salary:   { label: 'Зарплата', color: 'text-blue-600',   bg: 'bg-blue-600 hover:bg-blue-700'  },
+  personal_salary: { label: 'Личная зарплата', color: 'text-green-600', bg: 'bg-green-600 hover:bg-green-700' },
+  employee_salary: { label: 'Зарплата сотрудникам', color: 'text-blue-600', bg: 'bg-blue-600 hover:bg-blue-700' },
   transfer: { label: 'Перевод',  color: 'text-purple-600', bg: 'bg-purple-600 hover:bg-purple-700' },
 };
 
@@ -101,14 +103,13 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
     }
   }, [activeDebts, baseCurrency, form.debtId, operationCurrency]);
 
-  const filteredCategories = (operation.type === 'salary'
-    ? categories.filter((c) => c.type === 'expense')
-    : categories.filter((c) => c.type === operation.type)
-  ).filter((c) => !c.is_archived || c.id === form.categoryId);
+  const filteredCategories = categories
+    .filter((c) => c.type === categoryTypeForOperation(operation.type))
+    .filter((c) => !c.is_archived || c.id === form.categoryId);
 
   const handleAddCategory = async () => {
     if (!newCatName.trim()) return;
-    const catType = operation.type === 'income' ? 'income' : 'expense';
+    const catType = categoryTypeForOperation(operation.type);
     const created = await addCategory({ name: newCatName.trim(), type: catType });
     if (created) {
       setForm((prev) => ({ ...prev, categoryId: created.id }));
@@ -349,7 +350,7 @@ export default function EditOperationModal({ operation, workspaceId, onClose, on
           </div>
 
           {/* Debt selector (expense/income only) */}
-          {!isTransfer && operation.type !== 'salary' && (
+          {!isTransfer && !operation.type.endsWith('_salary') && (
             <DebtSelector
               debts={activeDebts}
               operationType={operation.type}

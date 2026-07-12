@@ -194,7 +194,7 @@ export default function WorkspacePage() {
 
     const catMap = new Map();
     operations.forEach(op => {
-      if ((op.type === 'expense' || op.type === 'salary') && op.category_id) {
+      if ((op.type === 'expense' || op.type === 'employee_salary') && op.category_id) {
         const existing = catMap.get(op.category_id) || 0;
         catMap.set(op.category_id, existing + Number(op.base_amount ?? op.amount ?? 0));
       }
@@ -406,7 +406,7 @@ export default function WorkspacePage() {
                       <div className="text-xs text-gray-500 dark:text-gray-400 pt-2 space-y-0.5">
                         <div>Доходы: <span className="text-green-600 dark:text-green-400 font-medium">+{formatUnsignedAmount(income, currencySymbol)}</span></div>
                         <div>Расходы: <span className="text-red-600 dark:text-red-400 font-medium">−{formatUnsignedAmount(expense, currencySymbol)}</span></div>
-                        <div>Зарплаты: <span className="text-primary-600 dark:text-primary-400 font-medium">−{formatUnsignedAmount(salary, currencySymbol)}</span></div>
+                        <div>Зарплаты сотрудникам: <span className="text-primary-600 dark:text-primary-400 font-medium">−{formatUnsignedAmount(salary, currencySymbol)}</span></div>
                       </div>
                       {key === 'month' && topExpenseCategories.length > 0 && (
                         <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700" data-testid="top-categories">
@@ -695,10 +695,11 @@ export default function WorkspacePage() {
                   const typeColors = {
                     income: 'text-green-600 dark:text-green-400',
                     expense: 'text-red-600 dark:text-red-400',
-                    salary: 'text-primary-600 dark:text-primary-400',
+                    personal_salary: 'text-green-600 dark:text-green-400',
+                    employee_salary: 'text-primary-600 dark:text-primary-400',
                     transfer: 'text-gray-600 dark:text-gray-400',
                   };
-                  const typeLabels = { income: 'Доход', expense: 'Расход', salary: 'Зарплата', transfer: 'Перевод' };
+                  const typeLabels = { income: 'Доход', personal_salary: 'Личная зарплата', expense: 'Расход', employee_salary: 'Зарплата сотрудникам', transfer: 'Перевод' };
                   const color = typeColors[op.type] || 'text-gray-600 dark:text-gray-400';
                   // Skip 'in' transfers (show only 'out' to avoid duplicates)
                   if (op.type === 'transfer' && op.transfer_direction === 'in') return null;

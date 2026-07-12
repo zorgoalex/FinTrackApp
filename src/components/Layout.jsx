@@ -102,7 +102,7 @@ export default function Layout() {
     </>
   );
 
-  const pageBg = currentWorkspace?.is_personal
+  const pageBg = currentWorkspace?.workspace_type === 'personal'
     ? 'bg-amber-50 dark:bg-gray-900'
     : 'bg-gray-50 dark:bg-gray-900'
 

@@ -415,7 +415,7 @@ export default function WorkspaceSettingsPage() {
                     Тип пространства
                   </label>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {currentWorkspace.is_personal ? 'Личное пространство' : 'Командное пространство'}
+                    {currentWorkspace.workspace_type === 'business' ? 'Бизнес-пространство' : 'Личное / семейное пространство'}
                   </p>
                 </div>
 
