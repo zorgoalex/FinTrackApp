@@ -989,7 +989,7 @@ export function OperationPage() {
                       onTouchEnd={() => handleDoubleTap(operation)}
                     >
                       {bulkMode && operation.type !== 'transfer' && <input type="checkbox" checked={selectedOperationIds.includes(operation.id)} onChange={() => toggleBulkSelection(operation.id)} onClick={(event) => event.stopPropagation()} className="h-5 w-5 shrink-0 rounded border-gray-300 text-indigo-600" aria-label={`Выбрать операцию ${operation.description || operation.id}`} />}
-                      <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
                         <span className="text-sm text-gray-500 dark:text-gray-400 shrink-0">
                           {formatOperationDate(operation.operation_date || operation.created_at)}
                         </span>
@@ -997,7 +997,7 @@ export function OperationPage() {
                           {typeInfo.label}
                         </span>
                         <OperationStatusBadge status={operation.status} />
-                        <span className="text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100 truncate">
+                        <span className="basis-full shrink-0 text-base font-semibold tabular-nums text-gray-900 dark:text-gray-100 sm:basis-auto sm:text-lg">
                           {formatSignedAmount(operation.type, operation.amount, operation.currency || currencySymbol)}
                         </span>
                       </div>
