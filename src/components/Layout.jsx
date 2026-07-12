@@ -93,10 +93,10 @@ export default function Layout() {
           <span>{theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}</span>
         </button>
         <div className="flex items-center justify-between">
-          <div>
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{user ? user.name : 'Гость'}</span>
-            <div className="text-xs text-gray-500 dark:text-gray-500">{user ? user.email : ''}</div>
-          </div>
+          <button type="button" onClick={() => { navigate(`/profile${workspaceId ? `?workspaceId=${workspaceId}` : ''}`); if (sidebarOpen) toggleSidebar(); }} className="min-w-0 rounded-lg p-1 text-left hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Открыть личный кабинет">
+            <span className="block text-sm font-medium text-gray-700 dark:text-gray-300">{user ? user.name || user.email : 'Гость'}</span>
+            <span className="block truncate text-xs text-gray-500 dark:text-gray-500">{user ? user.email : ''}</span>
+          </button>
           <button onClick={logout} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" title="Выйти" aria-label="Выйти">
             <LogOut size={20} className="text-gray-500 dark:text-gray-400" />
           </button>
@@ -147,11 +147,11 @@ export default function Layout() {
               >
                 {theme === 'dark' ? <Sun size={18} className="text-gray-400" /> : <Moon size={18} className="text-gray-600" />}
               </button>
-              <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-primary-700 rounded-full flex items-center justify-center shadow-sm">
+              <button type="button" onClick={() => navigate(`/profile${workspaceId ? `?workspaceId=${workspaceId}` : ''}`)} className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-700 shadow-sm ring-offset-2 hover:ring-2 hover:ring-primary-300" aria-label="Открыть личный кабинет">
                 <span className="text-white text-sm font-medium">
                   {user?.email?.charAt(0).toUpperCase() || 'П'}
                 </span>
-              </div>
+              </button>
             </div>
           </div>
         </header>
