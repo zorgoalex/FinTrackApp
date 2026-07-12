@@ -1,16 +1,19 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Pencil, Trash2, Plus, X, Check, Archive, ArchiveRestore } from 'lucide-react';
+import { Pencil, Trash2, Plus, X, Check, Archive, ArchiveRestore, BrainCircuit, Power } from 'lucide-react';
+import { supabase } from '../contexts/AuthContext';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { useCategories } from '../hooks/useCategories';
 import { useTags } from '../hooks/useTags';
 import { useAccounts } from '../hooks/useAccounts';
 import { useCurrencies } from '../hooks/useCurrencies';
+import { OPERATION_TYPE_META } from '../utils/operationTypes';
 
 const TABS = [
   { key: 'categories', label: 'Категории' },
   { key: 'tags', label: 'Теги' },
   { key: 'accounts', label: 'Счета' },
+  { key: 'rules', label: 'Правила' },
 ];
 
 function DeleteAlert({ message, onClose }) {
@@ -39,7 +42,7 @@ export default function DictionariesPage() {
       <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">Справочники</h1>
 
       {/* Tabs */}
-      <div className="grid grid-cols-3 border-b border-gray-200 dark:border-gray-700 mb-4" role="tablist" aria-label="Разделы справочников">
+      <div className="grid grid-cols-4 border-b border-gray-200 dark:border-gray-700 mb-4" role="tablist" aria-label="Разделы справочников">
         {TABS.map((tab) => (
           <button
             key={tab.key}
@@ -61,9 +64,79 @@ export default function DictionariesPage() {
         <CategoriesTab workspaceId={workspaceId} canEdit={hasManagementRights} />
       ) : activeTab === 'tags' ? (
         <TagsTab workspaceId={workspaceId} canEdit={hasManagementRights} />
-      ) : (
+      ) : activeTab === 'accounts' ? (
         <AccountsTab workspaceId={workspaceId} canEdit={hasManagementRights} />
+      ) : (
+        <CategoryRulesTab workspaceId={workspaceId} canEdit={hasManagementRights} />
       )}
+    </div>
+  );
+}
+
+/* ─── Learned category rules ─── */
+function CategoryRulesTab({ workspaceId, canEdit }) {
+  const [rules, setRules] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const loadRules = useCallback(async () => {
+    if (!workspaceId) return;
+    setLoading(true);
+    setError('');
+    const { data, error: loadError } = await supabase
+      .from('category_rules')
+      .select('id, operation_type, pattern, priority, is_active, created_at, categories(name, color)')
+      .eq('workspace_id', workspaceId)
+      .order('is_active', { ascending: false })
+      .order('updated_at', { ascending: false });
+    if (loadError) setError(loadError.message);
+    setRules(data || []);
+    setLoading(false);
+  }, [workspaceId]);
+
+  useEffect(() => { loadRules(); }, [loadRules]);
+
+  const toggleRule = async (rule) => {
+    const { error: updateError } = await supabase.from('category_rules')
+      .update({ is_active: !rule.is_active, updated_at: new Date().toISOString() })
+      .eq('id', rule.id);
+    if (updateError) setError(updateError.message);
+    else await loadRules();
+  };
+
+  const deleteRule = async (rule) => {
+    if (!window.confirm(`Удалить правило «${rule.pattern}»?`)) return;
+    const { error: deleteError } = await supabase.from('category_rules').delete().eq('id', rule.id);
+    if (deleteError) setError(deleteError.message);
+    else await loadRules();
+  };
+
+  if (loading) return <p className="text-sm text-gray-500 dark:text-gray-400">Загрузка правил…</p>;
+  return (
+    <div className="space-y-3">
+      <div className="rounded-xl border border-primary-200 bg-primary-50 p-3 text-sm text-primary-900 dark:border-primary-900 dark:bg-primary-950/30 dark:text-primary-200">
+        <div className="flex gap-2"><BrainCircuit size={19} className="shrink-0" /><p>Правила создаются в предпросмотре импорта через «Запомнить категорию» и применяются ко всем следующим выпискам пространства.</p></div>
+      </div>
+      {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-300">{error}</p>}
+      {rules.length === 0 && <p className="rounded-xl border border-dashed border-gray-300 px-4 py-8 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">Обучаемых правил пока нет. Импортируйте выписку и запомните категорию нужной операции.</p>}
+      {rules.map((rule) => (
+        <article key={rule.id} className={`flex min-h-16 items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800 ${rule.is_active ? '' : 'opacity-60'}`}>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="truncate font-medium text-gray-900 dark:text-gray-100">«{rule.pattern}»</span>
+              <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600 dark:bg-gray-700 dark:text-gray-300">{OPERATION_TYPE_META[rule.operation_type]?.label || rule.operation_type}</span>
+            </div>
+            <div className="mt-1 flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: rule.categories?.color || '#6B7280' }} />
+              Категория: {rule.categories?.name || 'удалена'}
+            </div>
+          </div>
+          {canEdit && <div className="flex shrink-0 items-center gap-1">
+            <button onClick={() => toggleRule(rule)} className="grid min-h-11 min-w-11 place-items-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-gray-700" aria-label={rule.is_active ? `Отключить правило ${rule.pattern}` : `Включить правило ${rule.pattern}`} title={rule.is_active ? 'Отключить' : 'Включить'}><Power size={16} /></button>
+            <button onClick={() => deleteRule(rule)} className="grid min-h-11 min-w-11 place-items-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30" aria-label={`Удалить правило ${rule.pattern}`} title="Удалить"><Trash2 size={16} /></button>
+          </div>}
+        </article>
+      ))}
     </div>
   );
 }

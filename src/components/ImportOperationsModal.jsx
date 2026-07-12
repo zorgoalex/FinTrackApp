@@ -1,10 +1,10 @@
 import { useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Camera, CheckCircle2, FileSearch, FileUp, Lock, ShieldCheck, X } from 'lucide-react';
+import { AlertTriangle, BrainCircuit, Camera, CheckCircle2, FileSearch, FileUp, Lock, ShieldCheck, X } from 'lucide-react';
 import { supabase } from '../contexts/AuthContext';
 import { useCurrencies } from '../hooks/useCurrencies';
 import { parseOperationsCSV } from '../utils/importOperations';
 import { categoryTypeForOperation, operationTypesForWorkspace, OPERATION_TYPE_META } from '../utils/operationTypes';
-import { suggestCategory } from '../utils/documentImport/categories';
+import { buildRulePattern, suggestCategory } from '../utils/documentImport/categories';
 import { extractDocument } from '../utils/documentImport/extract';
 import { operationFingerprint } from '../utils/documentImport/privacy';
 
@@ -92,7 +92,7 @@ export default function ImportOperationsModal({
     return { duplicateFingerprints, documentImportedBefore: (count || 0) > 0 };
   };
 
-  const enrichRows = async (operations, bank, sourceKind, documentHash) => {
+  const enrichRows = async (operations, bank, sourceKind, documentHash, categoryRules) => {
     const defaultAccount = activeAccounts.find((account) => account.is_default) || activeAccounts[0];
     const enriched = await Promise.all(operations.slice(0, 500).map(async (operation) => {
       const fingerprint = operation.import_fingerprint || await operationFingerprint(operation, bank);
@@ -103,13 +103,15 @@ export default function ImportOperationsModal({
         ...operation,
         selected: Boolean(operation.operation_date && Number(operation.amount) > 0 && (operation.confidence ?? 0.7) >= 0.68),
         duplicate: false,
-        category_id: operation.category_id || suggestCategory(operation, categories),
+        category_id: operation.category_id || suggestCategory(operation, categories, categoryRules),
         account_id: operation.account_id || account?.id || '',
         exchange_rate: rate || null,
         base_amount: rate ? Math.round(Number(operation.amount) * rate * 100) / 100 : Number(operation.amount),
         import_fingerprint: fingerprint,
         import_confidence: operation.confidence ?? 0.7,
         source_kind: sourceKind,
+        rule_pattern: buildRulePattern(operation),
+        remember_rule: false,
       };
     }));
     const duplicateInfo = await findDuplicates(enriched.map((row) => row.import_fingerprint), documentHash);
@@ -148,7 +150,15 @@ export default function ImportOperationsModal({
         operations = extracted.parsed?.operations || [];
       }
       if (!operations.length) throw new Error('Не удалось уверенно найти операции. Попробуйте более чёткий скриншот или CSV-экспорт банка.');
-      const enriched = await enrichRows(operations, bank, extracted.sourceKind, extracted.documentHash);
+      const { data: categoryRules, error: rulesError } = await supabase
+        .from('category_rules')
+        .select('id, operation_type, pattern, category_id, priority, is_active')
+        .eq('workspace_id', workspaceId)
+        .eq('is_active', true)
+        .order('priority')
+        .order('updated_at', { ascending: false });
+      if (rulesError) throw new Error(`Не удалось загрузить правила категоризации: ${rulesError.message}`);
+      const enriched = await enrichRows(operations, bank, extracted.sourceKind, extracted.documentHash, categoryRules || []);
       setRows(enriched.rows);
       setDocumentMeta({
         bank,
@@ -213,6 +223,18 @@ export default function ImportOperationsModal({
         }
         completedCount = index + 1;
         setProgress(completedCount);
+      }
+      const rulesToSave = Array.from(new Map(selectedRows
+        .filter((row) => row.remember_rule && row.rule_pattern && row.category_id)
+        .map((row) => [`${row.type}:${row.rule_pattern}`, row])).values());
+      for (const row of rulesToSave) {
+        const { error: ruleError } = await supabase.rpc('save_category_rule', {
+          p_workspace_id: workspaceId,
+          p_operation_type: row.type,
+          p_pattern: row.rule_pattern,
+          p_category_id: row.category_id,
+        });
+        if (ruleError) throw ruleError;
       }
       await onRefresh();
       resetDocument();
@@ -317,6 +339,11 @@ export default function ImportOperationsModal({
                       </label>}
                       {row.currency !== baseCurrency && <label className="sm:col-span-2 text-xs text-gray-500">Курс {row.currency} → {baseCurrency}<input aria-label={`Курс операции ${index + 1}`} type="number" min="0.000001" step="0.000001" className="input-field mt-1" value={row.exchange_rate || ''} onChange={(event) => updateRow(index, { exchange_rate: event.target.value, base_amount: Number(row.amount) * Number(event.target.value) })} /></label>}
                     </div>
+                    {row.category_id && row.rule_pattern && <label className="mt-3 flex cursor-pointer items-start gap-2 rounded-lg bg-primary-50 p-2.5 text-xs text-primary-900 dark:bg-primary-950/30 dark:text-primary-200">
+                      <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0" checked={Boolean(row.remember_rule)} onChange={(event) => updateRow(index, { remember_rule: event.target.checked })} />
+                      <BrainCircuit size={16} className="shrink-0" />
+                      <span><strong>Запомнить категорию</strong> для похожих операций с текстом «{row.rule_pattern}»</span>
+                    </label>}
                     {needsRate && <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">Нет курса {row.currency} → {baseCurrency}; проверьте сумму в базовой валюте после импорта.</p>}
                   </article>
                 );

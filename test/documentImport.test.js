@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { detectSensitiveData, redactSensitiveText } from '../src/utils/documentImport/privacy.js';
 import { parseBankDocumentText } from '../src/utils/documentImport/parsers.js';
+import { buildRulePattern, suggestCategory } from '../src/utils/documentImport/categories.js';
 
 test('parses Kaspi statement rows into an editable operation draft', async () => {
   const text = `ВЫПИСКА по Kaspi Gold
@@ -87,4 +88,22 @@ test('extracts receipt item lines into a redacted editable comment', async () =>
   assert.match(comment, /Хлеб/);
   assert.doesNotMatch(comment, /980806450265/);
   assert.doesNotMatch(comment, /ИТОГ/);
+});
+
+test('applies a learned workspace category rule before built-in suggestions', () => {
+  const categories = [
+    { id: 'software', name: 'ПО и подписки', type: 'expense', is_archived: false },
+    { id: 'marketing', name: 'Маркетинг и реклама', type: 'expense', is_archived: false },
+  ];
+  const rules = [{ operation_type: 'expense', pattern: 'openai', category_id: 'marketing', priority: 10, is_active: true }];
+  assert.equal(suggestCategory({ type: 'expense', description: 'Оплата OpenAI API' }, categories, rules), 'marketing');
+});
+
+test('builds a reusable merchant pattern without amount and currency noise', () => {
+  assert.equal(buildRulePattern({ description: 'Покупка ALTEL 4G 12 500 KZT' }), 'altel 4g');
+});
+
+test('maps employee salary suggestions to an expense category', () => {
+  const categories = [{ id: 'payroll', name: 'Зарплаты сотрудникам', type: 'expense', is_archived: false }];
+  assert.equal(suggestCategory({ type: 'employee_salary', description: 'Аванс сотруднику' }, categories), 'payroll');
 });

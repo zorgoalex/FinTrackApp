@@ -22,6 +22,7 @@ The implementation was developed against the local fixtures in `artifacts/import
 5. The user reviews and edits every draft row and the optional extracted item comment. Duplicate candidates are disabled by default.
 6. Only confirmed normalized operations and the edited item comment are written to Postgres.
 7. Import audit stores source type, bank, counts, SHA-256 document hash and row fingerprints. It never stores the original filename, file or OCR text.
+8. A category rule is saved only after an explicit “remember category” choice. It contains a normalized description fragment, operation type and category ID—not the source document or full OCR text.
 
 Hashing is pseudonymisation, not anonymisation: a document hash remains protected workspace metadata. Access is restricted by RLS.
 

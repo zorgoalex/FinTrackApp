@@ -12,6 +12,7 @@ const WORKSPACE_TABLES = [
   ['exchange_rates', 'exchangeRates'],
   ['budgets', 'budgets'],
   ['import_sessions', 'importSessions'],
+  ['category_rules', 'categoryRules'],
   ['operation_comments', 'operationComments'],
 ];
 
