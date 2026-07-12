@@ -7,6 +7,7 @@ test('builds a detailed operations CSV with lookup names and safe cells', () => 
     {
       operation_date: '2026-07-11',
       type: 'expense',
+      status: 'reconciled',
       amount: 1250.5,
       currency: 'KZT',
       exchange_rate: 1,
@@ -23,7 +24,7 @@ test('builds a detailed operations CSV with lookup names and safe cells', () => 
   });
 
   assert.ok(csv.startsWith('\uFEFFДата;Тип;'));
-  assert.match(csv, /2026-07-11;Расход;;1250\.5;KZT;1;1250\.5;Карта;Продукты;Дом, Срочно;/);
+  assert.match(csv, /2026-07-11;Расход;Сверена;;1250\.5;KZT;1;1250\.5;Карта;Продукты;Дом, Срочно;/);
   assert.match(csv, /"'=HYPERLINK\(""https:\/\/example\.com""\)"/);
 });
 
@@ -32,12 +33,13 @@ test('includes transfer direction and escapes delimiters', () => {
     {
       operation_date: '2026-07-10',
       type: 'transfer',
+      status: 'verified',
       transfer_direction: 'out',
       amount: 100,
       description: 'Карта; наличные'
     }
   ]);
 
-  assert.match(csv, /Перевод;Исходящий;100/);
+  assert.match(csv, /Перевод;Проверена;Исходящий;100/);
   assert.match(csv, /"Карта; наличные"/);
 });

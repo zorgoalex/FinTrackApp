@@ -73,9 +73,11 @@ export function buildOperationsCSV(
     transfer: 'Перевод'
   };
   const directionLabels = { in: 'Входящий', out: 'Исходящий' };
+  const statusLabels = { new: 'Новая', verified: 'Проверена', reconciled: 'Сверена' };
   const headers = [
     'Дата',
     'Тип',
+    'Статус',
     'Направление перевода',
     'Сумма',
     'Валюта',
@@ -89,6 +91,7 @@ export function buildOperationsCSV(
   const rows = (operations || []).map((operation) => [
     operation.operation_date || '',
     typeLabels[operation.type] || operation.type || '',
+    statusLabels[operation.status] || operation.status || 'Проверена',
     directionLabels[operation.transfer_direction] || '',
     Number(operation.amount) || 0,
     operation.currency || baseCurrency,

@@ -164,7 +164,7 @@ export function useOperations(workspaceId, options = {}) {
         (async () => {
           let query = supabase
             .from('operations')
-            .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id, account_id, transfer_group_id, transfer_direction, linked_operation_id, debt_id, debt_applied_amount, currency, exchange_rate, base_amount, import_session_id, import_fingerprint, import_confidence', { count: 'exact' })
+            .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id, account_id, transfer_group_id, transfer_direction, linked_operation_id, debt_id, debt_applied_amount, currency, exchange_rate, base_amount, import_session_id, import_fingerprint, import_confidence, status, verified_at, verified_by, reconciled_at, reconciled_by', { count: 'exact' })
             .eq('workspace_id', workspaceId);
           if (dateFrom) query = query.gte('operation_date', dateFrom);
           if (dateTo) query = query.lte('operation_date', dateTo);
@@ -364,6 +364,7 @@ export function useOperations(workspaceId, options = {}) {
       import_session_id: data?.import_session_id || null,
       import_fingerprint: data?.import_fingerprint || null,
       import_confidence: data?.import_confidence ?? null,
+      status: data?.status || (data?.import_session_id ? 'new' : 'verified'),
     };
 
     const tagNames = data?.tagNames || [];
@@ -375,7 +376,7 @@ export function useOperations(workspaceId, options = {}) {
       const { data: insertedData, error: insertError } = await supabase
         .from('operations')
         .insert([payload])
-        .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id, account_id, transfer_group_id, transfer_direction, linked_operation_id, debt_id, debt_applied_amount, currency, exchange_rate, base_amount, import_session_id, import_fingerprint, import_confidence')
+        .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id, account_id, transfer_group_id, transfer_direction, linked_operation_id, debt_id, debt_applied_amount, currency, exchange_rate, base_amount, import_session_id, import_fingerprint, import_confidence, status, verified_at, verified_by, reconciled_at, reconciled_by')
         .single();
 
       if (insertError) {
@@ -618,6 +619,24 @@ export function useOperations(workspaceId, options = {}) {
     }
   }, [workspaceId, operations, loadSummary]);
 
+  const transitionOperationStatus = useCallback(async (id, targetStatus, reason = null) => {
+    if (!workspaceId || !id) throw new Error('Операция не выбрана');
+
+    const { data, error: transitionError } = await supabase.rpc('transition_operation_status', {
+      p_operation_id: id,
+      p_target_status: targetStatus,
+      p_reason: reason || null,
+    });
+    if (transitionError) throw transitionError;
+
+    const updated = Array.isArray(data) ? data[0] : data;
+    setOperations((current) => current.map((operation) => operation.id === id
+      ? { ...operation, ...updated }
+      : operation));
+    await loadSummary();
+    return updated;
+  }, [loadSummary, workspaceId]);
+
   useEffect(() => {
     setVisibleLimit(pageSize);
   }, [workspaceId, dateFrom, dateTo, pageSize]);
@@ -638,6 +657,7 @@ export function useOperations(workspaceId, options = {}) {
     addOperation,
     updateOperation,
     deleteOperation,
+    transitionOperationStatus,
     refresh,
     summary,
     totalCount,

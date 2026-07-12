@@ -13,7 +13,7 @@ import EditOperationModal from '../components/EditOperationModal';
 import QuickButtonsSettings from '../components/QuickButtonsSettings';
 import OperationCommentsModal from '../components/OperationCommentsModal';
 import MonthPicker from '../components/MonthPicker';
-import { Pencil, Trash2, ChevronDown, X, Plus, Settings, Wallet, Download, Upload, Search, SlidersHorizontal, MoreHorizontal, MessageSquare } from 'lucide-react';
+import { Pencil, Trash2, ChevronDown, X, Plus, Settings, Wallet, Download, Upload, Search, SlidersHorizontal, MoreHorizontal, MessageSquare, CheckCircle2, ShieldCheck, RotateCcw } from 'lucide-react';
 import { formatSignedAmount, formatUnsignedAmount, formatGroupDate } from '../utils/formatters';
 import { getMonthRange } from '../utils/dateRange';
 import { buildOperationsCSV, downloadOperationsCSV } from '../utils/export';
@@ -28,11 +28,22 @@ const OPERATION_TYPES = {
   transfer: { label: 'Перевод',  sign: '⇄', color: 'text-purple-600' },
 };
 
+const OPERATION_STATUSES = {
+  new: { label: 'Новая', className: 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300' },
+  verified: { label: 'Проверена', className: 'bg-blue-100 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300' },
+  reconciled: { label: 'Сверена', className: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300' },
+};
+
 function formatOperationDate(value) {
   if (!value) return 'Без даты';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Без даты';
   return date.toLocaleDateString('ru-RU');
+}
+
+function OperationStatusBadge({ status = 'verified' }) {
+  const metadata = OPERATION_STATUSES[status] || OPERATION_STATUSES.verified;
+  return <span className={`rounded-full px-2 py-0.5 text-[0.68rem] font-semibold ${metadata.className}`}>{metadata.label}</span>;
 }
 
 export function OperationPage() {
@@ -63,6 +74,7 @@ export function OperationPage() {
     addOperation,
     updateOperation,
     deleteOperation,
+    transitionOperationStatus,
     totalCount,
     hasMore,
     loadMore,
@@ -88,6 +100,7 @@ export function OperationPage() {
   const [authorEmails, setAuthorEmails] = useState({});
   const [filterType, setFilterType] = useState(null);
   const [filterCategory, setFilterCategory] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
   const [filterTags, setFilterTags] = useState([]);
   const [showTagDropdown, setShowTagDropdown] = useState(false);
   const tagDropdownRef = useRef(null);
@@ -214,6 +227,9 @@ export function OperationPage() {
     if (filterCategory)
       filtered = filtered.filter((op) => op.category_id === filterCategory);
 
+    if (filterStatus)
+      filtered = filtered.filter((op) => op.status === filterStatus);
+
     if (filterTags.length > 0)
       filtered = filtered.filter((op) =>
         filterTags.some((tagId) => op.tags?.some((t) => t.id === tagId))
@@ -249,7 +265,7 @@ export function OperationPage() {
       }
       return sortDir === 'asc' ? valA - valB : valB - valA;
     });
-  }, [operations, filterType, filterCategory, filterTags, sortField, sortDir, visibleAccountIds, searchQuery, categoryMap, accountMap]);
+  }, [operations, filterType, filterCategory, filterStatus, filterTags, sortField, sortDir, visibleAccountIds, searchQuery, categoryMap, accountMap]);
 
   const groupedOperations = useMemo(() => {
     const groups = new Map();
@@ -326,12 +342,14 @@ export function OperationPage() {
 
   const canEditRecord = (operation) => {
     if (!operation) return false;
+    if (operation.status === 'reconciled') return false;
     if (permissions.isOwner || permissions.isAdmin || permissions.canEditAllOperations) return true;
     return permissions.canEditOwnOperations && operation.user_id === user?.id;
   };
 
   const canDeleteRecord = (operation) => {
     if (!operation) return false;
+    if (operation.status === 'reconciled') return false;
     if (permissions.isOwner || permissions.isAdmin || permissions.canDeleteOperations) return true;
     return permissions.canEditOwnOperations && operation.user_id === user?.id;
   };
@@ -398,7 +416,7 @@ export function OperationPage() {
       for (let from = 0; ; from += pageSize) {
         const { data, error: operationsError } = await supabase
           .from('operations')
-          .select('id, amount, type, description, operation_date, category_id, account_id, transfer_direction, currency, exchange_rate, base_amount')
+          .select('id, amount, type, description, operation_date, category_id, account_id, transfer_direction, currency, exchange_rate, base_amount, status')
           .eq('workspace_id', workspaceId)
           .gte('operation_date', dateFrom)
           .lte('operation_date', dateTo)
@@ -443,6 +461,28 @@ export function OperationPage() {
       setExportError(exportException.message || 'Не удалось экспортировать операции');
     } finally {
       setExporting(false);
+    }
+  };
+
+  const canTransitionRecord = (operation) => {
+    if (!operation || operation.type === 'transfer') return false;
+    if (permissions.hasManagementRights) return true;
+    return operation.status === 'new'
+      && permissions.isMember
+      && operation.user_id === user?.id;
+  };
+
+  const handleStatusTransition = async (operation, targetStatus) => {
+    let reason = null;
+    if (['new', 'verified'].includes(targetStatus) && operation.status !== 'new') {
+      reason = window.prompt('Укажите причину отмены статуса:');
+      if (!reason) return;
+    }
+    try {
+      await transitionOperationStatus(operation.id, targetStatus, reason);
+      setActionMenuId(null);
+    } catch (transitionError) {
+      window.alert(transitionError.message || 'Не удалось изменить статус операции');
     }
   };
 
@@ -665,6 +705,21 @@ export function OperationPage() {
         </select>
       </div>
 
+      <div className="mb-2 flex items-center gap-2">
+        <span className="shrink-0 text-xs text-gray-500 dark:text-gray-400">Статус:</span>
+        <select
+          value={filterStatus}
+          onChange={(event) => setFilterStatus(event.target.value)}
+          className="min-h-11 flex-1 rounded-md border border-gray-300 bg-white px-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 sm:max-w-[200px]"
+          data-testid="status-filter"
+        >
+          <option value="">Все статусы</option>
+          {Object.entries(OPERATION_STATUSES).map(([value, status]) => (
+            <option key={value} value={value}>{status.label}</option>
+          ))}
+        </select>
+      </div>
+
       {/* Account filter */}
       {activeAccounts.length > 0 && (
         <div className="flex items-center gap-2 mb-2">
@@ -810,7 +865,7 @@ export function OperationPage() {
           </div>
         ) : visibleOperations.length === 0 ? (
           <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-            {filterType || filterCategory || filterTags.length > 0
+            {filterType || filterCategory || filterStatus || filterTags.length > 0
               ? 'Нет операций, соответствующих фильтру.'
               : 'В этом месяце операций нет.'}
           </div>
@@ -847,13 +902,14 @@ export function OperationPage() {
                         <span className={`text-sm font-medium shrink-0 ${typeColor}`}>
                           {typeInfo.label}
                         </span>
+                        <OperationStatusBadge status={operation.status} />
                         <span className="text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100 truncate">
                           {formatSignedAmount(operation.type, operation.amount, operation.currency || currencySymbol)}
                         </span>
                       </div>
                       <div className="flex shrink-0 items-center gap-1" onTouchEnd={(event) => event.stopPropagation()}>
                         <button type="button" onClick={(event) => { event.stopPropagation(); setCommentsOperation(operation); }} className="flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-xl text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700" aria-label={`Комментарии к операции (${operation.comment_count || 0})`}><MessageSquare size={18} />{operation.comment_count > 0 && <span className="text-xs font-medium">{operation.comment_count}</span>}</button>
-                        {(canEditRecord(operation) || canDeleteRecord(operation)) && <div className="relative">
+                        {(canEditRecord(operation) || canDeleteRecord(operation) || canTransitionRecord(operation)) && <div className="relative">
                           <button
                             type="button"
                             onClick={(event) => { event.stopPropagation(); setActionMenuId(id => id === operation.id ? null : operation.id); }}
@@ -864,6 +920,10 @@ export function OperationPage() {
                           {actionMenuId === operation.id && (
                             <div className="absolute right-0 top-12 z-20 min-w-44 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl dark:border-gray-700 dark:bg-gray-800">
                               {canEditRecord(operation) && <button type="button" onClick={(event) => { event.stopPropagation(); setActionMenuId(null); setEditingOperation(operation); }} className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-700"><Pencil size={16} />Редактировать</button>}
+                              {canTransitionRecord(operation) && operation.status === 'new' && <button type="button" onClick={(event) => { event.stopPropagation(); handleStatusTransition(operation, 'verified'); }} className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-blue-700 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950/30"><CheckCircle2 size={16} />Подтвердить</button>}
+                              {permissions.hasManagementRights && operation.status === 'verified' && <button type="button" onClick={(event) => { event.stopPropagation(); handleStatusTransition(operation, 'reconciled'); }} className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30"><ShieldCheck size={16} />Сверить</button>}
+                              {permissions.hasManagementRights && operation.status === 'verified' && <button type="button" onClick={(event) => { event.stopPropagation(); handleStatusTransition(operation, 'new'); }} className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/30"><RotateCcw size={16} />Вернуть в новые</button>}
+                              {permissions.hasManagementRights && operation.status === 'reconciled' && <button type="button" onClick={(event) => { event.stopPropagation(); handleStatusTransition(operation, 'verified'); }} className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/30"><RotateCcw size={16} />Отменить сверку</button>}
                               {canDeleteRecord(operation) && <button type="button" onClick={(event) => { event.stopPropagation(); setActionMenuId(null); handleDelete(operation); }} className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"><Trash2 size={16} />Удалить</button>}
                             </div>
                           )}
@@ -888,6 +948,7 @@ export function OperationPage() {
                         <span className={`text-sm font-medium ${typeColor}`}>
                           {typeInfo.label}
                         </span>
+                        <OperationStatusBadge status={operation.status} />
                       </div>
                       <div className="text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100">
                         {formatSignedAmount(operation.type, operation.amount, operation.currency || currencySymbol)}
@@ -950,7 +1011,7 @@ export function OperationPage() {
 
                     <div className="flex shrink-0 items-start gap-1" onTouchEnd={(event) => event.stopPropagation()}>
                       <button type="button" onClick={(event) => { event.stopPropagation(); setCommentsOperation(operation); }} className="flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-xl text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700" aria-label={`Комментарии к операции (${operation.comment_count || 0})`}><MessageSquare size={18} />{operation.comment_count > 0 && <span className="text-xs font-medium">{operation.comment_count}</span>}</button>
-                      {(canEditRecord(operation) || canDeleteRecord(operation)) && <div className="relative">
+                      {(canEditRecord(operation) || canDeleteRecord(operation) || canTransitionRecord(operation)) && <div className="relative">
                         <button
                           type="button"
                           onClick={(event) => { event.stopPropagation(); setActionMenuId(id => id === operation.id ? null : operation.id); }}
@@ -961,6 +1022,10 @@ export function OperationPage() {
                         {actionMenuId === operation.id && (
                           <div className="absolute right-0 top-12 z-20 min-w-44 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl dark:border-gray-700 dark:bg-gray-800">
                             {canEditRecord(operation) && <button type="button" onClick={(event) => { event.stopPropagation(); setActionMenuId(null); setEditingOperation(operation); }} className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-700"><Pencil size={16} />Редактировать</button>}
+                            {canTransitionRecord(operation) && operation.status === 'new' && <button type="button" onClick={(event) => { event.stopPropagation(); handleStatusTransition(operation, 'verified'); }} className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-blue-700 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950/30"><CheckCircle2 size={16} />Подтвердить</button>}
+                            {permissions.hasManagementRights && operation.status === 'verified' && <button type="button" onClick={(event) => { event.stopPropagation(); handleStatusTransition(operation, 'reconciled'); }} className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30"><ShieldCheck size={16} />Сверить</button>}
+                            {permissions.hasManagementRights && operation.status === 'verified' && <button type="button" onClick={(event) => { event.stopPropagation(); handleStatusTransition(operation, 'new'); }} className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/30"><RotateCcw size={16} />Вернуть в новые</button>}
+                            {permissions.hasManagementRights && operation.status === 'reconciled' && <button type="button" onClick={(event) => { event.stopPropagation(); handleStatusTransition(operation, 'verified'); }} className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/30"><RotateCcw size={16} />Отменить сверку</button>}
                             {canDeleteRecord(operation) && <button type="button" onClick={(event) => { event.stopPropagation(); setActionMenuId(null); handleDelete(operation); }} className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"><Trash2 size={16} />Удалить</button>}
                           </div>
                         )}
