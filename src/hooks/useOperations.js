@@ -164,7 +164,7 @@ export function useOperations(workspaceId, options = {}) {
         (async () => {
           let query = supabase
             .from('operations')
-            .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id, account_id, transfer_group_id, transfer_direction, linked_operation_id, debt_id, debt_applied_amount, currency, exchange_rate, base_amount', { count: 'exact' })
+            .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id, account_id, transfer_group_id, transfer_direction, linked_operation_id, debt_id, debt_applied_amount, currency, exchange_rate, base_amount, import_session_id, import_fingerprint, import_confidence', { count: 'exact' })
             .eq('workspace_id', workspaceId);
           if (dateFrom) query = query.gte('operation_date', dateFrom);
           if (dateTo) query = query.lte('operation_date', dateTo);
@@ -348,6 +348,9 @@ export function useOperations(workspaceId, options = {}) {
       currency: data?.currency || 'KZT',
       exchange_rate: data?.exchange_rate ? Number(data.exchange_rate) : null,
       base_amount: data?.base_amount ? Number(data.base_amount) : Number(data?.amount) || 0,
+      import_session_id: data?.import_session_id || null,
+      import_fingerprint: data?.import_fingerprint || null,
+      import_confidence: data?.import_confidence ?? null,
     };
 
     const tagNames = data?.tagNames || [];
@@ -359,7 +362,7 @@ export function useOperations(workspaceId, options = {}) {
       const { data: insertedData, error: insertError } = await supabase
         .from('operations')
         .insert([payload])
-        .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id, account_id, transfer_group_id, transfer_direction, linked_operation_id, debt_id, debt_applied_amount, currency, exchange_rate, base_amount')
+        .select('id, workspace_id, user_id, amount, type, description, operation_date, created_at, category_id, account_id, transfer_group_id, transfer_direction, linked_operation_id, debt_id, debt_applied_amount, currency, exchange_rate, base_amount, import_session_id, import_fingerprint, import_confidence')
         .single();
 
       if (insertError) {

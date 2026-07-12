@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '../contexts/AuthContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -11,12 +11,13 @@ import useAccounts from '../hooks/useAccounts';
 import AddOperationModal from '../components/AddOperationModal';
 import EditOperationModal from '../components/EditOperationModal';
 import QuickButtonsSettings from '../components/QuickButtonsSettings';
-import ImportOperationsModal from '../components/ImportOperationsModal';
 import MonthPicker from '../components/MonthPicker';
 import { Pencil, Trash2, ChevronDown, X, Plus, Settings, Wallet, Download, Upload, Search, SlidersHorizontal, MoreHorizontal } from 'lucide-react';
 import { formatSignedAmount, formatUnsignedAmount, formatGroupDate } from '../utils/formatters';
 import { getMonthRange } from '../utils/dateRange';
 import { buildOperationsCSV, downloadOperationsCSV } from '../utils/export';
+
+const ImportOperationsModal = lazy(() => import('../components/ImportOperationsModal'));
 
 const OPERATION_TYPES = {
   income:   { label: 'Доход',    sign: '+', color: 'text-green-600' },
@@ -466,7 +467,7 @@ export function OperationPage() {
         />
         <div className="flex gap-2">
           {permissions.canCreateOperations && (
-            <button onClick={() => setImportOpen(true)} className="btn-secondary min-h-11 min-w-11" disabled={loading} aria-label="Импорт операций из CSV">
+            <button onClick={() => setImportOpen(true)} className="btn-secondary min-h-11 min-w-11" disabled={loading} aria-label="Импорт выписки, чека, скриншота или CSV">
               <Upload size={16} className="mr-2" />
               <span className="hidden sm:inline">Импорт</span>
             </button>
@@ -478,16 +479,19 @@ export function OperationPage() {
         </div>
       </header>
 
-      <ImportOperationsModal
-        open={importOpen}
-        onClose={() => setImportOpen(false)}
-        categories={categories}
-        workspaceType={currentWorkspace?.workspace_type}
-        accounts={accounts}
-        baseCurrency={currentWorkspace?.base_currency || 'KZT'}
-        onImport={addOperation}
-        onRefresh={refresh}
-      />
+      {importOpen && <Suspense fallback={<div className="fixed inset-0 z-50 grid place-items-center bg-black/50 text-white">Загрузка безопасного импорта…</div>}>
+        <ImportOperationsModal
+          open={importOpen}
+          onClose={() => setImportOpen(false)}
+          workspaceId={workspaceId}
+          categories={categories}
+          workspaceType={currentWorkspace?.workspace_type}
+          accounts={accounts}
+          baseCurrency={currentWorkspace?.base_currency || 'KZT'}
+          onImport={addOperation}
+          onRefresh={refresh}
+        />
+      </Suspense>}
 
       {exportError && (
         <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl p-3 text-sm text-red-700 dark:text-red-400 mb-4">

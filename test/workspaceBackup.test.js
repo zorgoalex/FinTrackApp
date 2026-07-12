@@ -13,7 +13,8 @@ test('builds a versioned workspace backup without invitation secrets', () => {
       accounts: [{ id: 'account-1' }],
       operations: [{ id: 'operation-1' }],
       operationTags: [{ operation_id: 'operation-1', tag_id: 'tag-1' }],
-      budgets: [{ id: 'budget-1', amount: 50000 }]
+      budgets: [{ id: 'budget-1', amount: 50000 }],
+      importSessions: [{ id: 'import-1', document_hash: 'hash' }]
     }
   });
 
@@ -23,6 +24,7 @@ test('builds a versioned workspace backup without invitation secrets', () => {
   assert.deepEqual(backup.data.accounts, [{ id: 'account-1' }]);
   assert.deepEqual(backup.data.categories, []);
   assert.deepEqual(backup.data.budgets, [{ id: 'budget-1', amount: 50000 }]);
+  assert.deepEqual(backup.data.importSessions, [{ id: 'import-1', document_hash: 'hash' }]);
   assert.equal('workspaceInvitations' in backup.data, false);
 });
 
