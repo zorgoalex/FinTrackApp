@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase, useAuth } from '../contexts/AuthContext';
 
-export const DASHBOARD_WIDGETS = ['summary', 'accounts', 'net_worth', 'debts', 'recent_operations'];
+export const DASHBOARD_WIDGETS = ['summary', 'accounts', 'debts', 'recent_operations'];
 
 const defaults = () => ({
   widget_order: [...DASHBOARD_WIDGETS],

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
-import { Menu, X, Home, Settings, BarChart3, Calendar, CalendarClock, CreditCard, LogOut, BookOpen, Sun, Moon, Receipt, Target, PlusCircle, MoreHorizontal, Sparkles, Landmark } from 'lucide-react'
+import { Menu, X, Home, Settings, BarChart3, Calendar, CalendarClock, CreditCard, LogOut, BookOpen, Sun, Moon, Receipt, Target, PlusCircle, MoreHorizontal, Sparkles } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useWorkspace } from '../contexts/WorkspaceContext'
 import { usePermissions } from '../hooks/usePermissions'
@@ -29,7 +29,6 @@ export default function Layout() {
     { icon: CalendarClock, label: 'Платёжный календарь', path: workspaceId ? `/cashflow?workspaceId=${workspaceId}` : '/cashflow', matchPath: '/cashflow' },
     { icon: Receipt, label: 'Долги', path: workspaceId ? `/debts?workspaceId=${workspaceId}` : '/debts', matchPath: '/debts' },
     { icon: Target, label: 'Бюджеты', path: workspaceId ? `/budgets?workspaceId=${workspaceId}` : '/budgets', matchPath: '/budgets' },
-    { icon: Landmark, label: 'Активы и капитал', path: workspaceId ? `/assets?workspaceId=${workspaceId}` : '/assets', matchPath: '/assets' },
     { icon: BarChart3, label: 'Аналитика', path: workspaceId ? `/analytics?workspaceId=${workspaceId}` : '/analytics', matchPath: '/analytics' },
     { icon: Sparkles, label: 'AI-ассистент', path: workspaceId ? `/assistant?workspaceId=${workspaceId}` : '/assistant', matchPath: '/assistant' },
     { icon: BookOpen, label: 'Справочники', path: workspaceId ? `/workspace/${workspaceId}/dictionaries` : '/dictionaries', matchPath: '/dictionaries' },

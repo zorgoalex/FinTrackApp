@@ -6,31 +6,31 @@ import { usePermissions } from '../hooks/usePermissions';
 import useAccounts from '../hooks/useAccounts';
 import AddOperationModal from '../components/AddOperationModal';
 import QuickButtonsSettings from '../components/QuickButtonsSettings';
-import { Plus, BarChart3, TrendingUp, FileText, Pin, Minimize2, Maximize2, Wallet, Settings, Receipt, Eye, EyeOff, ArrowUp, ArrowDown, Landmark } from 'lucide-react';
+import { Plus, BarChart3, TrendingUp, FileText, Pin, Minimize2, Maximize2, Wallet, Settings, Receipt, Eye, EyeOff, ArrowUp, ArrowDown } from 'lucide-react';
 import { formatUnsignedAmount, formatSignedAmount as formatBalanceFn } from '../utils/formatters';
 import useCategories from '../hooks/useCategories';
 import useDebts from '../hooks/useDebts';
 import useDashboardPreferences from '../hooks/useDashboardPreferences';
-import useNetWorth from '../hooks/useNetWorth';
 
 const widgetLabels = {
-  summary: 'Итоги периода', accounts: 'Счета', net_worth: 'Чистый капитал',
+  summary: 'Итоги периода', accounts: 'Счета',
   debts: 'Долги', recent_operations: 'Последние операции',
 };
 
 function WidgetSettingsDropdown({ dashboard }) {
   const { preferences, toggleWidget, moveWidget, toggleWidgetSize, saving } = dashboard;
+  const widgets = preferences.widget_order;
   return (
     <div className="absolute right-0 top-full mt-2 z-50 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-3 border border-gray-200 dark:border-gray-700 min-w-[260px]">
       <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">Видимость и порядок · синхронизировано</p>
-      {preferences.widget_order.map((widget, index) => (
+      {widgets.map((widget, index) => (
         <div key={widget} className="flex items-center gap-2 py-1">
           <input type="checkbox" checked={!preferences.hidden_widgets.includes(widget)} onChange={() => toggleWidget(widget)} disabled={saving} className="rounded border-gray-300 text-primary-600" />
           <span className="min-w-0 flex-1 text-sm text-gray-700 dark:text-gray-300">{widgetLabels[widget]}</span>
           {widget !== 'summary' && <button disabled={saving} onClick={() => toggleWidgetSize(widget)} className="min-w-9 rounded px-1 py-0.5 text-[10px] text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700" title="Размер виджета">{preferences.widget_sizes[widget] === 'wide' ? '2/2' : '1/2'}</button>}
           {widget !== 'summary' ? <>
             <button disabled={saving || index === 1} onClick={() => moveWidget(widget, -1)} className="rounded p-1 disabled:opacity-25" aria-label={`Поднять ${widgetLabels[widget]}`}><ArrowUp size={14} /></button>
-            <button disabled={saving || index === preferences.widget_order.length - 1} onClick={() => moveWidget(widget, 1)} className="rounded p-1 disabled:opacity-25" aria-label={`Опустить ${widgetLabels[widget]}`}><ArrowDown size={14} /></button>
+            <button disabled={saving || index === widgets.length - 1} onClick={() => moveWidget(widget, 1)} className="rounded p-1 disabled:opacity-25" aria-label={`Опустить ${widgetLabels[widget]}`}><ArrowDown size={14} /></button>
           </> : <span className="px-2 text-[10px] text-gray-400">фикс.</span>}
         </div>
       ))}
@@ -73,7 +73,6 @@ export default function WorkspacePage() {
   const { accounts, loadBalances } = useAccounts(workspaceId);
   const { activeDebts } = useDebts(workspaceId);
   const dashboard = useDashboardPreferences(workspaceId);
-  const netWorth = useNetWorth(workspaceId);
   const [balances, setBalances] = useState({});
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
 
@@ -612,19 +611,6 @@ export default function WorkspacePage() {
                   })}
                 </div>
               )}
-            </div>
-          )}
-
-          {isWidgetVisible('net_worth') && (
-            <div style={{ order: widgetOrder('net_worth') }} className={`${widgetSpan('net_worth')} bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border border-gray-200 dark:border-gray-700`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2"><Landmark size={16} className="text-primary-600 dark:text-primary-400" /><h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Чистый капитал</h3></div>
-                <button onClick={() => navigate(workspaceId ? `/assets?workspaceId=${workspaceId}` : '/assets')} className="text-xs text-primary-600 dark:text-primary-400">Подробнее</button>
-              </div>
-              {netWorth.loading ? <div className="mt-4 h-8 animate-pulse rounded bg-gray-100 dark:bg-gray-700" /> : <>
-                <p className={`mt-3 text-2xl font-bold tabular-nums ${(netWorth.report?.net_worth || 0) >= 0 ? 'text-primary-600 dark:text-primary-400' : 'text-red-600 dark:text-red-400'}`}>{formatSignedAmount(netWorth.report?.net_worth || 0)}</p>
-                <div className="mt-3 grid grid-cols-2 gap-3 border-t border-gray-100 pt-3 text-xs dark:border-gray-700"><div><span className="text-gray-500">Активы</span><p className="mt-1 font-semibold text-green-600 dark:text-green-400">{formatUnsignedAmount(netWorth.report?.total_assets || 0, currencySymbol)}</p></div><div><span className="text-gray-500">Обязательства</span><p className="mt-1 font-semibold text-red-600 dark:text-red-400">{formatUnsignedAmount(netWorth.report?.total_liabilities || 0, currencySymbol)}</p></div></div>
-              </>}
             </div>
           )}
 

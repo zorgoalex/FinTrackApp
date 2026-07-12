@@ -53,8 +53,6 @@ export function usePermissions() {
     // Права на аналитику
     canViewAnalytics: ['owner', 'admin', 'member', 'viewer'].includes(normalizedRole),
     canExportData: ['owner', 'admin', 'member'].includes(normalizedRole),
-    canViewNetWorth: ['owner', 'admin', 'member', 'viewer'].includes(normalizedRole),
-    canManageNetWorth: ['owner', 'admin'].includes(normalizedRole),
     
     // Дополнительные проверки
     isOwner: normalizedRole === 'owner',
