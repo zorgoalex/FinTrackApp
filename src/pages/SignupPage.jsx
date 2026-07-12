@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import AuthShell from '../components/AuthShell';
+import SocialAuthButtons from '../components/SocialAuthButtons';
 
 export default function SignupPage() {
   const navigate = useNavigate();
@@ -45,6 +46,7 @@ export default function SignupPage() {
         {(error || localError) && !confirmationSent && (
           <div className="text-red-600 dark:text-red-400 text-sm mb-3">{error || localError}</div>
         )}
+        {!confirmationSent && <SocialAuthButtons mode="signup" />}
         {!confirmationSent && <form onSubmit={handleSubmit} className="space-y-3">
           <input type="text" className="input-field" placeholder="Имя аккаунта" value={username} onChange={(e)=>setUsername(e.target.value)} autoComplete="username" minLength={3} maxLength={21} required />
           <input type="email" className="input-field" placeholder="Email" value={email} onChange={(e)=>setEmail(e.target.value)} required />

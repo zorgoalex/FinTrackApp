@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useAuth } from "../contexts/AuthContext";
 import AuthShell from '../components/AuthShell';
+import SocialAuthButtons from '../components/SocialAuthButtons';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -30,6 +31,7 @@ export default function LoginPage() {
         {(error || localError) && (
           <div className="text-red-600 dark:text-red-400 text-sm mb-3">{error || localError}</div>
         )}
+        <SocialAuthButtons mode="login" />
         <form onSubmit={handleSubmit} className="space-y-3">
           <input type="text" className="input-field" placeholder="Email или имя аккаунта" value={identifier} onChange={(e)=>setIdentifier(e.target.value)} autoComplete="username" required />
           <input type="password" className="input-field" placeholder="Пароль" value={password} onChange={(e)=>setPassword(e.target.value)} required />

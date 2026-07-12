@@ -5,6 +5,8 @@ const AuthContext = createContext({});
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const workosConnectionId = import.meta.env.VITE_WORKOS_CONNECTION_ID?.trim();
+const workosEnabled = import.meta.env.VITE_WORKOS_AUTH_ENABLED === 'true' && Boolean(workosConnectionId);
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export function AuthProvider({ children }) {
@@ -113,6 +115,30 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const loginWithWorkOS = async () => {
+    setError('');
+    if (!workosEnabled) {
+      setError('Вход через социальные аккаунты пока не настроен');
+      return false;
+    }
+    setLoading(true);
+    try {
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: 'workos',
+        options: {
+          redirectTo: `${window.location.origin}/workspaces`,
+          queryParams: { connection: workosConnectionId },
+        },
+      });
+      if (oauthError) throw oauthError;
+      return true;
+    } catch (oauthException) {
+      setError(oauthException.message || 'Не удалось начать вход через социальный аккаунт');
+      setLoading(false);
+      return false;
+    }
+  };
+
   const requestPasswordReset = async (email) => {
     setError("");
     setLoading(true);
@@ -160,6 +186,8 @@ export function AuthProvider({ children }) {
     login,
     logout,
     signUp,
+    loginWithWorkOS,
+    workosEnabled,
     requestPasswordReset,
     updatePassword,
     loading,
