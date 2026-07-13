@@ -24,6 +24,12 @@ const OPERATION_TYPES = {
   transfer: { label: 'Перевод',  color: 'text-purple-600', bg: 'bg-purple-600 hover:bg-purple-700' },
 };
 
+const MOBILE_ENTITY_TABS = [
+  { key: 'account', label: 'Счёт' },
+  { key: 'category', label: 'Категория' },
+  { key: 'counterparty', label: 'Контрагент' },
+];
+
 function todayDateString() {
   const d = new Date();
   const yyyy = d.getFullYear();
@@ -134,6 +140,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
   const [amountFocused, setAmountFocused] = useState(false);
+  const [mobileEntityTab, setMobileEntityTab] = useState('account');
 
   // Inline category creation
   const [showNewCat, setShowNewCat] = useState(false);
@@ -297,20 +304,126 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
 
           <VoiceOperationInput disabled={loading} onTranscript={handleVoiceTranscript} />
 
-          {/* Счёт (for non-transfer) */}
-          {form.type !== 'transfer' && activeAccounts.length > 1 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Счёт</label>
-              <select
-                aria-label="Счёт операции"
-                value={form.accountId}
-                onChange={(e) => setForm(prev => ({ ...prev, accountId: e.target.value }))}
-                className="input-field"
+          {/* Compact mobile entity tabs; regular fields on larger screens */}
+          {form.type !== 'transfer' && (
+            <div className="space-y-4">
+              <div
+                className="grid grid-cols-3 overflow-hidden rounded-xl border border-gray-300 bg-gray-50 dark:border-gray-600 dark:bg-gray-900 sm:hidden"
+                role="tablist"
+                aria-label="Параметры операции"
               >
-                {activeAccounts.map(a => (
-                  <option key={a.id} value={a.id}>{a.name}{a.is_default ? ' (основной)' : ''}</option>
-                ))}
-              </select>
+                {MOBILE_ENTITY_TABS.map((tab) => {
+                  const selected = mobileEntityTab === tab.key;
+                  return (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      role="tab"
+                      id={`operation-${tab.key}-tab`}
+                      aria-selected={selected}
+                      aria-controls={`operation-${tab.key}-panel`}
+                      onClick={() => setMobileEntityTab(tab.key)}
+                      className={`min-h-11 min-w-0 border-r border-gray-300 px-1.5 text-[clamp(0.6875rem,3vw,0.875rem)] font-medium transition-colors last:border-r-0 dark:border-gray-600 ${
+                        selected
+                          ? 'bg-primary-600 text-white dark:bg-primary-500'
+                          : 'text-gray-600 hover:bg-white dark:text-gray-300 dark:hover:bg-gray-800'
+                      }`}
+                    >
+                      <span className="block truncate">{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div
+                id="operation-account-panel"
+                role="tabpanel"
+                aria-labelledby="operation-account-tab"
+                className={`${mobileEntityTab === 'account' ? 'block' : 'hidden'} ${activeAccounts.length > 1 ? 'sm:block' : 'sm:hidden'}`}
+              >
+                <label className="mb-1 hidden text-sm font-medium text-gray-700 dark:text-gray-300 sm:block">Счёт</label>
+                <select
+                  aria-label="Счёт операции"
+                  value={form.accountId}
+                  onChange={(e) => setForm(prev => ({ ...prev, accountId: e.target.value }))}
+                  className="input-field"
+                >
+                  {activeAccounts.length === 0 && <option value="">Нет доступных счетов</option>}
+                  {activeAccounts.map(a => (
+                    <option key={a.id} value={a.id}>{a.name}{a.is_default ? ' (основной)' : ''}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div
+                id="operation-category-panel"
+                role="tabpanel"
+                aria-labelledby="operation-category-tab"
+                className={`${mobileEntityTab === 'category' ? 'block' : 'hidden'} sm:block`}
+              >
+                <label className="mb-1 hidden text-sm font-medium text-gray-700 dark:text-gray-300 sm:block">Категория</label>
+                <div className="flex gap-2">
+                  <select
+                    aria-label="Категория операции"
+                    value={form.categoryId}
+                    onChange={set('categoryId')}
+                    className="input-field min-w-0 flex-1"
+                    name="category"
+                  >
+                    <option value="">Без категории</option>
+                    {filteredCategories.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  {canEditDirectories && (
+                    <button
+                      type="button"
+                      onClick={() => setShowNewCat(!showNewCat)}
+                      className="grid min-h-11 min-w-11 place-items-center rounded-lg border border-gray-300 text-gray-500 transition-colors hover:border-primary-400 hover:text-primary-600 dark:border-gray-600 dark:text-gray-400 dark:hover:border-primary-500 dark:hover:text-primary-400"
+                      title="Добавить категорию"
+                      aria-label="Добавить категорию"
+                      data-testid="add-category-btn"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  )}
+                </div>
+                {canEditDirectories && showNewCat && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={newCatName}
+                      onChange={(e) => setNewCatName(e.target.value)}
+                      placeholder="Название категории"
+                      className="input-field min-w-0 flex-1 text-sm"
+                      data-testid="new-category-name"
+                      autoFocus
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddCategory(); } }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddCategory}
+                      className="whitespace-nowrap rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white transition-colors hover:bg-indigo-700"
+                      data-testid="save-category-btn"
+                    >
+                      OK
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div
+                id="operation-counterparty-panel"
+                role="tabpanel"
+                aria-labelledby="operation-counterparty-tab"
+                className={`${mobileEntityTab === 'counterparty' ? 'block' : 'hidden'} ${counterparties.length > 0 ? 'sm:block' : 'sm:hidden'}`}
+              >
+                <label className="mb-1 hidden text-sm font-medium text-gray-700 dark:text-gray-300 sm:block">Контрагент</label>
+                <select aria-label="Контрагент операции" value={form.counterpartyId} onChange={set('counterpartyId')} className="input-field">
+                  <option value="">Без контрагента</option>
+                  {counterparties.map((item) => <option key={item.id} value={item.id}>{item.display_name}</option>)}
+                </select>
+              </div>
             </div>
           )}
 
@@ -347,67 +460,6 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
               </div>
             </>
           )}
-
-          {/* Категория (hidden for transfers) */}
-          {form.type !== 'transfer' && <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Категория</label>
-              <div className="flex gap-2">
-                <select
-                  aria-label="Категория операции"
-                  value={form.categoryId}
-                  onChange={set('categoryId')}
-                  className="input-field flex-1"
-                  name="category"
-                >
-                  <option value="">Без категории</option>
-                  {filteredCategories.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-                {canEditDirectories && (
-                  <button
-                    type="button"
-                    onClick={() => setShowNewCat(!showNewCat)}
-                    className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 hover:border-primary-400 dark:hover:border-primary-500 transition-colors"
-                    title="Добавить категорию"
-                    aria-label="Добавить категорию"
-                    data-testid="add-category-btn"
-                  >
-                    <Plus size={16} />
-                  </button>
-                )}
-              </div>
-              {canEditDirectories && showNewCat && (
-                <div className="mt-2 flex gap-2 items-center">
-                  <input
-                    type="text"
-                    value={newCatName}
-                    onChange={(e) => setNewCatName(e.target.value)}
-                    placeholder="Название категории"
-                    className="input-field flex-1 text-sm"
-                    data-testid="new-category-name"
-                    autoFocus
-                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddCategory(); } }}
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddCategory}
-                    className="px-3 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors whitespace-nowrap"
-                    data-testid="save-category-btn"
-                  >
-                    OK
-                  </button>
-                </div>
-              )}
-            </div>}
-
-          {form.type !== 'transfer' && counterparties.length > 0 && <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Контрагент</label>
-            <select aria-label="Контрагент операции" value={form.counterpartyId} onChange={set('counterpartyId')} className="input-field">
-              <option value="">Без контрагента</option>
-              {counterparties.map((item) => <option key={item.id} value={item.id}>{item.display_name}</option>)}
-            </select>
-          </div>}
 
           {form.type !== 'transfer' && <OperationAllocationsEditor operationType={form.type} totalAmount={form.amount} currency={operationCurrency} categories={categories} counterparties={counterparties} allocations={form.allocations} onChange={(allocations) => setForm((current) => ({ ...current, allocations }))} />}
 

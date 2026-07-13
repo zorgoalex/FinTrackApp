@@ -303,13 +303,13 @@ export default function AnalyticsPage() {
         )}
 
         {/* Period selector with prev/next arrows */}
-        <div className="flex items-center gap-1" data-testid="period-selector">
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-0.5 sm:w-auto sm:gap-1" data-testid="period-selector">
           {PERIODS.map(p => (
-            <div key={p.key} className="flex items-center">
+            <div key={p.key} className="flex min-w-0 items-center">
               {period === p.key && p.key !== 'custom' && (
                 <button
                   onClick={() => setPeriodOffset(o => o - 1)}
-                  className="grid min-h-11 min-w-11 place-items-center rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-gray-700 dark:hover:text-primary-400 transition-colors"
+                  className="grid min-h-11 min-w-9 place-items-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-primary-400 sm:min-w-11"
                   aria-label="Предыдущий период"
                 >
                   <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><polygon points="8,1 8,11 2,6" /></svg>
@@ -318,7 +318,7 @@ export default function AnalyticsPage() {
               <button
                 onClick={() => handlePeriodChange(p.key)}
                 title={p.title}
-                className={`min-h-11 min-w-11 px-3 py-2 rounded-full text-sm font-medium border transition-colors ${
+                className={`min-h-11 min-w-11 max-w-full whitespace-nowrap rounded-full border px-[clamp(0.5rem,2vw,0.75rem)] py-2 text-[clamp(0.75rem,3vw,0.875rem)] font-medium transition-colors ${
                   period === p.key
                     ? 'bg-primary-600 dark:bg-primary-500 text-white border-primary-600 dark:border-primary-500'
                     : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:border-primary-400'
@@ -329,7 +329,7 @@ export default function AnalyticsPage() {
               {period === p.key && p.key !== 'custom' && (
                 <button
                   onClick={() => setPeriodOffset(o => o + 1)}
-                  className="grid min-h-11 min-w-11 place-items-center rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-gray-700 dark:hover:text-primary-400 transition-colors"
+                  className="grid min-h-11 min-w-9 place-items-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-primary-400 sm:min-w-11"
                   aria-label="Следующий период"
                 >
                   <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><polygon points="4,1 4,11 10,6" /></svg>
