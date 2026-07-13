@@ -608,30 +608,32 @@ export function OperationPage() {
       )}
 
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4">
-        <div className="flex flex-wrap gap-2">
+        <div className={`grid gap-2 ${activeAccounts.length > 1 ? 'grid-cols-3' : 'grid-cols-2'}`}>
           <button
             onClick={() => openAddModal('income')}
             disabled={!permissions.canCreateOperations || loading}
-            className="min-h-11 px-3 py-2 rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 disabled:opacity-50 font-medium text-sm truncate btn-press"
+            className="btn-press min-h-11 min-w-0 w-full whitespace-nowrap rounded-lg border border-green-200 bg-green-50 px-[clamp(0.25rem,1.5vw,0.75rem)] py-2 text-[clamp(0.625rem,3vw,0.875rem)] font-medium text-green-700 disabled:opacity-50 dark:border-green-800 dark:bg-green-900/30 dark:text-green-400"
           >
             ＋ Доход
           </button>
           <button
             onClick={() => openAddModal('expense')}
             disabled={!permissions.canCreateOperations || loading}
-            className="min-h-11 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800 disabled:opacity-50 font-medium text-sm truncate btn-press"
+            className="btn-press min-h-11 min-w-0 w-full whitespace-nowrap rounded-lg border border-red-200 bg-red-50 px-[clamp(0.25rem,1.5vw,0.75rem)] py-2 text-[clamp(0.625rem,3vw,0.875rem)] font-medium text-red-700 disabled:opacity-50 dark:border-red-800 dark:bg-red-900/30 dark:text-red-400"
           >
             ＋ Расход
           </button>
-          {accounts.filter(a => !a.is_archived).length > 1 && (
+          {activeAccounts.length > 1 && (
             <button
               onClick={() => openAddModal('transfer')}
               disabled={!permissions.canCreateOperations || loading}
-              className="min-h-11 px-3 py-2 rounded-lg bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800 disabled:opacity-50 font-medium text-sm truncate btn-press"
+              className="btn-press min-h-11 min-w-0 w-full whitespace-nowrap rounded-lg border border-purple-200 bg-purple-50 px-[clamp(0.25rem,1.5vw,0.75rem)] py-2 text-[clamp(0.625rem,3vw,0.875rem)] font-medium text-purple-700 disabled:opacity-50 dark:border-purple-800 dark:bg-purple-900/30 dark:text-purple-400"
             >
               ⇄ Перевод
             </button>
           )}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2">
           {/* Custom quick buttons */}
           {quickButtons.map((btn, i) => (
             <button
