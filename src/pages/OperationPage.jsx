@@ -15,7 +15,7 @@ import QuickButtonsSettings from '../components/QuickButtonsSettings';
 import OperationCommentsModal from '../components/OperationCommentsModal';
 import SplitOperationModal from '../components/SplitOperationModal';
 import MonthPicker from '../components/MonthPicker';
-import { Pencil, Trash2, ChevronDown, X, Plus, Settings, Wallet, Download, Upload, Search, SlidersHorizontal, MoreHorizontal, MessageSquare, CheckCircle2, ShieldCheck, RotateCcw, ListChecks, Split } from 'lucide-react';
+import { Pencil, Trash2, ChevronDown, X, Plus, Settings, Wallet, Download, Upload, Search, SlidersHorizontal, MoreHorizontal, MessageSquare, CheckCircle2, ShieldCheck, RotateCcw, ListChecks, Split, List, Rows } from 'lucide-react';
 import { formatSignedAmount, formatUnsignedAmount, formatGroupDate } from '../utils/formatters';
 import { getMonthRange } from '../utils/dateRange';
 import { buildOperationsCSV, downloadOperationsCSV } from '../utils/export';
@@ -845,7 +845,7 @@ export function OperationPage() {
         </div>
       )}
 
-      {/* Tag filter + View mode toggle row */}
+      {/* Tag filter + bulk actions row */}
       <div className="flex items-start justify-between mb-3">
         {/* Tag filter — dropdown multi-select */}
         {tags.length > 0 ? (
@@ -908,7 +908,7 @@ export function OperationPage() {
           </div>
         ) : <div />}
 
-        {/* View mode toggle — compact radio buttons */}
+        {/* Bulk actions */}
         <div className="flex items-center gap-1 shrink-0">
           {permissions.hasManagementRights && (
             <button
@@ -919,26 +919,6 @@ export function OperationPage() {
               title="Массовое редактирование"
             ><ListChecks size={18} /></button>
           )}
-          <button
-            onClick={() => handleViewMode('detailed')}
-            className={`min-h-11 px-3 py-2 rounded-lg text-xs transition-colors ${
-              viewMode === 'detailed'
-                ? 'bg-primary-600 dark:bg-primary-500 text-white'
-                : 'text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-300'
-            }`}
-          >
-            Подробный
-          </button>
-          <button
-            onClick={() => handleViewMode('compact')}
-            className={`min-h-11 px-3 py-2 rounded-lg text-xs transition-colors ${
-              viewMode === 'compact'
-                ? 'bg-primary-600 dark:bg-primary-500 text-white'
-                : 'text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-300'
-            }`}
-          >
-            Компактный
-          </button>
         </div>
       </div>
       </div>
@@ -972,16 +952,29 @@ export function OperationPage() {
               : 'В этом месяце операций нет.'}
           </div>
         ) : (
-          groupedOperations.map(group => (
+          groupedOperations.map((group, groupIndex) => (
             <div key={group.dateKey}>
               {/* Date header */}
-              <div className="sticky top-0 bg-gray-50 dark:bg-gray-900 px-4 py-2 flex items-center justify-between border-b border-gray-200 dark:border-gray-700" data-testid="date-group-header">
+              <div className="sticky top-0 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 border-b border-gray-200 bg-gray-50 px-4 py-2 dark:border-gray-700 dark:bg-gray-900" data-testid="date-group-header">
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{group.label}</span>
-                <span className="text-xs text-gray-400 dark:text-gray-500">
+                <span className="min-w-0 justify-self-end truncate text-xs text-gray-400 dark:text-gray-500">
                   {group.dayIncome > 0 && <span className="text-green-600">+{formatUnsignedAmount(group.dayIncome, currencySymbol)}</span>}
                   {group.dayIncome > 0 && group.dayExpense > 0 && ' / '}
                   {group.dayExpense > 0 && <span className="text-red-600">−{formatUnsignedAmount(group.dayExpense, currencySymbol)}</span>}
                 </span>
+                {groupIndex === 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => handleViewMode(viewMode === 'detailed' ? 'compact' : 'detailed')}
+                    className="grid min-h-9 min-w-9 place-items-center rounded-lg text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+                    aria-label={viewMode === 'detailed' ? 'Переключить на компактный вид' : 'Переключить на подробный вид'}
+                    aria-pressed={viewMode === 'compact'}
+                    title={viewMode === 'detailed' ? 'Компактный вид' : 'Подробный вид'}
+                    data-testid="operations-view-toggle"
+                  >
+                    {viewMode === 'detailed' ? <Rows size={18} /> : <List size={18} />}
+                  </button>
+                ) : <span aria-hidden="true" />}
               </div>
               {/* Operations in this group */}
               {group.operations.map(operation => {
