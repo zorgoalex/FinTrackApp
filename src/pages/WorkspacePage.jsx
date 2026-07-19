@@ -6,7 +6,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import useAccounts from '../hooks/useAccounts';
 import AddOperationModal from '../components/AddOperationModal';
 import QuickButtonsSettings from '../components/QuickButtonsSettings';
-import { Plus, BarChart3, TrendingUp, FileText, Pin, Minimize2, Maximize2, Wallet, Settings, Receipt, Eye, EyeOff, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, BarChart3, TrendingUp, FileText, Pin, Minimize2, Maximize2, Wallet, Settings, Receipt, Eye, EyeOff, ArrowUp, ArrowDown, Upload } from 'lucide-react';
 import { formatUnsignedAmount, formatSignedAmount as formatBalanceFn } from '../utils/formatters';
 import useCategories from '../hooks/useCategories';
 import useDebts from '../hooks/useDebts';
@@ -473,6 +473,15 @@ export default function WorkspacePage() {
                 ⇄ Перевод
               </button>
             )}
+            <button
+              onClick={() => navigate(workspaceId ? `/operations?workspaceId=${workspaceId}&import=1` : '/operations?import=1')}
+              disabled={!canCreateOperations}
+              className="flex min-h-11 items-center gap-2 rounded-xl border border-primary-200 bg-primary-50 px-4 py-2 text-sm font-semibold text-primary-700 disabled:opacity-50 dark:border-primary-800 dark:bg-primary-900/30 dark:text-primary-300"
+              aria-label="Сканировать чек или импортировать PDF-выписку"
+            >
+              <Upload size={17} />
+              Сканировать / импорт
+            </button>
             {quickButtons.map((btn, i) => (
               <button
                 key={i}

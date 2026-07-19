@@ -147,6 +147,14 @@ export function OperationPage() {
     setSearchParams(nextParams, { replace: true });
   }, [permissions.canCreateOperations, searchParams, setSearchParams]);
 
+  useEffect(() => {
+    if (!searchParams.get('import') || !permissions.canCreateOperations) return;
+    setImportOpen(true);
+    const nextParams = new globalThis.URLSearchParams(searchParams);
+    nextParams.delete('import');
+    setSearchParams(nextParams, { replace: true });
+  }, [permissions.canCreateOperations, searchParams, setSearchParams]);
+
   // Visible accounts filter (null = all visible)
   const [visibleAccountIds, setVisibleAccountIds] = useState(() => {
     if (!workspaceId) return null;
@@ -575,9 +583,9 @@ export function OperationPage() {
         />
         <div className="flex gap-2">
           {permissions.canCreateOperations && (
-            <button onClick={() => setImportOpen(true)} className="btn-secondary min-h-11 min-w-11" disabled={loading} aria-label="Импорт выписки, чека, скриншота или CSV">
-              <Upload size={16} className="mr-2" />
-              <span className="hidden sm:inline">Импорт</span>
+            <button onClick={() => setImportOpen(true)} className="btn-secondary flex min-h-11 items-center gap-2 px-3" disabled={loading} aria-label="Импорт выписки, чека, скриншота или CSV">
+              <Upload size={16} />
+              <span>Чек / PDF</span>
             </button>
           )}
           <button onClick={handleExportOperations} className="btn-secondary min-h-11 min-w-11" disabled={exporting || loading} aria-label={exporting ? 'Экспорт операций выполняется' : 'Экспорт операций в CSV'}>
