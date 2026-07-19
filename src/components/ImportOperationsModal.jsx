@@ -343,7 +343,7 @@ export default function ImportOperationsModal({
                 <div className="text-sm text-emerald-950 dark:text-emerald-100">
                   <p className="font-semibold">Документ обрабатывается локально в этой вкладке</p>
                   <ul className="mt-2 list-disc space-y-1 pl-5 text-emerald-800 dark:text-emerald-200">
-                    <li>Исходный PDF, изображение и OCR-текст не загружаются в Supabase и не передаются AI API.</li>
+                    <li>Исходный PDF, изображение и OCR-текст не загружаются на сервер и не передаются AI API.</li>
                     <li>ИИН/БИН, IBAN, карты, телефоны, ФИО и номера документов маскируются в описаниях.</li>
                     <li>После закрытия окна временный текст удаляется из памяти; сохраняются только подтверждённые операции и SHA-256 для поиска повторов.</li>
                   </ul>
