@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, BrainCircuit, Camera, CheckCircle2, FileSearch, FileUp, Lock, ShieldCheck, X } from 'lucide-react';
 import { supabase } from '../contexts/AuthContext';
 import { useCurrencies } from '../hooks/useCurrencies';
@@ -6,6 +6,7 @@ import { inspectOperationsCSV, parseOperationsCSV } from '../utils/importOperati
 import { categoryTypeForOperation, operationTypesForWorkspace, OPERATION_TYPE_META } from '../utils/operationTypes';
 import { buildRulePattern, suggestCategory } from '../utils/documentImport/categories';
 import { extractDocument } from '../utils/documentImport/extract';
+import { OCR_TIMEOUT_MS } from '../utils/documentImport/ocrPolicy';
 import { operationFingerprint } from '../utils/documentImport/privacy';
 
 const MAX_FILE_SIZE = 15 * 1024 * 1024;
@@ -13,7 +14,15 @@ const MAX_FILE_SIZE = 15 * 1024 * 1024;
 function progressLabel(progress) {
   if (!progress) return 'Анализируем документ…';
   if (progress.stage === 'pdf') return `Читаем PDF: страница ${progress.current} из ${progress.total}`;
-  if (progress.stage === 'ocr') return `Локальное распознавание: ${Math.round((progress.progress || 0) * 100)}%`;
+  if (progress.stage === 'preparing') return 'Готовим изображение…';
+  if (progress.stage === 'ocr') {
+    const status = String(progress.status || '').toLocaleLowerCase('ru-RU');
+    if (status.includes('loading tesseract core')) return 'Запускаем локальный OCR…';
+    if (status.includes('loading language')) return `Загружаем языки OCR: ${Math.round((progress.progress || 0) * 100)}%`;
+    if (status.includes('initializing')) return 'Готовим распознавание…';
+    if (status.includes('recognizing')) return `Локальное распознавание: ${Math.round((progress.progress || 0) * 100)}%`;
+    return 'Запускаем локальный OCR…';
+  }
   return 'Анализируем документ…';
 }
 
@@ -30,6 +39,7 @@ export default function ImportOperationsModal({
 }) {
   const inputRef = useRef(null);
   const cameraInputRef = useRef(null);
+  const processingControllerRef = useRef(null);
   const { getRate } = useCurrencies(workspaceId);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [fileName, setFileName] = useState('');
@@ -61,6 +71,8 @@ export default function ImportOperationsModal({
     format: csvFormat,
   }) : null, [baseCurrency, csvFormat, csvSetup]);
 
+  useEffect(() => () => processingControllerRef.current?.abort(), []);
+
   if (!open) return null;
 
   const resetDocument = () => {
@@ -82,10 +94,20 @@ export default function ImportOperationsModal({
   };
 
   const close = () => {
-    if (importing || processing) return;
+    if (importing) return;
+    if (processingControllerRef.current) {
+      processingControllerRef.current.silent = true;
+      processingControllerRef.current.abort();
+    }
+    processingControllerRef.current = null;
+    setProcessing(false);
     resetDocument();
     setPrivacyAccepted(false);
     onClose();
+  };
+
+  const cancelProcessing = () => {
+    processingControllerRef.current?.abort();
   };
 
   const findDuplicates = async (fingerprints, documentHash) => {
@@ -154,8 +176,14 @@ export default function ImportOperationsModal({
       return;
     }
     setProcessing(true);
+    setFatalError('');
+    const controller = new globalThis.AbortController();
+    processingControllerRef.current = controller;
     try {
-      const extracted = await extractDocument(file, setProcessingProgress);
+      const extracted = await extractDocument(file, setProcessingProgress, {
+        signal: controller.signal,
+        timeoutMs: OCR_TIMEOUT_MS,
+      });
       let operations;
       let bank = extracted.parsed?.bank || 'unknown';
       if (extracted.sourceKind === 'csv') {
@@ -207,8 +235,13 @@ export default function ImportOperationsModal({
       });
       if (operations.length > 500) setErrors((current) => [...current, 'Показаны первые 500 операций. Разделите документ на части.']);
     } catch (error) {
-      setFatalError(error.message || 'Не удалось обработать документ');
+      if (!(error.name === 'AbortError' && controller.silent)) {
+        setFatalError(error.name === 'AbortError'
+          ? 'Распознавание отменено. Выберите другой файл или обрежьте фотографию до области чека.'
+          : error.message || 'Не удалось обработать документ');
+      }
     } finally {
+      if (processingControllerRef.current === controller) processingControllerRef.current = null;
       setProcessing(false);
       setProcessingProgress(null);
     }
@@ -332,7 +365,7 @@ export default function ImportOperationsModal({
             <h2 id="import-title" className="text-xl font-semibold text-gray-900 dark:text-gray-100">Выписка, чек или скриншот</h2>
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Сначала проверьте черновик. Ничего не сохранится без подтверждения.</p>
           </div>
-          <button type="button" onClick={close} disabled={importing || processing} className="grid min-h-11 min-w-11 place-items-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Закрыть импорт"><X size={20} /></button>
+          <button type="button" onClick={close} disabled={importing} className="grid min-h-11 min-w-11 place-items-center rounded-lg hover:bg-gray-100 disabled:opacity-50 dark:hover:bg-gray-700" aria-label="Закрыть импорт"><X size={20} /></button>
         </div>
 
         {!documentMeta && rows.length === 0 && (
@@ -351,7 +384,7 @@ export default function ImportOperationsModal({
               </div>
             </div>
             <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 p-3 text-sm dark:border-gray-700">
-              <input type="checkbox" checked={privacyAccepted} onChange={(event) => setPrivacyAccepted(event.target.checked)} className="mt-1 h-4 w-4" />
+              <input type="checkbox" checked={privacyAccepted} disabled={processing} onChange={(event) => setPrivacyAccepted(event.target.checked)} className="mt-1 h-4 w-4 disabled:opacity-50" />
               <span>Я понимаю, что финансовый документ может содержать персональные данные, и согласен на локальное распознавание и автоматическое маскирование.</span>
             </label>
             <input ref={inputRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.csv,application/pdf,image/*,text/csv" onChange={handleFile} className="hidden" />
@@ -364,6 +397,11 @@ export default function ImportOperationsModal({
             <button type="button" onClick={() => cameraInputRef.current?.click()} disabled={!privacyAccepted || processing} className="btn-secondary flex min-h-12 w-full items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:hidden">
               <Camera size={18} /> Сканировать чек камерой
             </button>
+            {processing && (
+              <button type="button" onClick={cancelProcessing} className="btn-secondary min-h-11 w-full border-red-200 text-red-700 dark:border-red-900 dark:text-red-300">
+                Отменить обработку
+              </button>
+            )}
           </div>
         )}
 

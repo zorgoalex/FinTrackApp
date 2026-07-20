@@ -1,9 +1,66 @@
 import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.mjs?url';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
+import tesseractWorkerUrl from 'tesseract.js/dist/worker.min.js?url';
 import { detectSensitiveData, sha256Hex } from './privacy.js';
 import { parseBankDocumentText } from './parsers.js';
+import {
+  calculateOcrImageSize,
+  OCR_TIMEOUT_MS,
+  runWithOcrDeadline,
+} from './ocrPolicy.js';
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+
+let ocrWorkerPromise = null;
+let ocrProgressListener = null;
+
+function invalidateOcrWorker() {
+  const staleWorkerPromise = ocrWorkerPromise;
+  ocrWorkerPromise = null;
+  ocrProgressListener = null;
+  if (staleWorkerPromise) {
+    Promise.resolve(staleWorkerPromise)
+      .then((worker) => worker.terminate())
+      .catch(() => {});
+  }
+}
+
+async function getOcrWorker(onProgress) {
+  ocrProgressListener = onProgress;
+  if (!ocrWorkerPromise) {
+    let creationPromise;
+    creationPromise = import('tesseract.js')
+      .then(async ({ createWorker, PSM }) => {
+        const worker = await createWorker('rus+eng', 1, {
+          workerPath: tesseractWorkerUrl,
+          logger: (message) => {
+            ocrProgressListener?.({
+              stage: 'ocr',
+              status: message.status || '',
+              progress: message.progress || 0,
+            });
+          },
+        });
+        if (ocrWorkerPromise !== creationPromise) {
+          await worker.terminate();
+          const error = new Error('Распознавание отменено');
+          error.name = 'AbortError';
+          throw error;
+        }
+        await worker.setParameters({
+          tessedit_pageseg_mode: PSM.AUTO,
+          preserve_interword_spaces: '1',
+        });
+        return worker;
+      })
+      .catch((error) => {
+        if (ocrWorkerPromise === creationPromise) ocrWorkerPromise = null;
+        throw error;
+      });
+    ocrWorkerPromise = creationPromise;
+  }
+  return ocrWorkerPromise;
+}
 
 function detectBinaryKind(buffer) {
   const bytes = new Uint8Array(buffer.slice(0, 16));
@@ -43,44 +100,50 @@ async function extractPdfText(file, onProgress) {
   return pages.join('\n');
 }
 
-async function extractImageText(file, onProgress) {
-  const { createWorker, PSM } = await import('tesseract.js');
-  const worker = await createWorker('rus+eng', 1, {
-    logger: (message) => {
-      if (message.status === 'recognizing text') onProgress?.({ stage: 'ocr', progress: message.progress || 0 });
-    },
-  });
+async function extractImageText(file, onProgress, { signal, timeoutMs = OCR_TIMEOUT_MS } = {}) {
   try {
-    await worker.setParameters({ tessedit_pageseg_mode: PSM.AUTO, preserve_interword_spaces: '1' });
-    let imageForOcr = file;
-    if (globalThis.createImageBitmap && globalThis.document) {
-      const bitmap = await globalThis.createImageBitmap(file);
-      const scale = Math.min(3, Math.max(1.5, 1600 / bitmap.width));
-      const canvas = globalThis.document.createElement('canvas');
-      canvas.width = Math.round(bitmap.width * scale);
-      canvas.height = Math.round(bitmap.height * scale);
-      const context = canvas.getContext('2d', { willReadFrequently: true });
-      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-      bitmap.close();
-      const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
-      for (let index = 0; index < pixels.data.length; index += 4) {
-        const gray = pixels.data[index] * 0.299 + pixels.data[index + 1] * 0.587 + pixels.data[index + 2] * 0.114;
-        const contrasted = Math.max(0, Math.min(255, (gray - 128) * 1.45 + 128));
-        pixels.data[index] = contrasted;
-        pixels.data[index + 1] = contrasted;
-        pixels.data[index + 2] = contrasted;
+    return await runWithOcrDeadline(async () => {
+      onProgress?.({ stage: 'preparing', progress: 0 });
+      let imageForOcr = file;
+      if (globalThis.createImageBitmap && globalThis.document) {
+        const bitmap = await globalThis.createImageBitmap(file);
+        const target = calculateOcrImageSize(bitmap.width, bitmap.height);
+        const canvas = globalThis.document.createElement('canvas');
+        canvas.width = target.width;
+        canvas.height = target.height;
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        if (!context) throw new Error('Браузер не поддерживает подготовку изображения для OCR');
+        context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        bitmap.close();
+        const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+        for (let index = 0; index < pixels.data.length; index += 4) {
+          const gray = pixels.data[index] * 0.299 + pixels.data[index + 1] * 0.587 + pixels.data[index + 2] * 0.114;
+          const contrasted = Math.max(0, Math.min(255, (gray - 128) * 1.35 + 128));
+          pixels.data[index] = contrasted;
+          pixels.data[index + 1] = contrasted;
+          pixels.data[index + 2] = contrasted;
+        }
+        context.putImageData(pixels, 0, 0);
+        imageForOcr = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png')) || file;
       }
-      context.putImageData(pixels, 0, 0);
-      imageForOcr = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png')) || file;
-    }
-    const result = await worker.recognize(imageForOcr);
-    return { text: result.data.text || '', confidence: Number(result.data.confidence) || 0 };
+      onProgress?.({ stage: 'preparing', progress: 1 });
+      const worker = await getOcrWorker(onProgress);
+      const result = await worker.recognize(imageForOcr);
+      return { text: result.data.text || '', confidence: Number(result.data.confidence) || 0 };
+    }, {
+      signal,
+      timeoutMs,
+      onCancel: invalidateOcrWorker,
+    });
+  } catch (error) {
+    if (!['AbortError', 'OcrTimeoutError'].includes(error.name)) invalidateOcrWorker();
+    throw error;
   } finally {
-    await worker.terminate();
+    ocrProgressListener = null;
   }
 }
 
-async function extractScannedPdf(file, onProgress) {
+async function extractScannedPdf(file, onProgress, options) {
   const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
   if (pdf.numPages > 5) throw new Error('Сканированный PDF длиннее 5 страниц. Разделите его на части для локального OCR.');
   const texts = [];
@@ -93,14 +156,18 @@ async function extractScannedPdf(file, onProgress) {
     canvas.height = Math.ceil(viewport.height);
     await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
     const image = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
-    const ocr = await extractImageText(image, (progress) => onProgress?.({ ...progress, page: index, pages: pdf.numPages }));
+    const ocr = await extractImageText(
+      image,
+      (progress) => onProgress?.({ ...progress, page: index, pages: pdf.numPages }),
+      options,
+    );
     texts.push(ocr.text);
     confidenceTotal += ocr.confidence;
   }
   return { text: texts.join('\n'), confidence: confidenceTotal / pdf.numPages };
 }
 
-export async function extractDocument(file, onProgress) {
+export async function extractDocument(file, onProgress, options = {}) {
   const buffer = await file.arrayBuffer();
   const documentHash = await sha256Hex(buffer);
   const binaryKind = detectBinaryKind(buffer);
@@ -120,12 +187,12 @@ export async function extractDocument(file, onProgress) {
       throw new Error(`PDF повреждён или имеет неподдерживаемую структуру: ${error.message}`);
     }
     if (text.replace(/\s/g, '').length < 40) {
-      const ocr = await extractScannedPdf(file, onProgress);
+      const ocr = await extractScannedPdf(file, onProgress, options);
       text = ocr.text;
       ocrConfidence = ocr.confidence;
     }
   } else if ((type.startsWith('image/') || ['jpg', 'jpeg', 'png', 'webp'].includes(extension)) && binaryKind === 'image') {
-    const ocr = await extractImageText(file, onProgress);
+    const ocr = await extractImageText(file, onProgress, options);
     text = ocr.text;
     ocrConfidence = ocr.confidence;
   } else {
