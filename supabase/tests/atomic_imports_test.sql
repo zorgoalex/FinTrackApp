@@ -3,7 +3,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
 
-SELECT plan(20);
+SELECT plan(21);
 
 INSERT INTO auth.users (id, email) VALUES
   ('12000000-0000-0000-0000-000000000001', 'import-owner@example.test'),
@@ -98,6 +98,11 @@ SELECT lives_ok(
       '62000000-0000-0000-0000-000000000002'
     )$$,
   'member atomically confirms valid rows'
+);
+
+SELECT lives_ok(
+  $$SET CONSTRAINTS operation_allocation_totals_from_operation IMMEDIATE$$,
+  'deferred allocation trigger accepts a regular imported operation'
 );
 
 SELECT is(
