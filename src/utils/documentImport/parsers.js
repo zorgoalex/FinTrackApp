@@ -69,7 +69,7 @@ function normalizeOcrArtifacts(text) {
 
 function extractReceiptItems(text) {
   const lines = String(text || '').split(/\r?\n/).map((line) => line.replace(/\s+/g, ' ').trim()).filter(Boolean);
-  const ignored = /итог|всего|скидк|безнал|налич|сдач|ндс|оплат|т[өе]лем|жиын|жалпы|кассир|оператор|фиск|бин|иин|рнм|знм|ккм|чек|дата|время|телефон|consumer|oofd|спасибо/iu;
+  const ignored = /ито[грю]|всего|скидк|безнал|налич|сдач|ндс|оплат|т[өе]лем|жиын|жалпы|кассир|оператор|фиск|бин|иин|рнм|знм|ккм|чек|дата|время|телефон|consumer|oofd|спасибо/iu;
   const pricePattern = /(?:=|[xх×]\s*)\s*([1-9][\d ]*(?:[,.]\d{1,2})?)|([1-9][\d ]*(?:[,.]\d{1,2})?)\s*(?:₸|₦|тг|тенге|KZT|[TТ])(?:\s|$)/iu;
   const items = [];
 
@@ -128,7 +128,32 @@ function parseFreedomStatement(text) {
   return rows;
 }
 
-function parseGenericReceipt(text) {
+function extractLabelledTotal(text) {
+  const totalMatch = String(text || '').match(/(?:ЖИЫНЫ?|ИТО(?:Г(?:О|А)?|Р[ОO]?|Ю)|ВСЕГО|ЖАЛПЫ(?:\s+[ТT?ӨО]ЛЕМГЕ)?|БАРЛЫҒЫ|БАРЛЫНЫ|TOTAL)[^\d]{0,24}=?\s*([\d ]+(?:[,.]\d{1,2})?)/iu);
+  const paidMatch = String(text || '').match(/(?:оплаченн(?:ая|о)\s+сумма|сумма платежа|плат[её]ж успешно совершен)[^\d]{0,24}([\d ]+(?:[,.]\d{1,2})?)/iu);
+  const match = totalMatch || paidMatch;
+  if (!match) return null;
+  const amount = parseMoney(match[1]);
+  return Number.isFinite(amount) && amount > 0 ? { match, amount } : null;
+}
+
+function receiptReviewReasons({ dateMatch, labelledTotal, meaningfulAmount, focusedTotal, hasFocusedEvidence }) {
+  const reasons = [];
+  if (!dateMatch) reasons.push('Дата не распознана — проверьте её по чеку');
+  if (!meaningfulAmount) {
+    reasons.push('Итоговая сумма не распознана');
+  } else if (!labelledTotal) {
+    reasons.push('Сумма найдена без подписи «Итого/Всего/Оплачено»');
+  }
+  if (hasFocusedEvidence && !focusedTotal) {
+    reasons.push('Повторный проход не подтвердил итоговую сумму');
+  } else if (labelledTotal && focusedTotal && Math.abs(labelledTotal.amount - focusedTotal.amount) >= 0.005) {
+    reasons.push(`Распознаны разные итоговые суммы: ${labelledTotal.amount} и ${focusedTotal.amount}`);
+  }
+  return reasons;
+}
+
+function parseGenericReceipt(text, evidence = {}) {
   const dateCandidates = Array.from(text.matchAll(/(?<!\d)(\d{1,2}[.\-/]\d{1,2}[.\-/](?:\d{4}|\d{2}))(?!\d)/gu))
     .map((match) => {
       const nearby = text.slice(Math.max(0, match.index - 50), match.index + match[0].length + 20);
@@ -144,17 +169,17 @@ function parseGenericReceipt(text) {
     .filter(({ parsed }) => parsed)
     .sort((a, b) => b.score - a.score || b.match.index - a.match.index);
   const dateMatch = dateCandidates[0]?.match;
-  const totalMatch = text.match(/(?:ЖИЫНЫ?|ИТОГ(?:О|А)?|ВСЕГО|ЖАЛПЫ(?:\s+[ТT?ӨО]ЛЕМГЕ)?|БАРЛЫҒЫ|БАРЛЫНЫ|TOTAL)[^\d]{0,24}=?\s*([\d ]+(?:[,.]\d{1,2})?)/iu);
-  const labelledAmountMatch = text.match(/(?:оплаченн(?:ая|о)\s+сумма|сумма платежа|плат[её]ж успешно совершен)[^\d]{0,24}([\d ]+(?:[,.]\d{1,2})?)/iu);
+  const labelledTotal = extractLabelledTotal(Object.hasOwn(evidence, 'primaryText') ? evidence.primaryText : text);
+  const focusedTotal = extractLabelledTotal(evidence.criticalText);
   const fallbackDecimalAmounts = Array.from(text.matchAll(/(?<!\d)([1-9][\d ]*[,.]\d{2})(?!\d)/g))
     .map((match) => ({ match: [match[0], match[1], 'KZT'], amount: parseMoney(match[1]), inferredCurrency: 'KZT' }))
     .filter(({ amount }) => Number.isFinite(amount) && amount > 0)
     .sort((a, b) => b.amount - a.amount);
   const amountMatches = Array.from(text.matchAll(/([+-]?\s*[\d ]+(?:[,.]\d{2})?)\s*(₸|KZT\b|\$|USD\b|€|EUR\b|₽|RUB\b|[TТ]\b)/giu));
-  const meaningfulAmount = totalMatch
-    ? { match: totalMatch, amount: parseMoney(totalMatch[1]), inferredCurrency: 'KZT' }
-    : labelledAmountMatch
-      ? { match: labelledAmountMatch, amount: parseMoney(labelledAmountMatch[1]), inferredCurrency: 'KZT' }
+  const meaningfulAmount = focusedTotal
+    ? { ...focusedTotal, inferredCurrency: 'KZT' }
+    : labelledTotal
+      ? { ...labelledTotal, inferredCurrency: 'KZT' }
     : amountMatches
     .map((match) => ({ match, amount: parseMoney(match[1]) }))
     .filter(({ amount }) => Number.isFinite(amount) && amount > 0)
@@ -166,6 +191,13 @@ function parseGenericReceipt(text) {
   const operationWord = /перевод/iu.test(text) ? 'Перевод' : /налог|социальн|плат[её]ж/iu.test(text) ? 'Платёж' : 'Покупка';
   const sign = /возврат|пополнение|зачислен/iu.test(text) ? '+' : '-';
   const reference = text.match(/(?:№\s*(?:чека|квитанции)|номер операции|референс)\s*[:№]?\s*([A-ZА-Я0-9-]{6,})/iu)?.[1] || '';
+  const reviewReasons = receiptReviewReasons({
+    dateMatch,
+    labelledTotal,
+    meaningfulAmount,
+    focusedTotal,
+    hasFocusedEvidence: Object.hasOwn(evidence, 'criticalText'),
+  });
   return [{
     operation_date: dateMatch ? parseDate(dateMatch[1]) : '',
     type: mapDirection(sign, operationWord),
@@ -175,17 +207,19 @@ function parseGenericReceipt(text) {
     source_label: operationWord,
     reference,
     receipt_items_comment: extractReceiptItems(text),
-    confidence: dateMatch && meaningfulAmount ? 0.82 : 0.55,
+    confidence: dateMatch && meaningfulAmount && reviewReasons.length === 0 ? 0.88 : dateMatch && meaningfulAmount ? 0.62 : 0.55,
+    review_reasons: reviewReasons,
+    critical_fields_confirmed: reviewReasons.length === 0,
   }];
 }
 
-export async function parseBankDocumentText(text, sourceKind = 'pdf') {
+export async function parseBankDocumentText(text, sourceKind = 'pdf', evidence = {}) {
   const normalizedText = sourceKind === 'image' ? normalizeOcrArtifacts(text) : text;
   const detected = detectDocumentKind(normalizedText);
   let rows = [];
   if (detected.documentType === 'statement' && detected.bank === 'kaspi') rows = parseKaspiStatement(normalizedText);
   if (detected.documentType === 'statement' && detected.bank === 'freedom') rows = parseFreedomStatement(normalizedText);
-  if (rows.length === 0) rows = parseGenericReceipt(normalizedText);
+  if (rows.length === 0) rows = parseGenericReceipt(normalizedText, evidence);
   const operations = await Promise.all(rows.map(async (row) => ({
     ...row,
     source_kind: sourceKind,

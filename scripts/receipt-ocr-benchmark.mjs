@@ -166,7 +166,7 @@ async function imageDataUrl(filename) {
   return `data:${mime};base64,${(await readFile(filename)).toString('base64')}`;
 }
 
-class OvisProvider {
+class LlamaCppProvider {
   constructor(options) {
     this.options = options;
     this.child = null;
@@ -198,7 +198,7 @@ class OvisProvider {
 
     const deadline = Date.now() + 120_000;
     while (Date.now() < deadline) {
-      if (this.child.exitCode !== null) throw new Error(`Ovis server exited early: ${this.logs.join('').slice(-2000)}`);
+      if (this.child.exitCode !== null) throw new Error(`llama.cpp OCR server exited early: ${this.logs.join('').slice(-2000)}`);
       try {
         const response = await fetch(`http://127.0.0.1:${port}/health`, { signal: globalThis.AbortSignal.timeout(1500) });
         if (response.ok) return;
@@ -207,19 +207,19 @@ class OvisProvider {
       }
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
-    throw new Error(`Ovis server did not become healthy: ${this.logs.join('').slice(-2000)}`);
+    throw new Error(`llama.cpp OCR server did not become healthy: ${this.logs.join('').slice(-2000)}`);
   }
 
   async recognize(filename) {
     const startedAt = globalThis.performance.now();
     const data = await postJson(`http://127.0.0.1:${this.options.port}/v1/chat/completions`, {
-      model: 'OvisOCR2',
+      model: this.options.apiModel,
       temperature: 0,
       max_tokens: this.options.maxTokens,
       messages: [{
         role: 'user',
         content: [
-          { type: 'text', text: OCR_PROMPT },
+          { type: 'text', text: this.options.prompt },
           { type: 'image_url', image_url: { url: await imageDataUrl(filename) } },
         ],
       }],
@@ -311,7 +311,7 @@ function summarize(results) {
     return [field, { correct, total: scored.length, accuracy: scored.length ? correct / scored.length : null }];
   }));
   const complete = results.filter((row) => row.complete);
-  const latencies = results.map((row) => row.latency_ms).sort((a, b) => a - b);
+  const latencies = results.map((row) => row.latency_ms).filter(Number.isFinite).sort((a, b) => a - b);
   const percentile = (fraction) => latencies[Math.min(latencies.length - 1, Math.floor(latencies.length * fraction))] || null;
   const duplicateGroups = Object.values(Object.groupBy(results, (row) => row.document_group)).filter((rows) => rows.length > 1);
   return {
@@ -349,7 +349,7 @@ async function main() {
 
   let provider;
   if (providerName === 'ovis') {
-    provider = new OvisProvider({
+    provider = new LlamaCppProvider({
       executable: path.resolve(args.executable || path.join(projectRoot, 'artifacts', 'runtime', 'llama-b10076-cpu', 'llama-server.exe')),
       model: path.resolve(args.model || path.join(projectRoot, 'artifacts', 'model_cache', 'ovisocr2', 'OvisOCR2-Q5_K_M.gguf')),
       mmproj: path.resolve(args.mmproj || path.join(projectRoot, 'artifacts', 'model_cache', 'ovisocr2', 'mmproj-F16.gguf')),
@@ -359,6 +359,22 @@ async function main() {
       timeoutMs: Number(args['timeout-ms'] || 120_000),
       device: String(args.device || 'none'),
       gpuLayers: Number(args['gpu-layers'] || 0),
+      apiModel: 'OvisOCR2',
+      prompt: OCR_PROMPT,
+    });
+  } else if (providerName === 'glm') {
+    provider = new LlamaCppProvider({
+      executable: path.resolve(args.executable || path.join(projectRoot, 'artifacts', 'runtime', 'llama-b10076-cpu', 'llama-server.exe')),
+      model: path.resolve(args.model || path.join(projectRoot, 'artifacts', 'model_cache', 'glm-ocr', 'GLM-OCR-Q8_0.gguf')),
+      mmproj: path.resolve(args.mmproj || path.join(projectRoot, 'artifacts', 'model_cache', 'glm-ocr', 'mmproj-GLM-OCR-Q8_0.gguf')),
+      port: Number(args.port || 18084),
+      threads: Number(args.threads || Math.min(12, Math.max(1, Number(process.env.NUMBER_OF_PROCESSORS) || 4))),
+      maxTokens: Number(args['max-tokens'] || 1800),
+      timeoutMs: Number(args['timeout-ms'] || 120_000),
+      device: String(args.device || 'none'),
+      gpuLayers: Number(args['gpu-layers'] || 0),
+      apiModel: 'GLM-OCR',
+      prompt: 'Text Recognition:',
     });
   } else if (providerName === 'openrouter') {
     provider = new OpenRouterProvider({ model: String(args.model || process.env.OPENROUTER_RECEIPT_MODEL || 'google/gemini-3-flash-preview') });
@@ -372,10 +388,36 @@ async function main() {
     for (const [index, document] of documents.entries()) {
       process.stdout.write(`[${index + 1}/${documents.length}] ${document.id} ... `);
       const filename = path.join(datasetDir, document.file);
+      const extension = ['ovis', 'glm'].includes(providerName) ? 'md' : 'json';
+      const rawPath = path.join(outputDir, 'raw', `${document.id}.${extension}`);
       try {
+        if (args['reuse-raw']) {
+          try {
+            const raw = await readFile(rawPath, 'utf8');
+            const structured = ['ovis', 'glm'].includes(providerName)
+              ? await structureLocalOcr(raw)
+              : parseJsonContent(raw);
+            const row = {
+              id: document.id,
+              file: document.file,
+              document_group: document.document_group,
+              complete: document.complete,
+              expected: document.expected,
+              actual: structured,
+              score: scoreDocument(document.expected, structured, document.complete),
+              latency_ms: null,
+              usage: null,
+              reused_raw: true,
+            };
+            results.push(row);
+            console.log(`${row.score.critical_exact ? 'critical OK' : 'review'} (cached raw)`);
+            continue;
+          } catch (error) {
+            if (error.code !== 'ENOENT') throw error;
+          }
+        }
         const recognized = await provider.recognize(filename);
-        const extension = providerName === 'ovis' ? 'md' : 'json';
-        await writeFile(path.join(outputDir, 'raw', `${document.id}.${extension}`), `${recognized.raw}\n`, 'utf8');
+        await writeFile(rawPath, `${recognized.raw}\n`, 'utf8');
         const row = {
           id: document.id,
           file: document.file,
@@ -413,7 +455,7 @@ async function main() {
     provider: providerName,
     model: provider.options?.model || null,
     dataset: path.basename(datasetDir),
-    summary: summarize(results.filter((row) => row.latency_ms !== null)),
+    summary: summarize(results),
     results,
   };
   await writeFile(path.join(outputDir, 'report.json'), `${JSON.stringify(report, null, 2)}\n`, 'utf8');

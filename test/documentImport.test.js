@@ -67,6 +67,41 @@ test('supports photographed fiscal receipts with hyphen dates and Kazakh totals'
   assert.equal(result.operations[0].amount, 1340);
 });
 
+test('confirms a receipt amount only when the focused OCR pass agrees', async () => {
+  const text = `САТУ ЧЕГІ\n20.07.2026 10:34\nЖАЛПЫ ТӨЛЕМГЕ = 2180.00`;
+  const result = await parseBankDocumentText(text, 'image', { criticalText: 'ИТОГО: 2180.00' });
+  assert.equal(result.operations[0].amount, 2180);
+  assert.equal(result.operations[0].critical_fields_confirmed, true);
+  assert.deepEqual(result.operations[0].review_reasons, []);
+});
+
+test('keeps conflicting OCR totals unconfirmed for manual review', async () => {
+  const text = `САТУ ЧЕГІ\n20.07.2026 10:34\nЖАЛПЫ ТӨЛЕМГЕ = 2180.00`;
+  const result = await parseBankDocumentText(text, 'image', { criticalText: 'ИТОГО: 2160.00' });
+  assert.equal(result.operations[0].amount, 2160);
+  assert.equal(result.operations[0].critical_fields_confirmed, false);
+  assert.match(result.operations[0].review_reasons.join(' '), /разные итоговые суммы/i);
+});
+
+test('does not trust an unlabelled amount from a focused OCR pass', async () => {
+  const text = `ПРОДАЖА\n20.07.2026 10:34\n2180.00 KZT`;
+  const result = await parseBankDocumentText(text, 'image', { criticalText: '2180.00 KZT' });
+  assert.equal(result.operations[0].critical_fields_confirmed, false);
+  assert.match(result.operations[0].review_reasons.join(' '), /без подписи|не подтвердил/i);
+});
+
+test('tolerates common OCR confusions in the ИТОГО label', async () => {
+  const variants = [
+    ['ИТОРО К ОПЛАТЕ: 9 480,00', 9480],
+    ['ИТОЮ К ОШИТЕ:\n2 180,00', 2180],
+  ];
+
+  for (const [text, expectedAmount] of variants) {
+    const result = await parseBankDocumentText(`20.07.2026\n${text}`, 'image');
+    assert.equal(result.operations[0].amount, expectedAmount);
+  }
+});
+
 test('keeps an incomplete receipt as an unconfirmed editable draft', async () => {
   const result = await parseBankDocumentText('ПРОДАЖА\nИТОГ: 1150.00\nФИСКАЛЬНЫЙ ЧЕК', 'image');
   assert.equal(result.operations.length, 1);

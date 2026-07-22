@@ -17,6 +17,7 @@ let paddleOcrPromise = null;
 let paddleProgressListener = null;
 
 const PADDLE_CYRILLIC_MODEL_URL = 'https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0/cyrillic_PP-OCRv5_mobile_rec_onnx_infer.tar';
+const TOTAL_LABEL_PATTERN = /(?:ито(?:г|р|ю)|всего|жалпы|жиыны|барлығы|барлыны|total|оплаченн(?:ая|о)\s+сумма|сумма платежа)/iu;
 
 function invalidateOcrWorker() {
   const staleWorkerPromise = ocrWorkerPromise;
@@ -115,35 +116,96 @@ async function getOcrWorker(onProgress) {
   return ocrWorkerPromise;
 }
 
+function enhanceCanvas(canvas, contrast = 1.35) {
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+  for (let index = 0; index < pixels.data.length; index += 4) {
+    const gray = pixels.data[index] * 0.299 + pixels.data[index + 1] * 0.587 + pixels.data[index + 2] * 0.114;
+    const contrasted = Math.max(0, Math.min(255, (gray - 128) * contrast + 128));
+    pixels.data[index] = contrasted;
+    pixels.data[index + 1] = contrasted;
+    pixels.data[index + 2] = contrasted;
+  }
+  context.putImageData(pixels, 0, 0);
+  return canvas;
+}
+
 async function imageCanvas(file, rotation = 0, monochrome = false) {
   const bitmap = await globalThis.createImageBitmap(file);
   const target = calculateOcrImageSize(bitmap.width, bitmap.height);
-  const quarterTurn = Math.abs(rotation) % 180 === 90;
+  const radians = (rotation * Math.PI) / 180;
+  const cosine = Math.abs(Math.cos(radians));
+  const sine = Math.abs(Math.sin(radians));
   const canvas = globalThis.document.createElement('canvas');
-  canvas.width = quarterTurn ? target.height : target.width;
-  canvas.height = quarterTurn ? target.width : target.height;
+  canvas.width = Math.ceil(target.width * cosine + target.height * sine);
+  canvas.height = Math.ceil(target.width * sine + target.height * cosine);
   const context = canvas.getContext('2d', { willReadFrequently: true });
   if (!context) {
     bitmap.close();
     throw new Error('Браузер не поддерживает подготовку изображения для OCR');
   }
   context.translate(canvas.width / 2, canvas.height / 2);
-  context.rotate((rotation * Math.PI) / 180);
+  context.rotate(radians);
   context.drawImage(bitmap, -target.width / 2, -target.height / 2, target.width, target.height);
   bitmap.close();
 
-  if (monochrome) {
-    const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
-    for (let index = 0; index < pixels.data.length; index += 4) {
-      const gray = pixels.data[index] * 0.299 + pixels.data[index + 1] * 0.587 + pixels.data[index + 2] * 0.114;
-      const contrasted = Math.max(0, Math.min(255, (gray - 128) * 1.35 + 128));
-      pixels.data[index] = contrasted;
-      pixels.data[index + 1] = contrasted;
-      pixels.data[index + 2] = contrasted;
-    }
-    context.putImageData(pixels, 0, 0);
-  }
-  return canvas;
+  return monochrome ? enhanceCanvas(canvas) : canvas;
+}
+
+function normalizedTextLineAngle(item) {
+  const [left, right] = item?.poly || [];
+  if (!left || !right) return null;
+  let angle = Math.atan2(right[1] - left[1], right[0] - left[0]) * 180 / Math.PI;
+  while (angle > 45) angle -= 90;
+  while (angle < -45) angle += 90;
+  return angle;
+}
+
+function detectedTextSkew(result) {
+  const angles = (result?.items || [])
+    .filter((item) => Number(item.score) >= 0.45 && String(item.text || '').trim().length >= 2)
+    .map(normalizedTextLineAngle)
+    .filter((angle) => Number.isFinite(angle) && Math.abs(angle) <= 15)
+    .sort((a, b) => a - b);
+  if (angles.length < 3) return 0;
+  const middle = Math.floor(angles.length / 2);
+  return angles.length % 2 ? angles[middle] : (angles[middle - 1] + angles[middle]) / 2;
+}
+
+function itemBounds(item) {
+  const points = item?.poly || [];
+  if (!points.length) return null;
+  const xs = points.map((point) => Number(point[0])).filter(Number.isFinite);
+  const ys = points.map((point) => Number(point[1])).filter(Number.isFinite);
+  if (!xs.length || !ys.length) return null;
+  return {
+    left: Math.min(...xs),
+    top: Math.min(...ys),
+    right: Math.max(...xs),
+    bottom: Math.max(...ys),
+  };
+}
+
+function criticalReceiptCrop(canvas, result) {
+  const labelled = (result?.items || [])
+    .filter((item) => TOTAL_LABEL_PATTERN.test(String(item.text || '')))
+    .map((item) => ({ item, bounds: itemBounds(item) }))
+    .filter((entry) => entry.bounds)
+    .sort((a, b) => b.bounds.top - a.bounds.top)[0];
+  const top = labelled
+    ? Math.max(0, labelled.bounds.top - Math.max(80, (labelled.bounds.bottom - labelled.bounds.top) * 4))
+    : Math.round(canvas.height * 0.42);
+  const bottom = labelled
+    ? Math.min(canvas.height, labelled.bounds.bottom + Math.max(220, (labelled.bounds.bottom - labelled.bounds.top) * 10))
+    : canvas.height;
+  const sourceHeight = Math.max(1, bottom - top);
+  const scale = Math.min(2.4, Math.max(1, 1800 / canvas.width));
+  const focused = globalThis.document.createElement('canvas');
+  focused.width = Math.max(1, Math.round(canvas.width * scale));
+  focused.height = Math.max(1, Math.round(sourceHeight * scale));
+  const context = focused.getContext('2d', { willReadFrequently: true });
+  context.drawImage(canvas, 0, top, canvas.width, sourceHeight, 0, 0, focused.width, focused.height);
+  return enhanceCanvas(focused, 1.45);
 }
 
 function paddleResultText(result) {
@@ -164,7 +226,7 @@ function receiptSignalScore(text, confidence) {
   const uniqueRatio = lines.length ? new Set(lines.map((line) => line.toLocaleLowerCase('ru-RU'))).size / lines.length : 0;
   let score = Math.min(20, value.length / 20) + Math.min(15, Number(confidence) / 6);
   if (/\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}/u.test(value)) score += 25;
-  if (/(?:итог|всего|жалпы|жиыны|барлығы|total)[^\d]{0,24}[\d ]{2,}/iu.test(value)) score += 25;
+  if (/(?:ито(?:г|р|ю)|всего|жалпы|жиыны|барлығы|total)[^\d]{0,24}[\d ]{2,}/iu.test(value)) score += 25;
   if (/\d[\d ]*(?:[,.]\d{1,2})?\s*(?:₸|тг|тенге|KZT|[TТ]\b)/iu.test(value)) score += 10;
   if (uniqueRatio < 0.35) score -= 40;
   return score;
@@ -193,14 +255,46 @@ async function extractWithPaddle(file, onProgress) {
     });
     const text = paddleResultText(result);
     const confidence = paddleResultConfidence(result);
-    const candidate = { text, confidence, score: receiptSignalScore(text, confidence) };
+    const candidate = { text, confidence, score: receiptSignalScore(text, confidence), result, canvas, rotation };
     if (!best || candidate.score > best.score) best = candidate;
     if (candidate.score >= 67) break;
   }
   if (!best?.text || best.text.replace(/\s/g, '').length < 20) {
     throw new Error('PP-OCRv5 не нашёл достаточно текста');
   }
-  return { text: best.text, confidence: best.confidence, engine: 'paddle' };
+  const skew = detectedTextSkew(best.result);
+  if (Math.abs(skew) >= 0.7) {
+    onProgress?.({ stage: 'ocr', engine: 'paddle', status: 'deskewing', progress: 0 });
+    const canvas = await imageCanvas(file, best.rotation - skew, false);
+    const [result] = await ocr.predict(canvas, {
+      textDetLimitSideLen: 1600,
+      textDetLimitType: 'max',
+      textDetMaxSideLimit: 2400,
+      textDetBoxThresh: 0.4,
+      textRecScoreThresh: 0.2,
+    });
+    const text = paddleResultText(result);
+    const confidence = paddleResultConfidence(result);
+    const corrected = { text, confidence, score: receiptSignalScore(text, confidence), result, canvas, rotation: best.rotation - skew };
+    if (corrected.score >= best.score - 3) best = corrected;
+  }
+
+  onProgress?.({ stage: 'ocr', engine: 'paddle', status: 'recognizing-total', progress: 0 });
+  const focusedCanvas = criticalReceiptCrop(best.canvas, best.result);
+  const [focusedResult] = await ocr.predict(focusedCanvas, {
+    textDetLimitSideLen: 1800,
+    textDetLimitType: 'max',
+    textDetMaxSideLimit: 2400,
+    textDetBoxThresh: 0.32,
+    textRecScoreThresh: 0.18,
+  });
+  const criticalText = paddleResultText(focusedResult);
+  return {
+    text: best.text,
+    criticalText,
+    confidence: Math.max(best.confidence, paddleResultConfidence(focusedResult)),
+    engine: 'paddle',
+  };
 }
 
 async function extractWithTesseract(file, onProgress) {
@@ -243,7 +337,7 @@ async function extractWithTesseract(file, onProgress) {
 function hasCriticalReceiptSignals(text) {
   const value = String(text || '');
   const hasDate = /\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}/u.test(value);
-  const hasTotal = /(?:итог|всего|жалпы|жиыны|барлығы|total)[^\d]{0,24}[\d ]{2,}/iu.test(value);
+  const hasTotal = /(?:ито(?:г|р|ю)|всего|жалпы|жиыны|барлығы|total)[^\d]{0,24}[\d ]{2,}/iu.test(value);
   return hasDate && hasTotal;
 }
 
@@ -298,7 +392,11 @@ async function extractImageText(file, onProgress, { signal, timeoutMs = OCR_TIME
     const completedPasses = Math.min(passes, pass - 1);
     const overallProgress = progress.status === 'loading-model'
       ? 0.03
-      : 0.06 + (completedPasses / passes) * 0.36;
+      : progress.status === 'deskewing'
+        ? 0.38
+        : progress.status === 'recognizing-total'
+          ? 0.44
+          : 0.06 + (completedPasses / passes) * 0.3;
     onProgress?.({ ...progress, overallProgress });
   };
   const reportTesseractProgress = (progress) => {
@@ -317,11 +415,14 @@ async function extractImageText(file, onProgress, { signal, timeoutMs = OCR_TIME
       onProgress?.({ stage: 'preparing', progress: 1, overallProgress: 0.02 });
       try {
         const paddleResult = await extractWithPaddle(file, reportPaddleProgress);
-        if (hasCriticalReceiptSignals(paddleResult.text)) return paddleResult;
+        const paddleText = `${paddleResult.text}\n${paddleResult.criticalText || ''}`;
+        if (hasCriticalReceiptSignals(paddleText)) return { ...paddleResult, text: paddleText, primaryText: paddleResult.text };
         reportTesseractProgress({ stage: 'ocr', engine: 'tesseract', status: 'supplementing', progress: 0 });
         const tesseractResult = await extractWithTesseract(file, reportTesseractProgress);
         return {
-          text: `${paddleResult.text}\n${tesseractResult.text}`,
+          text: `${paddleResult.text}\n${paddleResult.criticalText || ''}\n${tesseractResult.text}`,
+          primaryText: `${paddleResult.text}\n${tesseractResult.text}`,
+          criticalText: paddleResult.criticalText || '',
           confidence: Math.max(paddleResult.confidence, tesseractResult.confidence),
           engine: 'paddle+tesseract',
         };
@@ -329,7 +430,8 @@ async function extractImageText(file, onProgress, { signal, timeoutMs = OCR_TIME
         if (['AbortError', 'OcrTimeoutError'].includes(error.name)) throw error;
         invalidatePaddleOcr();
         reportTesseractProgress({ stage: 'ocr', engine: 'tesseract', status: 'fallback', progress: 0 });
-        return extractWithTesseract(file, reportTesseractProgress);
+        const fallback = await extractWithTesseract(file, reportTesseractProgress);
+        return { ...fallback, primaryText: fallback.text, criticalText: '' };
       }
     }, {
       signal,
@@ -357,6 +459,8 @@ async function extractScannedPdf(file, onProgress, options) {
   const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
   if (pdf.numPages > 5) throw new Error('Сканированный PDF длиннее 5 страниц. Разделите его на части для локального OCR.');
   const texts = [];
+  const criticalTexts = [];
+  const primaryTexts = [];
   let confidenceTotal = 0;
   let engine = null;
   for (let index = 1; index <= pdf.numPages; index += 1) {
@@ -373,10 +477,18 @@ async function extractScannedPdf(file, onProgress, options) {
       options,
     );
     texts.push(ocr.text);
+    primaryTexts.push(ocr.primaryText || ocr.text);
+    if (ocr.criticalText) criticalTexts.push(ocr.criticalText);
     confidenceTotal += ocr.confidence;
     engine = ocr.engine || engine;
   }
-  return { text: texts.join('\n'), confidence: confidenceTotal / pdf.numPages, engine };
+  return {
+    text: texts.join('\n'),
+    primaryText: primaryTexts.join('\n'),
+    criticalText: criticalTexts.join('\n'),
+    confidence: confidenceTotal / pdf.numPages,
+    engine,
+  };
 }
 
 export async function extractDocument(file, onProgress, options = {}) {
@@ -388,6 +500,8 @@ export async function extractDocument(file, onProgress, options = {}) {
   let text = '';
   let ocrConfidence = null;
   let ocrEngine = null;
+  let ocrCriticalText = null;
+  let ocrPrimaryText = null;
   let sourceKind = 'image';
   if ((type === 'text/csv' || extension === 'csv') && binaryKind === 'text') {
     sourceKind = 'csv';
@@ -404,16 +518,26 @@ export async function extractDocument(file, onProgress, options = {}) {
       text = ocr.text;
       ocrConfidence = ocr.confidence;
       ocrEngine = ocr.engine || null;
+      ocrCriticalText = ocr.criticalText || '';
+      ocrPrimaryText = ocr.primaryText || ocr.text;
     }
   } else if ((type.startsWith('image/') || ['jpg', 'jpeg', 'png', 'webp'].includes(extension)) && binaryKind === 'image') {
     const ocr = await extractImageText(file, onProgress, options);
     text = ocr.text;
     ocrConfidence = ocr.confidence;
     ocrEngine = ocr.engine || null;
+    ocrCriticalText = ocr.criticalText || '';
+    ocrPrimaryText = ocr.primaryText || ocr.text;
   } else {
     throw new Error('Содержимое файла не соответствует PDF, JPG, PNG, WEBP или CSV. Расширение файла не считается достаточной проверкой.');
   }
-  const parsed = sourceKind === 'csv' ? null : await parseBankDocumentText(text, ocrConfidence !== null ? 'image' : sourceKind);
+  const parsed = sourceKind === 'csv'
+    ? null
+    : await parseBankDocumentText(
+      text,
+      ocrConfidence !== null ? 'image' : sourceKind,
+      ocrConfidence !== null ? { criticalText: ocrCriticalText || '', primaryText: ocrPrimaryText || '' } : {},
+    );
   if (parsed && ocrConfidence !== null) {
     parsed.operations = parsed.operations.map((operation) => ({
       ...operation,

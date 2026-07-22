@@ -25,6 +25,8 @@ function progressLabel(progress) {
     if (progress.engine === 'paddle') {
       if (progress.status === 'loading-model') return `Загружаем локальную модель PP-OCRv5${suffix}`;
       if (progress.status === 'checking-orientation') return `Проверяем ориентацию чека${pass}${suffix}`;
+      if (progress.status === 'deskewing') return `Выравниваем наклон текста${suffix}`;
+      if (progress.status === 'recognizing-total') return `Повторно проверяем итоговую сумму${suffix}`;
       return `Распознаём чек локально${pass}${suffix}`;
     }
     if (progress.status === 'supplementing') return `Уточняем дату и итоговую сумму${suffix}`;
@@ -156,9 +158,11 @@ export default function ImportOperationsModal({
       const account = activeAccounts.find((item) => item.currency === operation.currency)
         || (operation.currency === baseCurrency ? defaultAccount : null);
       const rate = operation.currency === baseCurrency ? 1 : getRate(operation.currency, baseCurrency, operation.operation_date);
+      const requiresManualReview = Array.isArray(operation.review_reasons) && operation.review_reasons.length > 0;
       return {
         ...operation,
-        selected: Boolean(operation.operation_date && Number(operation.amount) > 0 && (operation.confidence ?? 0.7) >= 0.68),
+        selected: Boolean(operation.operation_date && Number(operation.amount) > 0 && (operation.confidence ?? 0.7) >= 0.68 && !requiresManualReview),
+        manual_review_confirmed: false,
         duplicate: false,
         category_id: operation.category_id || suggestCategory(operation, categories, categoryRules),
         counterparty_id: operation.counterparty_id || '',
@@ -326,7 +330,14 @@ export default function ImportOperationsModal({
   };
 
   const updateRow = (index, patch) => {
-    setRows((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row));
+    setRows((current) => current.map((row, rowIndex) => {
+      if (rowIndex !== index) return row;
+      return {
+        ...row,
+        ...patch,
+        ...(patch.selected && row.review_reasons?.length ? { manual_review_confirmed: true } : {}),
+      };
+    }));
   };
 
   const handleImport = async () => {
@@ -483,10 +494,17 @@ export default function ImportOperationsModal({
                       <label className="flex items-center gap-2 font-medium"><input type="checkbox" checked={row.selected} onChange={(event) => updateRow(index, { selected: event.target.checked })} /> Операция {index + 1}</label>
                       <div className="flex flex-wrap justify-end gap-1 text-xs">
                         {row.duplicate && <span className="rounded-full bg-amber-100 px-2 py-1 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">возможный повтор</span>}
-                        {!row.selected && !row.duplicate && (row.import_confidence || 0) < 0.68 && <span className="rounded-full bg-red-100 px-2 py-1 text-red-700 dark:bg-red-900/40 dark:text-red-300">нужна ручная проверка</span>}
+                        {!row.duplicate && row.review_reasons?.length > 0 && !row.manual_review_confirmed && <span className="rounded-full bg-red-100 px-2 py-1 text-red-700 dark:bg-red-900/40 dark:text-red-300">проверьте сумму и дату</span>}
+                        {row.manual_review_confirmed && <span className="rounded-full bg-emerald-100 px-2 py-1 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">проверено вручную</span>}
+                        {!row.selected && !row.duplicate && !row.review_reasons?.length && (row.import_confidence || 0) < 0.68 && <span className="rounded-full bg-red-100 px-2 py-1 text-red-700 dark:bg-red-900/40 dark:text-red-300">нужна ручная проверка</span>}
                         <span className="rounded-full bg-gray-100 px-2 py-1 text-gray-600 dark:bg-gray-700 dark:text-gray-300">уверенность {Math.round((row.import_confidence || 0) * 100)}%</span>
                       </div>
                     </div>
+                    {row.review_reasons?.length > 0 && !row.manual_review_confirmed && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+                      <p className="font-semibold">Автоматическая проверка не пройдена:</p>
+                      <ul className="mt-1 list-disc pl-4">{row.review_reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>
+                      <p className="mt-1">Сверьте поля с чеком и отметьте операцию вручную.</p>
+                    </div>}
                     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                       <input aria-label={`Дата операции ${index + 1}`} type="date" className="input-field" value={row.operation_date || ''} onChange={(event) => updateRow(index, { operation_date: event.target.value })} />
                       <select aria-label={`Тип операции ${index + 1}`} className="input-field" value={row.type} onChange={(event) => updateRow(index, { type: event.target.value, category_id: '' })}>
