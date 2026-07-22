@@ -13,22 +13,29 @@ const MAX_FILE_SIZE = 15 * 1024 * 1024;
 
 function progressLabel(progress) {
   if (!progress) return 'Анализируем документ…';
+  const percent = Number.isFinite(Number(progress.overallProgress))
+    ? Math.max(0, Math.min(99, Math.round(Number(progress.overallProgress) * 100)))
+    : null;
+  const suffix = percent === null ? '' : ` · ${percent}%`;
+  const pass = progress.pass && progress.passes ? `, этап ${progress.pass} из ${progress.passes}` : '';
   if (progress.stage === 'pdf') return `Читаем PDF: страница ${progress.current} из ${progress.total}`;
-  if (progress.stage === 'preparing') return 'Готовим изображение…';
+  if (progress.stage === 'preparing') return `Готовим изображение${suffix}`;
+  if (progress.stage === 'finalizing') return `Формируем черновик${suffix}`;
   if (progress.stage === 'ocr') {
     if (progress.engine === 'paddle') {
-      if (progress.status === 'loading-model') return 'Загружаем локальную модель PP-OCRv5…';
-      if (progress.status === 'checking-orientation') return 'Проверяем ориентацию чека…';
-      return 'Локальное распознавание PP-OCRv5…';
+      if (progress.status === 'loading-model') return `Загружаем локальную модель PP-OCRv5${suffix}`;
+      if (progress.status === 'checking-orientation') return `Проверяем ориентацию чека${pass}${suffix}`;
+      return `Распознаём чек локально${pass}${suffix}`;
     }
-    if (progress.status === 'supplementing') return 'Уточняем дату и сумму резервным OCR…';
-    if (progress.status === 'fallback') return 'Пробуем резервный локальный OCR…';
+    if (progress.status === 'supplementing') return `Уточняем дату и итоговую сумму${suffix}`;
+    if (progress.status === 'fallback') return `Пробуем резервный локальный OCR${suffix}`;
+    if (progress.status === 'checking-orientation') return `Проверяем ориентацию резервным OCR${pass}${suffix}`;
     const status = String(progress.status || '').toLocaleLowerCase('ru-RU');
-    if (status.includes('loading tesseract core')) return 'Запускаем локальный OCR…';
-    if (status.includes('loading language')) return `Загружаем языки OCR: ${Math.round((progress.progress || 0) * 100)}%`;
-    if (status.includes('initializing')) return 'Готовим распознавание…';
-    if (status.includes('recognizing')) return `Локальное распознавание: ${Math.round((progress.progress || 0) * 100)}%`;
-    return 'Запускаем локальный OCR…';
+    if (status.includes('loading tesseract core')) return `Запускаем резервный OCR${suffix}`;
+    if (status.includes('loading language')) return `Загружаем языки резервного OCR${suffix}`;
+    if (status.includes('initializing')) return `Готовим резервное распознавание${suffix}`;
+    if (status.includes('recognizing')) return `Уточняем чек${pass}${suffix}`;
+    return `Запускаем резервный OCR${suffix}`;
   }
   return 'Анализируем документ…';
 }

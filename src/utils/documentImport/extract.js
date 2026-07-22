@@ -173,8 +173,16 @@ function receiptSignalScore(text, confidence) {
 async function extractWithPaddle(file, onProgress) {
   const ocr = await getPaddleOcr(onProgress);
   let best = null;
-  for (const rotation of [0, 90, 270, 180]) {
-    onProgress?.({ stage: 'ocr', engine: 'paddle', status: rotation ? 'checking-orientation' : 'recognizing', rotation });
+  const rotations = [0, 90, 270, 180];
+  for (const [index, rotation] of rotations.entries()) {
+    onProgress?.({
+      stage: 'ocr',
+      engine: 'paddle',
+      status: rotation ? 'checking-orientation' : 'recognizing',
+      rotation,
+      pass: index + 1,
+      passes: rotations.length,
+    });
     const canvas = await imageCanvas(file, rotation, false);
     const [result] = await ocr.predict(canvas, {
       textDetLimitSideLen: 1600,
@@ -199,7 +207,15 @@ async function extractWithTesseract(file, onProgress) {
   const worker = await getOcrWorker(onProgress);
   let best = null;
   const rotations = globalThis.createImageBitmap && globalThis.document ? [0, 90, 270, 180] : [0];
-  for (const rotation of rotations) {
+  for (const [index, rotation] of rotations.entries()) {
+    const pass = index + 1;
+    ocrProgressListener = (progress) => onProgress?.({
+      ...progress,
+      engine: 'tesseract',
+      rotation,
+      pass,
+      passes: rotations.length,
+    });
     let imageForOcr = file;
     if (globalThis.createImageBitmap && globalThis.document) {
       const canvas = await imageCanvas(file, rotation, true);
@@ -210,6 +226,9 @@ async function extractWithTesseract(file, onProgress) {
       engine: 'tesseract',
       status: rotation ? 'checking-orientation' : 'recognizing',
       rotation,
+      progress: 0,
+      pass,
+      passes: rotations.length,
     });
     const result = await worker.recognize(imageForOcr);
     const text = result.data.text || '';
@@ -273,15 +292,34 @@ async function extractPdfText(file, onProgress) {
 }
 
 async function extractImageText(file, onProgress, { signal, timeoutMs = OCR_TIMEOUT_MS } = {}) {
+  const reportPaddleProgress = (progress) => {
+    const pass = Math.max(1, Number(progress.pass) || 1);
+    const passes = Math.max(pass, Number(progress.passes) || 4);
+    const completedPasses = Math.min(passes, pass - 1);
+    const overallProgress = progress.status === 'loading-model'
+      ? 0.03
+      : 0.06 + (completedPasses / passes) * 0.36;
+    onProgress?.({ ...progress, overallProgress });
+  };
+  const reportTesseractProgress = (progress) => {
+    const pass = Math.max(1, Number(progress.pass) || 1);
+    const passes = Math.max(pass, Number(progress.passes) || 4);
+    const passProgress = Math.max(0, Math.min(1, Number(progress.progress) || 0));
+    const completedPasses = Math.min(passes, pass - 1);
+    const overallProgress = progress.pass
+      ? 0.48 + ((completedPasses + passProgress) / passes) * 0.48
+      : 0.43 + passProgress * 0.05;
+    onProgress?.({ ...progress, overallProgress });
+  };
   try {
-    return await runWithOcrDeadline(async () => {
-      onProgress?.({ stage: 'preparing', progress: 0 });
-      onProgress?.({ stage: 'preparing', progress: 1 });
+    const result = await runWithOcrDeadline(async () => {
+      onProgress?.({ stage: 'preparing', progress: 0, overallProgress: 0 });
+      onProgress?.({ stage: 'preparing', progress: 1, overallProgress: 0.02 });
       try {
-        const paddleResult = await extractWithPaddle(file, onProgress);
+        const paddleResult = await extractWithPaddle(file, reportPaddleProgress);
         if (hasCriticalReceiptSignals(paddleResult.text)) return paddleResult;
-        onProgress?.({ stage: 'ocr', engine: 'tesseract', status: 'supplementing', progress: 0 });
-        const tesseractResult = await extractWithTesseract(file, onProgress);
+        reportTesseractProgress({ stage: 'ocr', engine: 'tesseract', status: 'supplementing', progress: 0 });
+        const tesseractResult = await extractWithTesseract(file, reportTesseractProgress);
         return {
           text: `${paddleResult.text}\n${tesseractResult.text}`,
           confidence: Math.max(paddleResult.confidence, tesseractResult.confidence),
@@ -290,8 +328,8 @@ async function extractImageText(file, onProgress, { signal, timeoutMs = OCR_TIME
       } catch (error) {
         if (['AbortError', 'OcrTimeoutError'].includes(error.name)) throw error;
         invalidatePaddleOcr();
-        onProgress?.({ stage: 'ocr', engine: 'tesseract', status: 'fallback', progress: 0 });
-        return extractWithTesseract(file, onProgress);
+        reportTesseractProgress({ stage: 'ocr', engine: 'tesseract', status: 'fallback', progress: 0 });
+        return extractWithTesseract(file, reportTesseractProgress);
       }
     }, {
       signal,
@@ -301,6 +339,8 @@ async function extractImageText(file, onProgress, { signal, timeoutMs = OCR_TIME
         invalidateOcrWorker();
       },
     });
+    onProgress?.({ stage: 'finalizing', overallProgress: 0.99 });
+    return result;
   } catch (error) {
     if (!['AbortError', 'OcrTimeoutError'].includes(error.name)) {
       invalidatePaddleOcr();
