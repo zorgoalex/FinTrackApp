@@ -14,6 +14,7 @@
     "test": "node --test",
     "verify": "npm run lint && npm test && npm run build",
     "hooks:install": "git config core.hooksPath .githooks",
+    "benchmark:receipts": "node scripts/receipt-ocr-benchmark.mjs",
     "supabase:init": "npx supabase init",
     "supabase:start": "npx supabase start",
     "supabase:stop": "npx supabase stop",
@@ -21,6 +22,7 @@
     "supabase:reset": "npx supabase db reset"
   },
   "dependencies": {
+    "@paddleocr/paddleocr-js": "^0.4.2",
     "@supabase/supabase-js": "^2.53.0",
     "clsx": "^2.0.0",
     "date-fns": "^2.30.0",

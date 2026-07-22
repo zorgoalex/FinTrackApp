@@ -5,7 +5,7 @@ import { useCurrencies } from '../hooks/useCurrencies';
 import { inspectOperationsCSV, parseOperationsCSV } from '../utils/importOperations';
 import { categoryTypeForOperation, operationTypesForWorkspace, OPERATION_TYPE_META } from '../utils/operationTypes';
 import { buildRulePattern, suggestCategory } from '../utils/documentImport/categories';
-import { extractDocument } from '../utils/documentImport/extract';
+import { extractDocument, prewarmDocumentOcr } from '../utils/documentImport/extract';
 import { OCR_TIMEOUT_MS } from '../utils/documentImport/ocrPolicy';
 import { operationFingerprint } from '../utils/documentImport/privacy';
 
@@ -16,6 +16,13 @@ function progressLabel(progress) {
   if (progress.stage === 'pdf') return `Читаем PDF: страница ${progress.current} из ${progress.total}`;
   if (progress.stage === 'preparing') return 'Готовим изображение…';
   if (progress.stage === 'ocr') {
+    if (progress.engine === 'paddle') {
+      if (progress.status === 'loading-model') return 'Загружаем локальную модель PP-OCRv5…';
+      if (progress.status === 'checking-orientation') return 'Проверяем ориентацию чека…';
+      return 'Локальное распознавание PP-OCRv5…';
+    }
+    if (progress.status === 'supplementing') return 'Уточняем дату и сумму резервным OCR…';
+    if (progress.status === 'fallback') return 'Пробуем резервный локальный OCR…';
     const status = String(progress.status || '').toLocaleLowerCase('ru-RU');
     if (status.includes('loading tesseract core')) return 'Запускаем локальный OCR…';
     if (status.includes('loading language')) return `Загружаем языки OCR: ${Math.round((progress.progress || 0) * 100)}%`;
@@ -72,6 +79,11 @@ export default function ImportOperationsModal({
   }) : null, [baseCurrency, csvFormat, csvSetup]);
 
   useEffect(() => () => processingControllerRef.current?.abort(), []);
+
+  useEffect(() => {
+    if (!open) return;
+    prewarmDocumentOcr().catch(() => {});
+  }, [open]);
 
   if (!open) return null;
 
@@ -228,6 +240,7 @@ export default function ImportOperationsModal({
       setDocumentMeta({
         bank,
         sourceKind: extracted.sourceKind,
+        ocrEngine: extracted.ocrEngine,
         documentHash: extracted.documentHash,
         sensitiveData: extracted.sensitiveData,
         documentImportedBefore: enriched.documentImportedBefore,
@@ -340,7 +353,7 @@ export default function ImportOperationsModal({
         p_document_hash: documentMeta.documentHash,
         p_rows: rpcRows,
         p_template_id: selectedTemplateId || null,
-        p_metadata: { parser: 'local-redacted', redacted_types: (documentMeta.sensitiveData || []).map((item) => item.type || item.label) },
+        p_metadata: { parser: documentMeta.ocrEngine || 'local-redacted', redacted_types: (documentMeta.sensitiveData || []).map((item) => item.type || item.label) },
         p_request_id: globalThis.crypto.randomUUID(),
       });
       if (importError) throw importError;
@@ -377,6 +390,7 @@ export default function ImportOperationsModal({
                   <p className="font-semibold">Документ обрабатывается локально в этой вкладке</p>
                   <ul className="mt-2 list-disc space-y-1 pl-5 text-emerald-800 dark:text-emerald-200">
                     <li>Исходный PDF, изображение и OCR-текст не загружаются на сервер и не передаются AI API.</li>
+                    <li>При первом запуске браузер скачивает OCR-модели; содержимое документа в этот запрос не входит.</li>
                     <li>ИИН/БИН, IBAN, карты, телефоны, ФИО и номера документов маскируются в описаниях.</li>
                     <li>После закрытия окна временный текст удаляется из памяти; сохраняются только подтверждённые операции и SHA-256 для поиска повторов.</li>
                   </ul>

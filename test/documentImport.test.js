@@ -90,6 +90,22 @@ test('extracts receipt item lines into a redacted editable comment', async () =>
   assert.doesNotMatch(comment, /ИТОГ/);
 });
 
+test('parses integer totals and item prices from VLM receipt markdown', async () => {
+  const text = `"TB COFFEE" ЖШС
+17.07.26 16:54
+1. Американо 450 мл
+$1 \\times 1090 = 1090$
+2. Сэндвич с казы
+$1 \\times 1790 = 1790$
+Барлыны/Итого:2880 ₦ (Kaspi POS: 2880)`;
+  const result = await parseBankDocumentText(text, 'image');
+  assert.equal(result.operations[0].operation_date, '2026-07-17');
+  assert.equal(result.operations[0].amount, 2880);
+  assert.equal(result.operations[0].currency, 'KZT');
+  assert.match(result.operations[0].receipt_items_comment, /Американо/);
+  assert.match(result.operations[0].receipt_items_comment, /Сэндвич/);
+});
+
 test('applies a learned workspace category rule before built-in suggestions', () => {
   const categories = [
     { id: 'software', name: 'ПО и подписки', type: 'expense', is_archived: false },

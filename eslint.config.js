@@ -26,7 +26,7 @@ const browserGlobals = {
 
 export default [
   {
-    ignores: ['dist/**', 'node_modules/**', 'OLD/**', 'coverage/**', 'supabase/functions/**'],
+    ignores: ['dist/**', 'node_modules/**', 'OLD/**', 'coverage/**', 'supabase/functions/**', 'public/ort/**'],
   },
   js.configs.recommended,
   {

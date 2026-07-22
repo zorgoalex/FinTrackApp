@@ -136,6 +136,31 @@ export function OperationPage() {
   }, [actionMenuId]);
 
   useEffect(() => {
+    if (!permissions.canCreateOperations) return undefined;
+    const connection = globalThis.navigator?.connection;
+    const memory = Number(globalThis.navigator?.deviceMemory) || 0;
+    const cores = Number(globalThis.navigator?.hardwareConcurrency) || 0;
+    const isCompactScreen = globalThis.matchMedia?.('(max-width: 767px)').matches;
+    if (connection?.saveData || /(?:^|-)2g$/u.test(connection?.effectiveType || '')) return undefined;
+    if (isCompactScreen || (memory && memory < 4) || (cores && cores < 4)) return undefined;
+
+    let cancelled = false;
+    const warmUp = () => {
+      import('../utils/documentImport/extract')
+        .then(({ prewarmDocumentOcr }) => cancelled ? null : prewarmDocumentOcr())
+        .catch(() => {});
+    };
+    const idleId = globalThis.requestIdleCallback
+      ? globalThis.requestIdleCallback(warmUp, { timeout: 8000 })
+      : globalThis.setTimeout(warmUp, 3000);
+    return () => {
+      cancelled = true;
+      if (globalThis.cancelIdleCallback) globalThis.cancelIdleCallback(idleId);
+      else globalThis.clearTimeout(idleId);
+    };
+  }, [permissions.canCreateOperations]);
+
+  useEffect(() => {
     const requestedType = searchParams.get('new');
     if (!requestedType || !permissions.canCreateOperations) return;
     if (!['income', 'expense', 'transfer'].includes(requestedType)) return;

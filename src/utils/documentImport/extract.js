@@ -13,6 +13,10 @@ pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
 let ocrWorkerPromise = null;
 let ocrProgressListener = null;
+let paddleOcrPromise = null;
+let paddleProgressListener = null;
+
+const PADDLE_CYRILLIC_MODEL_URL = 'https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0/cyrillic_PP-OCRv5_mobile_rec_onnx_infer.tar';
 
 function invalidateOcrWorker() {
   const staleWorkerPromise = ocrWorkerPromise;
@@ -23,6 +27,55 @@ function invalidateOcrWorker() {
       .then((worker) => worker.terminate())
       .catch(() => {});
   }
+}
+
+function invalidatePaddleOcr() {
+  const stalePromise = paddleOcrPromise;
+  paddleOcrPromise = null;
+  paddleProgressListener = null;
+  if (stalePromise) {
+    Promise.resolve(stalePromise)
+      .then((ocr) => ocr.dispose())
+      .catch(() => {});
+  }
+}
+
+async function getPaddleOcr(onProgress) {
+  paddleProgressListener = onProgress;
+  if (!paddleOcrPromise) {
+    let creationPromise;
+    creationPromise = import('@paddleocr/paddleocr-js')
+      .then(async ({ PaddleOCR }) => {
+        paddleProgressListener?.({ stage: 'ocr', engine: 'paddle', status: 'loading-model', progress: 0 });
+        const ocr = await PaddleOCR.create({
+          textDetectionModelName: 'PP-OCRv5_mobile_det',
+          textRecognitionModelName: 'cyrillic_PP-OCRv5_mobile_rec',
+          textRecognitionModelAsset: { url: PADDLE_CYRILLIC_MODEL_URL },
+          textRecognitionBatchSize: 8,
+          worker: true,
+          ortOptions: {
+            backend: 'wasm',
+            wasmPaths: '/ort/',
+            numThreads: 1,
+            simd: true,
+          },
+        });
+        if (paddleOcrPromise !== creationPromise) {
+          ocr.dispose();
+          const error = new Error('Распознавание отменено');
+          error.name = 'AbortError';
+          throw error;
+        }
+        paddleProgressListener?.({ stage: 'ocr', engine: 'paddle', status: 'model-ready', progress: 1 });
+        return ocr;
+      })
+      .catch((error) => {
+        if (paddleOcrPromise === creationPromise) paddleOcrPromise = null;
+        throw error;
+      });
+    paddleOcrPromise = creationPromise;
+  }
+  return paddleOcrPromise;
 }
 
 async function getOcrWorker(onProgress) {
@@ -60,6 +113,125 @@ async function getOcrWorker(onProgress) {
     ocrWorkerPromise = creationPromise;
   }
   return ocrWorkerPromise;
+}
+
+async function imageCanvas(file, rotation = 0, monochrome = false) {
+  const bitmap = await globalThis.createImageBitmap(file);
+  const target = calculateOcrImageSize(bitmap.width, bitmap.height);
+  const quarterTurn = Math.abs(rotation) % 180 === 90;
+  const canvas = globalThis.document.createElement('canvas');
+  canvas.width = quarterTurn ? target.height : target.width;
+  canvas.height = quarterTurn ? target.width : target.height;
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) {
+    bitmap.close();
+    throw new Error('Браузер не поддерживает подготовку изображения для OCR');
+  }
+  context.translate(canvas.width / 2, canvas.height / 2);
+  context.rotate((rotation * Math.PI) / 180);
+  context.drawImage(bitmap, -target.width / 2, -target.height / 2, target.width, target.height);
+  bitmap.close();
+
+  if (monochrome) {
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+    for (let index = 0; index < pixels.data.length; index += 4) {
+      const gray = pixels.data[index] * 0.299 + pixels.data[index + 1] * 0.587 + pixels.data[index + 2] * 0.114;
+      const contrasted = Math.max(0, Math.min(255, (gray - 128) * 1.35 + 128));
+      pixels.data[index] = contrasted;
+      pixels.data[index + 1] = contrasted;
+      pixels.data[index + 2] = contrasted;
+    }
+    context.putImageData(pixels, 0, 0);
+  }
+  return canvas;
+}
+
+function paddleResultText(result) {
+  return (result?.items || [])
+    .filter((item) => String(item.text || '').trim())
+    .map((item) => String(item.text).trim())
+    .join('\n');
+}
+
+function paddleResultConfidence(result) {
+  const scores = (result?.items || []).map((item) => Number(item.score)).filter(Number.isFinite);
+  return scores.length ? (scores.reduce((sum, score) => sum + score, 0) / scores.length) * 100 : 0;
+}
+
+function receiptSignalScore(text, confidence) {
+  const value = String(text || '');
+  const lines = value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const uniqueRatio = lines.length ? new Set(lines.map((line) => line.toLocaleLowerCase('ru-RU'))).size / lines.length : 0;
+  let score = Math.min(20, value.length / 20) + Math.min(15, Number(confidence) / 6);
+  if (/\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}/u.test(value)) score += 25;
+  if (/(?:итог|всего|жалпы|жиыны|барлығы|total)[^\d]{0,24}[\d ]{2,}/iu.test(value)) score += 25;
+  if (/\d[\d ]*(?:[,.]\d{1,2})?\s*(?:₸|тг|тенге|KZT|[TТ]\b)/iu.test(value)) score += 10;
+  if (uniqueRatio < 0.35) score -= 40;
+  return score;
+}
+
+async function extractWithPaddle(file, onProgress) {
+  const ocr = await getPaddleOcr(onProgress);
+  let best = null;
+  for (const rotation of [0, 90, 270, 180]) {
+    onProgress?.({ stage: 'ocr', engine: 'paddle', status: rotation ? 'checking-orientation' : 'recognizing', rotation });
+    const canvas = await imageCanvas(file, rotation, false);
+    const [result] = await ocr.predict(canvas, {
+      textDetLimitSideLen: 1600,
+      textDetLimitType: 'max',
+      textDetMaxSideLimit: 2400,
+      textDetBoxThresh: 0.45,
+      textRecScoreThresh: 0.25,
+    });
+    const text = paddleResultText(result);
+    const confidence = paddleResultConfidence(result);
+    const candidate = { text, confidence, score: receiptSignalScore(text, confidence) };
+    if (!best || candidate.score > best.score) best = candidate;
+    if (candidate.score >= 67) break;
+  }
+  if (!best?.text || best.text.replace(/\s/g, '').length < 20) {
+    throw new Error('PP-OCRv5 не нашёл достаточно текста');
+  }
+  return { text: best.text, confidence: best.confidence, engine: 'paddle' };
+}
+
+async function extractWithTesseract(file, onProgress) {
+  const worker = await getOcrWorker(onProgress);
+  let best = null;
+  const rotations = globalThis.createImageBitmap && globalThis.document ? [0, 90, 270, 180] : [0];
+  for (const rotation of rotations) {
+    let imageForOcr = file;
+    if (globalThis.createImageBitmap && globalThis.document) {
+      const canvas = await imageCanvas(file, rotation, true);
+      imageForOcr = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png')) || file;
+    }
+    onProgress?.({
+      stage: 'ocr',
+      engine: 'tesseract',
+      status: rotation ? 'checking-orientation' : 'recognizing',
+      rotation,
+    });
+    const result = await worker.recognize(imageForOcr);
+    const text = result.data.text || '';
+    const confidence = Number(result.data.confidence) || 0;
+    const candidate = { text, confidence, score: receiptSignalScore(text, confidence) };
+    if (!best || candidate.score > best.score) best = candidate;
+    if (hasCriticalReceiptSignals(text)) break;
+  }
+  return { text: best?.text || '', confidence: best?.confidence || 0, engine: 'tesseract' };
+}
+
+function hasCriticalReceiptSignals(text) {
+  const value = String(text || '');
+  const hasDate = /\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}/u.test(value);
+  const hasTotal = /(?:итог|всего|жалпы|жиыны|барлығы|total)[^\d]{0,24}[\d ]{2,}/iu.test(value);
+  return hasDate && hasTotal;
+}
+
+export async function prewarmDocumentOcr() {
+  if (!globalThis.createImageBitmap || !globalThis.document) return false;
+  await Promise.all([getPaddleOcr(), getOcrWorker()]);
+  return true;
 }
 
 function detectBinaryKind(buffer) {
@@ -104,41 +276,39 @@ async function extractImageText(file, onProgress, { signal, timeoutMs = OCR_TIME
   try {
     return await runWithOcrDeadline(async () => {
       onProgress?.({ stage: 'preparing', progress: 0 });
-      let imageForOcr = file;
-      if (globalThis.createImageBitmap && globalThis.document) {
-        const bitmap = await globalThis.createImageBitmap(file);
-        const target = calculateOcrImageSize(bitmap.width, bitmap.height);
-        const canvas = globalThis.document.createElement('canvas');
-        canvas.width = target.width;
-        canvas.height = target.height;
-        const context = canvas.getContext('2d', { willReadFrequently: true });
-        if (!context) throw new Error('Браузер не поддерживает подготовку изображения для OCR');
-        context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-        bitmap.close();
-        const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
-        for (let index = 0; index < pixels.data.length; index += 4) {
-          const gray = pixels.data[index] * 0.299 + pixels.data[index + 1] * 0.587 + pixels.data[index + 2] * 0.114;
-          const contrasted = Math.max(0, Math.min(255, (gray - 128) * 1.35 + 128));
-          pixels.data[index] = contrasted;
-          pixels.data[index + 1] = contrasted;
-          pixels.data[index + 2] = contrasted;
-        }
-        context.putImageData(pixels, 0, 0);
-        imageForOcr = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png')) || file;
-      }
       onProgress?.({ stage: 'preparing', progress: 1 });
-      const worker = await getOcrWorker(onProgress);
-      const result = await worker.recognize(imageForOcr);
-      return { text: result.data.text || '', confidence: Number(result.data.confidence) || 0 };
+      try {
+        const paddleResult = await extractWithPaddle(file, onProgress);
+        if (hasCriticalReceiptSignals(paddleResult.text)) return paddleResult;
+        onProgress?.({ stage: 'ocr', engine: 'tesseract', status: 'supplementing', progress: 0 });
+        const tesseractResult = await extractWithTesseract(file, onProgress);
+        return {
+          text: `${paddleResult.text}\n${tesseractResult.text}`,
+          confidence: Math.max(paddleResult.confidence, tesseractResult.confidence),
+          engine: 'paddle+tesseract',
+        };
+      } catch (error) {
+        if (['AbortError', 'OcrTimeoutError'].includes(error.name)) throw error;
+        invalidatePaddleOcr();
+        onProgress?.({ stage: 'ocr', engine: 'tesseract', status: 'fallback', progress: 0 });
+        return extractWithTesseract(file, onProgress);
+      }
     }, {
       signal,
       timeoutMs,
-      onCancel: invalidateOcrWorker,
+      onCancel: () => {
+        invalidatePaddleOcr();
+        invalidateOcrWorker();
+      },
     });
   } catch (error) {
-    if (!['AbortError', 'OcrTimeoutError'].includes(error.name)) invalidateOcrWorker();
+    if (!['AbortError', 'OcrTimeoutError'].includes(error.name)) {
+      invalidatePaddleOcr();
+      invalidateOcrWorker();
+    }
     throw error;
   } finally {
+    paddleProgressListener = null;
     ocrProgressListener = null;
   }
 }
@@ -148,6 +318,7 @@ async function extractScannedPdf(file, onProgress, options) {
   if (pdf.numPages > 5) throw new Error('Сканированный PDF длиннее 5 страниц. Разделите его на части для локального OCR.');
   const texts = [];
   let confidenceTotal = 0;
+  let engine = null;
   for (let index = 1; index <= pdf.numPages; index += 1) {
     const page = await pdf.getPage(index);
     const viewport = page.getViewport({ scale: 2 });
@@ -163,8 +334,9 @@ async function extractScannedPdf(file, onProgress, options) {
     );
     texts.push(ocr.text);
     confidenceTotal += ocr.confidence;
+    engine = ocr.engine || engine;
   }
-  return { text: texts.join('\n'), confidence: confidenceTotal / pdf.numPages };
+  return { text: texts.join('\n'), confidence: confidenceTotal / pdf.numPages, engine };
 }
 
 export async function extractDocument(file, onProgress, options = {}) {
@@ -175,6 +347,7 @@ export async function extractDocument(file, onProgress, options = {}) {
   const extension = file.name.split('.').pop()?.toLowerCase();
   let text = '';
   let ocrConfidence = null;
+  let ocrEngine = null;
   let sourceKind = 'image';
   if ((type === 'text/csv' || extension === 'csv') && binaryKind === 'text') {
     sourceKind = 'csv';
@@ -190,11 +363,13 @@ export async function extractDocument(file, onProgress, options = {}) {
       const ocr = await extractScannedPdf(file, onProgress, options);
       text = ocr.text;
       ocrConfidence = ocr.confidence;
+      ocrEngine = ocr.engine || null;
     }
   } else if ((type.startsWith('image/') || ['jpg', 'jpeg', 'png', 'webp'].includes(extension)) && binaryKind === 'image') {
     const ocr = await extractImageText(file, onProgress, options);
     text = ocr.text;
     ocrConfidence = ocr.confidence;
+    ocrEngine = ocr.engine || null;
   } else {
     throw new Error('Содержимое файла не соответствует PDF, JPG, PNG, WEBP или CSV. Расширение файла не считается достаточной проверкой.');
   }
@@ -211,6 +386,7 @@ export async function extractDocument(file, onProgress, options = {}) {
     rawText: text,
     sensitiveData: detectSensitiveData(text),
     ocrConfidence,
+    ocrEngine,
     parsed,
   };
 }

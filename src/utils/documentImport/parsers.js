@@ -63,23 +63,25 @@ function normalizeOcrArtifacts(text) {
     .replace(/(\d{2}\.)\s+(?=\d)/g, '$1')
     .replace(/(\d{2}\.\d{2}\.\d{2,4})\s*=\s*(?=\d)/g, '$1 - ')
     .replace(/([,.]\d{2})\s*[7TТ](?=\s|$)/giu, '$1 ₸')
-    .replace(/([\d ])\s+[TТ](?=\s|$)/giu, '$1 ₸');
+    .replace(/([\d ])\s+[TТ](?=\s|$)/giu, '$1 ₸')
+    .replace(/(?<=\d)\s*[₦](?=\s|$|\()/gu, ' ₸');
 }
 
 function extractReceiptItems(text) {
   const lines = String(text || '').split(/\r?\n/).map((line) => line.replace(/\s+/g, ' ').trim()).filter(Boolean);
   const ignored = /итог|всего|скидк|безнал|налич|сдач|ндс|оплат|т[өе]лем|жиын|жалпы|кассир|оператор|фиск|бин|иин|рнм|знм|ккм|чек|дата|время|телефон|consumer|oofd|спасибо/iu;
-  const pricePattern = /(?:=|x\s*)?([1-9][\d ]*[,.]\d{1,2})(?:\s*(?:₸|тг|тенге|KZT|[TТ]))?/iu;
+  const pricePattern = /(?:=|[xх×]\s*)\s*([1-9][\d ]*(?:[,.]\d{1,2})?)|([1-9][\d ]*(?:[,.]\d{1,2})?)\s*(?:₸|₦|тг|тенге|KZT|[TТ])(?:\s|$)/iu;
   const items = [];
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
     const price = line.match(pricePattern);
     if (!price || ignored.test(line)) continue;
-    let label = /\p{L}{3}/u.test(line) ? line : lines[index - 1] || '';
+    const pricingOnly = /^\$?\s*\d+(?:[.,]\d+)?\s*(?:\\times|[xх×])\s*\d+(?:[.,]\d+)?\s*=\s*\d+(?:[.,]\d+)?\s*\$?$/iu;
+    let label = !pricingOnly.test(line) && /\p{L}{3}/u.test(line) ? line : lines[index - 1] || '';
     if (!label || ignored.test(label) || !/\p{L}{3}/u.test(label)) continue;
     label = label.replace(/^\d{5,}\s*/u, '').trim();
-    const amount = price[1].replace(/\s+/g, ' ');
+    const amount = (price[1] || price[2]).replace(/\s+/g, ' ');
     const normalized = redactSensitiveText(label.includes(price[0]) ? label : `${label} — ${amount}`).slice(0, 240);
     if (normalized && !items.includes(normalized)) items.push(normalized);
     if (items.length >= 30) break;
@@ -142,8 +144,8 @@ function parseGenericReceipt(text) {
     .filter(({ parsed }) => parsed)
     .sort((a, b) => b.score - a.score || b.match.index - a.match.index);
   const dateMatch = dateCandidates[0]?.match;
-  const totalMatch = text.match(/(?:ЖИЫНЫ?|ИТОГ(?:О|А)?|ВСЕГО|ЖАЛПЫ(?:\s+[ТT?ӨО]ЛЕМГЕ)?|TOTAL)[^\d]{0,24}=?\s*([\d ]+(?:[,.]\d{1,2}))/iu);
-  const labelledAmountMatch = text.match(/(?:оплаченн(?:ая|о)\s+сумма|сумма платежа|плат[её]ж успешно совершен)[^\d]{0,24}([\d ]+(?:[,.]\d{2}))/iu);
+  const totalMatch = text.match(/(?:ЖИЫНЫ?|ИТОГ(?:О|А)?|ВСЕГО|ЖАЛПЫ(?:\s+[ТT?ӨО]ЛЕМГЕ)?|БАРЛЫҒЫ|БАРЛЫНЫ|TOTAL)[^\d]{0,24}=?\s*([\d ]+(?:[,.]\d{1,2})?)/iu);
+  const labelledAmountMatch = text.match(/(?:оплаченн(?:ая|о)\s+сумма|сумма платежа|плат[её]ж успешно совершен)[^\d]{0,24}([\d ]+(?:[,.]\d{1,2})?)/iu);
   const fallbackDecimalAmounts = Array.from(text.matchAll(/(?<!\d)([1-9][\d ]*[,.]\d{2})(?!\d)/g))
     .map((match) => ({ match: [match[0], match[1], 'KZT'], amount: parseMoney(match[1]), inferredCurrency: 'KZT' }))
     .filter(({ amount }) => Number.isFinite(amount) && amount > 0)
