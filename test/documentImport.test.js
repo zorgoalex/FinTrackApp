@@ -110,6 +110,26 @@ test('keeps an incomplete receipt as an unconfirmed editable draft', async () =>
   assert.equal(result.operations[0].confidence, 0.55);
 });
 
+test('returns a manual image draft when OCR finds no critical fields', async () => {
+  const result = await parseBankDocumentText('неразборчивый фрагмент', 'image', {
+    primaryText: 'неразборчивый фрагмент',
+    criticalText: '',
+  });
+  assert.equal(result.operations.length, 1);
+  assert.equal(result.operations[0].operation_date, '');
+  assert.equal(result.operations[0].amount, '');
+  assert.equal(result.operations[0].manual_draft, true);
+  assert.equal(result.operations[0].selected, true);
+  assert.match(result.operations[0].description, /заполните данные вручную/i);
+  assert.match(result.operations[0].review_reasons.join(' '), /дата не распознана/i);
+  assert.match(result.operations[0].review_reasons.join(' '), /сумма не распознана/i);
+});
+
+test('does not invent a manual operation for an unreadable text PDF', async () => {
+  const result = await parseBankDocumentText('неразборчивый фрагмент', 'pdf');
+  assert.equal(result.operations.length, 0);
+});
+
 test('extracts receipt item lines into a redacted editable comment', async () => {
   const text = `ПРОДАЖА
 Молоко 1 л =450.00

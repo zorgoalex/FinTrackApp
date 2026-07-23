@@ -17,26 +17,26 @@ function progressLabel(progress) {
     ? Math.max(0, Math.min(99, Math.round(Number(progress.overallProgress) * 100)))
     : null;
   const suffix = percent === null ? '' : ` · ${percent}%`;
-  const pass = progress.pass && progress.passes ? `, этап ${progress.pass} из ${progress.passes}` : '';
   if (progress.stage === 'pdf') return `Читаем PDF: страница ${progress.current} из ${progress.total}`;
   if (progress.stage === 'preparing') return `Готовим изображение${suffix}`;
   if (progress.stage === 'finalizing') return `Формируем черновик${suffix}`;
   if (progress.stage === 'ocr') {
     if (progress.engine === 'paddle') {
       if (progress.status === 'loading-model') return `Загружаем локальную модель PP-OCRv5${suffix}`;
-      if (progress.status === 'checking-orientation') return `Проверяем ориентацию чека${pass}${suffix}`;
+      if (progress.status === 'enhancing') return `Усиливаем текст на фотографии${suffix}`;
+      if (progress.status === 'checking-orientation') return `Проверяем, как расположен чек${suffix}`;
       if (progress.status === 'deskewing') return `Выравниваем наклон текста${suffix}`;
       if (progress.status === 'recognizing-total') return `Повторно проверяем итоговую сумму${suffix}`;
-      return `Распознаём чек локально${pass}${suffix}`;
+      return `Распознаём чек локально${suffix}`;
     }
     if (progress.status === 'supplementing') return `Уточняем дату и итоговую сумму${suffix}`;
     if (progress.status === 'fallback') return `Пробуем резервный локальный OCR${suffix}`;
-    if (progress.status === 'checking-orientation') return `Проверяем ориентацию резервным OCR${pass}${suffix}`;
+    if (progress.status === 'checking-orientation') return `Проверяем поворот резервным OCR${suffix}`;
     const status = String(progress.status || '').toLocaleLowerCase('ru-RU');
     if (status.includes('loading tesseract core')) return `Запускаем резервный OCR${suffix}`;
     if (status.includes('loading language')) return `Загружаем языки резервного OCR${suffix}`;
     if (status.includes('initializing')) return `Готовим резервное распознавание${suffix}`;
-    if (status.includes('recognizing')) return `Уточняем чек${pass}${suffix}`;
+    if (status.includes('recognizing')) return `Уточняем чек${suffix}`;
     return `Запускаем резервный OCR${suffix}`;
   }
   return 'Анализируем документ…';
@@ -56,6 +56,7 @@ export default function ImportOperationsModal({
   const inputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const processingControllerRef = useRef(null);
+  const previewUrlRef = useRef('');
   const { getRate } = useCurrencies(workspaceId);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [fileName, setFileName] = useState('');
@@ -73,6 +74,7 @@ export default function ImportOperationsModal({
   const [csvTemplates, setCsvTemplates] = useState([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [templateName, setTemplateName] = useState('');
+  const [imagePreviewUrl, setImagePreviewUrl] = useState('');
 
   const activeAccounts = useMemo(() => accounts.filter((account) => !account.is_archived), [accounts]);
   const selectedRows = rows.filter((row) => row.selected);
@@ -87,7 +89,10 @@ export default function ImportOperationsModal({
     format: csvFormat,
   }) : null, [baseCurrency, csvFormat, csvSetup]);
 
-  useEffect(() => () => processingControllerRef.current?.abort(), []);
+  useEffect(() => () => {
+    processingControllerRef.current?.abort();
+    if (previewUrlRef.current) globalThis.URL.revokeObjectURL(previewUrlRef.current);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -97,6 +102,11 @@ export default function ImportOperationsModal({
   if (!open) return null;
 
   const resetDocument = () => {
+    if (previewUrlRef.current) {
+      globalThis.URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = '';
+    }
+    setImagePreviewUrl('');
     setFileName('');
     setDocumentMeta(null);
     setRows([]);
@@ -154,7 +164,9 @@ export default function ImportOperationsModal({
   const enrichRows = async (operations, bank, sourceKind, documentHash, categoryRules) => {
     const defaultAccount = activeAccounts.find((account) => account.is_default) || activeAccounts[0];
     const enriched = await Promise.all(operations.slice(0, 500).map(async (operation) => {
-      const fingerprint = operation.import_fingerprint || await operationFingerprint(operation, bank);
+      const fingerprint = operation.manual_draft
+        ? `manual-${documentHash}`
+        : operation.import_fingerprint || await operationFingerprint(operation, bank);
       const account = activeAccounts.find((item) => item.currency === operation.currency)
         || (operation.currency === baseCurrency ? defaultAccount : null);
       const rate = operation.currency === baseCurrency ? 1 : getRate(operation.currency, baseCurrency, operation.operation_date);
@@ -197,6 +209,11 @@ export default function ImportOperationsModal({
     if (file.size > MAX_FILE_SIZE) {
       setFatalError('Файл больше 15 МБ. Разделите выписку на несколько частей.');
       return;
+    }
+    if (file.type.startsWith('image/') || /\.(?:jpe?g|png|webp)$/iu.test(file.name)) {
+      const previewUrl = globalThis.URL.createObjectURL(file);
+      previewUrlRef.current = previewUrl;
+      setImagePreviewUrl(previewUrl);
     }
     setProcessing(true);
     setFatalError('');
@@ -252,6 +269,7 @@ export default function ImportOperationsModal({
         bank,
         sourceKind: extracted.sourceKind,
         ocrEngine: extracted.ocrEngine,
+        ocrError: extracted.ocrError,
         documentHash: extracted.documentHash,
         sensitiveData: extracted.sensitiveData,
         documentImportedBefore: enriched.documentImportedBefore,
@@ -484,20 +502,36 @@ export default function ImportOperationsModal({
               </div>
             )}
 
+            {imagePreviewUrl && (
+              <details className="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900/40">
+                <summary className="cursor-pointer text-sm font-semibold text-gray-800 dark:text-gray-200">Сверить данные с фотографией чека</summary>
+                <img src={imagePreviewUrl} alt="Выбранная фотография чека" className="mx-auto mt-3 max-h-[55vh] w-auto max-w-full rounded-lg object-contain" />
+              </details>
+            )}
+
+            {rows.some((row) => row.manual_draft) && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+                <p className="font-semibold">{documentMeta.ocrError ? 'Распознавание остановлено — фотография не потеряна' : 'Создан ручной черновик — фотография не потеряна'}</p>
+                <p className="mt-1">Откройте фото выше, заполните дату и сумму, затем отметьте операцию для сохранения.</p>
+              </div>
+            )}
+
             <div className="space-y-3">
               {rows.map((row, index) => {
                 const rowCategories = categories.filter((category) => !category.is_archived && category.type === categoryTypeForOperation(row.type));
                 const needsRate = row.currency !== baseCurrency && !row.exchange_rate;
                 return (
-                  <article key={row.import_fingerprint || index} className={`rounded-xl border p-3 ${row.selected ? 'border-primary-300 dark:border-primary-700' : 'border-gray-200 opacity-70 dark:border-gray-700'}`}>
+                  <article key={row.import_fingerprint || index} className={`rounded-xl border p-3 ${row.selected ? 'border-primary-300 dark:border-primary-700' : 'border-gray-200 dark:border-gray-700'}`}>
                     <div className="mb-3 flex items-start justify-between gap-3">
-                      <label className="flex items-center gap-2 font-medium"><input type="checkbox" checked={row.selected} onChange={(event) => updateRow(index, { selected: event.target.checked })} /> Операция {index + 1}</label>
+                      <label className="flex items-center gap-2 font-medium"><input type="checkbox" checked={row.selected} onChange={(event) => updateRow(index, { selected: event.target.checked })} /> {row.manual_draft ? 'Ручной черновик' : `Операция ${index + 1}`}</label>
                       <div className="flex flex-wrap justify-end gap-1 text-xs">
                         {row.duplicate && <span className="rounded-full bg-amber-100 px-2 py-1 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">возможный повтор</span>}
                         {!row.duplicate && row.review_reasons?.length > 0 && !row.manual_review_confirmed && <span className="rounded-full bg-red-100 px-2 py-1 text-red-700 dark:bg-red-900/40 dark:text-red-300">проверьте сумму и дату</span>}
                         {row.manual_review_confirmed && <span className="rounded-full bg-emerald-100 px-2 py-1 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">проверено вручную</span>}
                         {!row.selected && !row.duplicate && !row.review_reasons?.length && (row.import_confidence || 0) < 0.68 && <span className="rounded-full bg-red-100 px-2 py-1 text-red-700 dark:bg-red-900/40 dark:text-red-300">нужна ручная проверка</span>}
-                        <span className="rounded-full bg-gray-100 px-2 py-1 text-gray-600 dark:bg-gray-700 dark:text-gray-300">уверенность {Math.round((row.import_confidence || 0) * 100)}%</span>
+                        {row.manual_draft
+                          ? <span className="rounded-full bg-gray-100 px-2 py-1 text-gray-600 dark:bg-gray-700 dark:text-gray-300">ручной ввод</span>
+                          : <span className="rounded-full bg-gray-100 px-2 py-1 text-gray-600 dark:bg-gray-700 dark:text-gray-300">уверенность {Math.round((row.import_confidence || 0) * 100)}%</span>}
                       </div>
                     </div>
                     {row.review_reasons?.length > 0 && !row.manual_review_confirmed && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">

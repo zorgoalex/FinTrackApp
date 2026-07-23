@@ -145,7 +145,7 @@ function receiptReviewReasons({ dateMatch, labelledTotal, meaningfulAmount, focu
   } else if (!labelledTotal) {
     reasons.push('Сумма найдена без подписи «Итого/Всего/Оплачено»');
   }
-  if (hasFocusedEvidence && !focusedTotal) {
+  if (hasFocusedEvidence && meaningfulAmount && !focusedTotal) {
     reasons.push('Повторный проход не подтвердил итоговую сумму');
   } else if (labelledTotal && focusedTotal && Math.abs(labelledTotal.amount - focusedTotal.amount) >= 0.005) {
     reasons.push(`Распознаны разные итоговые суммы: ${labelledTotal.amount} и ${focusedTotal.amount}`);
@@ -184,7 +184,8 @@ function parseGenericReceipt(text, evidence = {}) {
     .map((match) => ({ match, amount: parseMoney(match[1]) }))
     .filter(({ amount }) => Number.isFinite(amount) && amount > 0)
     .sort((a, b) => b.amount - a.amount)[0] || fallbackDecimalAmounts[0];
-  if (!dateMatch && !meaningfulAmount) return [];
+  const manualDraft = !dateMatch && !meaningfulAmount;
+  if (manualDraft && !evidence.allowEmptyDraft) return [];
   const successfulIndex = text.search(/(?:плат[её]ж|перевод) успешно|успешно совершен/iu);
   const header = text.slice(0, successfulIndex > 0 ? successfulIndex : 180)
     .split(/\n/).map((line) => line.trim()).filter(Boolean).slice(-3).join(' · ');
@@ -203,13 +204,14 @@ function parseGenericReceipt(text, evidence = {}) {
     type: mapDirection(sign, operationWord),
     amount: meaningfulAmount?.amount || '',
     currency: meaningfulAmount?.inferredCurrency || normalizeCurrency(meaningfulAmount?.match?.[2], meaningfulAmount?.match?.[2]),
-    description: cleanDetails(header, operationWord),
-    source_label: operationWord,
+    description: cleanDetails(manualDraft ? 'Чек — заполните данные вручную' : header || operationWord, operationWord),
+    source_label: manualDraft ? 'Чек' : operationWord,
     reference,
     receipt_items_comment: extractReceiptItems(text),
-    confidence: dateMatch && meaningfulAmount && reviewReasons.length === 0 ? 0.88 : dateMatch && meaningfulAmount ? 0.62 : 0.55,
+    confidence: manualDraft ? 0.25 : dateMatch && meaningfulAmount && reviewReasons.length === 0 ? 0.88 : dateMatch && meaningfulAmount ? 0.62 : 0.55,
     review_reasons: reviewReasons,
     critical_fields_confirmed: reviewReasons.length === 0,
+    manual_draft: manualDraft,
   }];
 }
 
@@ -219,7 +221,10 @@ export async function parseBankDocumentText(text, sourceKind = 'pdf', evidence =
   let rows = [];
   if (detected.documentType === 'statement' && detected.bank === 'kaspi') rows = parseKaspiStatement(normalizedText);
   if (detected.documentType === 'statement' && detected.bank === 'freedom') rows = parseFreedomStatement(normalizedText);
-  if (rows.length === 0) rows = parseGenericReceipt(normalizedText, evidence);
+  if (rows.length === 0) rows = parseGenericReceipt(normalizedText, {
+    ...evidence,
+    allowEmptyDraft: sourceKind === 'image',
+  });
   const operations = await Promise.all(rows.map(async (row) => ({
     ...row,
     source_kind: sourceKind,

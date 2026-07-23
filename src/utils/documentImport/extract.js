@@ -234,18 +234,14 @@ function receiptSignalScore(text, confidence) {
 
 async function extractWithPaddle(file, onProgress) {
   const ocr = await getPaddleOcr(onProgress);
-  let best = null;
-  const rotations = [0, 90, 270, 180];
-  for (const [index, rotation] of rotations.entries()) {
+  const recognizeRotation = async (rotation, status = 'recognizing', monochrome = false) => {
     onProgress?.({
       stage: 'ocr',
       engine: 'paddle',
-      status: rotation ? 'checking-orientation' : 'recognizing',
+      status,
       rotation,
-      pass: index + 1,
-      passes: rotations.length,
     });
-    const canvas = await imageCanvas(file, rotation, false);
+    const canvas = await imageCanvas(file, rotation, monochrome);
     const [result] = await ocr.predict(canvas, {
       textDetLimitSideLen: 1600,
       textDetLimitType: 'max',
@@ -255,13 +251,23 @@ async function extractWithPaddle(file, onProgress) {
     });
     const text = paddleResultText(result);
     const confidence = paddleResultConfidence(result);
-    const candidate = { text, confidence, score: receiptSignalScore(text, confidence), result, canvas, rotation };
-    if (!best || candidate.score > best.score) best = candidate;
-    if (candidate.score >= 67) break;
+    return { text, confidence, score: receiptSignalScore(text, confidence), result, canvas, rotation };
+  };
+
+  let best = await recognizeRotation(0);
+  if (!hasCriticalReceiptSignals(best.text)) {
+    const enhanced = await recognizeRotation(0, 'enhancing', true);
+    if (enhanced.score > best.score) best = enhanced;
   }
-  if (!best?.text || best.text.replace(/\s/g, '').length < 20) {
-    throw new Error('PP-OCRv5 не нашёл достаточно текста');
+  if (!hasCriticalReceiptSignals(best.text) && best.score < 60) {
+    const fallbackRotations = best.canvas.width > best.canvas.height * 1.12 ? [90, 270] : [180];
+    for (const rotation of fallbackRotations) {
+      const candidate = await recognizeRotation(rotation, 'checking-orientation');
+      if (!best || candidate.score > best.score) best = candidate;
+      if (hasCriticalReceiptSignals(candidate.text) || candidate.score >= 67) break;
+    }
   }
+
   const skew = detectedTextSkew(best.result);
   if (Math.abs(skew) >= 0.7) {
     onProgress?.({ stage: 'ocr', engine: 'paddle', status: 'deskewing', progress: 0 });
@@ -294,21 +300,22 @@ async function extractWithPaddle(file, onProgress) {
     criticalText,
     confidence: Math.max(best.confidence, paddleResultConfidence(focusedResult)),
     engine: 'paddle',
+    rotation: best.rotation,
   };
 }
 
-async function extractWithTesseract(file, onProgress) {
+async function extractWithTesseract(file, onProgress, { preferredRotation = 0 } = {}) {
   const worker = await getOcrWorker(onProgress);
   let best = null;
-  const rotations = globalThis.createImageBitmap && globalThis.document ? [0, 90, 270, 180] : [0];
-  for (const [index, rotation] of rotations.entries()) {
-    const pass = index + 1;
+  const normalizedRotation = ((Number(preferredRotation) % 360) + 360) % 360;
+  const rotations = globalThis.createImageBitmap && globalThis.document
+    ? [normalizedRotation, (normalizedRotation + 180) % 360]
+    : [0];
+  for (const [index, rotation] of [...new Set(rotations)].entries()) {
     ocrProgressListener = (progress) => onProgress?.({
       ...progress,
       engine: 'tesseract',
       rotation,
-      pass,
-      passes: rotations.length,
     });
     let imageForOcr = file;
     if (globalThis.createImageBitmap && globalThis.document) {
@@ -321,15 +328,13 @@ async function extractWithTesseract(file, onProgress) {
       status: rotation ? 'checking-orientation' : 'recognizing',
       rotation,
       progress: 0,
-      pass,
-      passes: rotations.length,
     });
     const result = await worker.recognize(imageForOcr);
     const text = result.data.text || '';
     const confidence = Number(result.data.confidence) || 0;
     const candidate = { text, confidence, score: receiptSignalScore(text, confidence) };
     if (!best || candidate.score > best.score) best = candidate;
-    if (hasCriticalReceiptSignals(text)) break;
+    if (hasCriticalReceiptSignals(text) || candidate.score >= 55 || index === rotations.length - 1) break;
   }
   return { text: best?.text || '', confidence: best?.confidence || 0, engine: 'tesseract' };
 }
@@ -387,26 +392,22 @@ async function extractPdfText(file, onProgress) {
 
 async function extractImageText(file, onProgress, { signal, timeoutMs = OCR_TIMEOUT_MS } = {}) {
   const reportPaddleProgress = (progress) => {
-    const pass = Math.max(1, Number(progress.pass) || 1);
-    const passes = Math.max(pass, Number(progress.passes) || 4);
-    const completedPasses = Math.min(passes, pass - 1);
     const overallProgress = progress.status === 'loading-model'
       ? 0.03
+      : progress.status === 'enhancing'
+        ? 0.2
+      : progress.status === 'checking-orientation'
+        ? 0.3
       : progress.status === 'deskewing'
         ? 0.38
         : progress.status === 'recognizing-total'
-          ? 0.44
-          : 0.06 + (completedPasses / passes) * 0.3;
+          ? 0.48
+          : 0.1;
     onProgress?.({ ...progress, overallProgress });
   };
   const reportTesseractProgress = (progress) => {
-    const pass = Math.max(1, Number(progress.pass) || 1);
-    const passes = Math.max(pass, Number(progress.passes) || 4);
     const passProgress = Math.max(0, Math.min(1, Number(progress.progress) || 0));
-    const completedPasses = Math.min(passes, pass - 1);
-    const overallProgress = progress.pass
-      ? 0.48 + ((completedPasses + passProgress) / passes) * 0.48
-      : 0.43 + passProgress * 0.05;
+    const overallProgress = 0.52 + passProgress * 0.43;
     onProgress?.({ ...progress, overallProgress });
   };
   try {
@@ -418,7 +419,9 @@ async function extractImageText(file, onProgress, { signal, timeoutMs = OCR_TIME
         const paddleText = `${paddleResult.text}\n${paddleResult.criticalText || ''}`;
         if (hasCriticalReceiptSignals(paddleText)) return { ...paddleResult, text: paddleText, primaryText: paddleResult.text };
         reportTesseractProgress({ stage: 'ocr', engine: 'tesseract', status: 'supplementing', progress: 0 });
-        const tesseractResult = await extractWithTesseract(file, reportTesseractProgress);
+        const tesseractResult = await extractWithTesseract(file, reportTesseractProgress, {
+          preferredRotation: paddleResult.rotation,
+        });
         return {
           text: `${paddleResult.text}\n${paddleResult.criticalText || ''}\n${tesseractResult.text}`,
           primaryText: `${paddleResult.text}\n${tesseractResult.text}`,
@@ -502,6 +505,7 @@ export async function extractDocument(file, onProgress, options = {}) {
   let ocrEngine = null;
   let ocrCriticalText = null;
   let ocrPrimaryText = null;
+  let ocrError = null;
   let sourceKind = 'image';
   if ((type === 'text/csv' || extension === 'csv') && binaryKind === 'text') {
     sourceKind = 'csv';
@@ -522,12 +526,22 @@ export async function extractDocument(file, onProgress, options = {}) {
       ocrPrimaryText = ocr.primaryText || ocr.text;
     }
   } else if ((type.startsWith('image/') || ['jpg', 'jpeg', 'png', 'webp'].includes(extension)) && binaryKind === 'image') {
-    const ocr = await extractImageText(file, onProgress, options);
-    text = ocr.text;
-    ocrConfidence = ocr.confidence;
-    ocrEngine = ocr.engine || null;
-    ocrCriticalText = ocr.criticalText || '';
-    ocrPrimaryText = ocr.primaryText || ocr.text;
+    try {
+      const ocr = await extractImageText(file, onProgress, options);
+      text = ocr.text;
+      ocrConfidence = ocr.confidence;
+      ocrEngine = ocr.engine || null;
+      ocrCriticalText = ocr.criticalText || '';
+      ocrPrimaryText = ocr.primaryText || ocr.text;
+    } catch (error) {
+      if (error.name === 'AbortError') throw error;
+      text = '';
+      ocrConfidence = 0;
+      ocrEngine = 'manual';
+      ocrCriticalText = '';
+      ocrPrimaryText = '';
+      ocrError = error.message || 'Локальное распознавание не завершилось';
+    }
   } else {
     throw new Error('Содержимое файла не соответствует PDF, JPG, PNG, WEBP или CSV. Расширение файла не считается достаточной проверкой.');
   }
@@ -551,6 +565,7 @@ export async function extractDocument(file, onProgress, options = {}) {
     sensitiveData: detectSensitiveData(text),
     ocrConfidence,
     ocrEngine,
+    ocrError,
     parsed,
   };
 }
