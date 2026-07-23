@@ -1,0 +1,50 @@
+services:
+  glm-ocr:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    restart: unless-stopped
+    command:
+      - -m
+      - /models/GLM-OCR-Q8_0.gguf
+      - --mmproj
+      - /models/mmproj-GLM-OCR-Q8_0.gguf
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - -c
+      - "8192"
+      - -np
+      - "1"
+      - -t
+      - "${GLM_OCR_THREADS:-8}"
+      - -tb
+      - "${GLM_OCR_THREADS:-8}"
+      - -ngl
+      - "${GLM_OCR_GPU_LAYERS:-0}"
+    volumes:
+      - "${GLM_OCR_MODEL_DIR:?Set GLM_OCR_MODEL_DIR}:/models:ro"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 120s
+
+  receipt-ocr:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      glm-ocr:
+        condition: service_healthy
+    environment:
+      PORT: "8788"
+      LLAMA_BASE_URL: http://glm-ocr:8080
+      GLM_OCR_API_MODEL: GLM-OCR
+      GLM_OCR_MAX_TOKENS: "${GLM_OCR_MAX_TOKENS:-2200}"
+      SUPABASE_URL: "${SUPABASE_URL:?Set SUPABASE_URL}"
+      SUPABASE_ANON_KEY: "${SUPABASE_ANON_KEY:?Set SUPABASE_ANON_KEY}"
+      OCR_ALLOWED_ORIGINS: "${OCR_ALLOWED_ORIGINS:-https://fintrackapp-wheat.vercel.app}"
+      OCR_REQUESTS_PER_MINUTE: "${OCR_REQUESTS_PER_MINUTE:-12}"
+      OCR_TIMEOUT_MS: "${OCR_TIMEOUT_MS:-70000}"
+    ports:
+      - "127.0.0.1:8788:8788"

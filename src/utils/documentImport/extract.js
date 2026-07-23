@@ -390,7 +390,7 @@ async function extractPdfText(file, onProgress) {
   return pages.join('\n');
 }
 
-async function extractImageText(file, onProgress, { signal, timeoutMs = OCR_TIMEOUT_MS } = {}) {
+async function extractImageTextLocal(file, onProgress, { signal, timeoutMs = OCR_TIMEOUT_MS } = {}) {
   const reportPaddleProgress = (progress) => {
     const overallProgress = progress.status === 'loading-model'
       ? 0.03
@@ -458,13 +458,60 @@ async function extractImageText(file, onProgress, { signal, timeoutMs = OCR_TIME
   }
 }
 
+async function extractImageText(file, onProgress, options = {}) {
+  const {
+    serverOcr,
+    allowLocalFallback = true,
+    signal,
+  } = options;
+  let serverError = null;
+
+  if (typeof serverOcr === 'function') {
+    try {
+      const result = await serverOcr(file, { signal, onProgress });
+      const text = String(result?.text || '').trim();
+      if (!text) throw new Error('GLM-OCR не вернул читаемый текст');
+      onProgress?.({ stage: 'finalizing', engine: result.engine || 'glm-ocr', overallProgress: 0.99 });
+      return {
+        text,
+        primaryText: text,
+        criticalText: '',
+        confidence: null,
+        engine: result.engine || 'glm-ocr',
+        model: result.model || null,
+      };
+    } catch (error) {
+      if (error.name === 'AbortError') throw error;
+      serverError = error.message || 'Серверный OCR недоступен';
+      if (!allowLocalFallback) throw error;
+      onProgress?.({
+        stage: 'ocr',
+        engine: 'local-fallback',
+        status: 'fallback',
+        overallProgress: 0.15,
+      });
+    }
+  }
+
+  const localProgress = serverError
+    ? (progress) => onProgress?.({
+      ...progress,
+      overallProgress: 0.16 + Math.max(0, Math.min(1, Number(progress.overallProgress) || 0)) * 0.8,
+    })
+    : onProgress;
+  const local = await extractImageTextLocal(file, localProgress, options);
+  return serverError ? { ...local, ocrError: `GLM-OCR: ${serverError}. Использован локальный резерв.` } : local;
+}
+
 async function extractScannedPdf(file, onProgress, options) {
   const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
-  if (pdf.numPages > 5) throw new Error('Сканированный PDF длиннее 5 страниц. Разделите его на части для локального OCR.');
+  if (pdf.numPages > 5) throw new Error('Сканированный PDF длиннее 5 страниц. Разделите его на части для распознавания.');
   const texts = [];
   const criticalTexts = [];
   const primaryTexts = [];
+  const ocrErrors = [];
   let confidenceTotal = 0;
+  let confidenceCount = 0;
   let engine = null;
   for (let index = 1; index <= pdf.numPages; index += 1) {
     const page = await pdf.getPage(index);
@@ -482,15 +529,20 @@ async function extractScannedPdf(file, onProgress, options) {
     texts.push(ocr.text);
     primaryTexts.push(ocr.primaryText || ocr.text);
     if (ocr.criticalText) criticalTexts.push(ocr.criticalText);
-    confidenceTotal += ocr.confidence;
+    if (Number.isFinite(ocr.confidence)) {
+      confidenceTotal += ocr.confidence;
+      confidenceCount += 1;
+    }
+    if (ocr.ocrError) ocrErrors.push(ocr.ocrError);
     engine = ocr.engine || engine;
   }
   return {
     text: texts.join('\n'),
     primaryText: primaryTexts.join('\n'),
     criticalText: criticalTexts.join('\n'),
-    confidence: confidenceTotal / pdf.numPages,
+    confidence: confidenceCount ? confidenceTotal / confidenceCount : null,
     engine,
+    ocrError: ocrErrors.length ? [...new Set(ocrErrors)].join(' ') : null,
   };
 }
 
@@ -520,19 +572,21 @@ export async function extractDocument(file, onProgress, options = {}) {
     if (text.replace(/\s/g, '').length < 40) {
       const ocr = await extractScannedPdf(file, onProgress, options);
       text = ocr.text;
-      ocrConfidence = ocr.confidence;
+      ocrConfidence = Number.isFinite(ocr.confidence) ? ocr.confidence : null;
       ocrEngine = ocr.engine || null;
       ocrCriticalText = ocr.criticalText || '';
       ocrPrimaryText = ocr.primaryText || ocr.text;
+      ocrError = ocr.ocrError || null;
     }
   } else if ((type.startsWith('image/') || ['jpg', 'jpeg', 'png', 'webp'].includes(extension)) && binaryKind === 'image') {
     try {
       const ocr = await extractImageText(file, onProgress, options);
       text = ocr.text;
-      ocrConfidence = ocr.confidence;
+      ocrConfidence = Number.isFinite(ocr.confidence) ? ocr.confidence : null;
       ocrEngine = ocr.engine || null;
       ocrCriticalText = ocr.criticalText || '';
       ocrPrimaryText = ocr.primaryText || ocr.text;
+      ocrError = ocr.ocrError || null;
     } catch (error) {
       if (error.name === 'AbortError') throw error;
       text = '';
@@ -545,14 +599,15 @@ export async function extractDocument(file, onProgress, options = {}) {
   } else {
     throw new Error('Содержимое файла не соответствует PDF, JPG, PNG, WEBP или CSV. Расширение файла не считается достаточной проверкой.');
   }
+  const usedOcr = Boolean(ocrEngine);
   const parsed = sourceKind === 'csv'
     ? null
     : await parseBankDocumentText(
       text,
-      ocrConfidence !== null ? 'image' : sourceKind,
-      ocrConfidence !== null ? { criticalText: ocrCriticalText || '', primaryText: ocrPrimaryText || '' } : {},
+      usedOcr ? 'image' : sourceKind,
+      usedOcr ? { criticalText: ocrCriticalText || '', primaryText: ocrPrimaryText || '' } : {},
     );
-  if (parsed && ocrConfidence !== null) {
+  if (parsed && Number.isFinite(ocrConfidence)) {
     parsed.operations = parsed.operations.map((operation) => ({
       ...operation,
       confidence: Math.min(operation.confidence || 1, ocrConfidence / 100),

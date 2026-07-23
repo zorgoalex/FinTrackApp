@@ -8,6 +8,7 @@ import { buildRulePattern, suggestCategory } from '../utils/documentImport/categ
 import { extractDocument, prewarmDocumentOcr } from '../utils/documentImport/extract';
 import { OCR_TIMEOUT_MS } from '../utils/documentImport/ocrPolicy';
 import { operationFingerprint } from '../utils/documentImport/privacy';
+import { receiptOcrClient } from '../services/appReceiptOcr';
 
 const MAX_FILE_SIZE = 15 * 1024 * 1024;
 
@@ -21,6 +22,12 @@ function progressLabel(progress) {
   if (progress.stage === 'preparing') return `Готовим изображение${suffix}`;
   if (progress.stage === 'finalizing') return `Формируем черновик${suffix}`;
   if (progress.stage === 'ocr') {
+    if (progress.engine === 'glm-ocr') {
+      if (progress.status === 'uploading') return `Безопасно отправляем фото на OCR-сервер${suffix}`;
+      if (progress.status === 'complete') return `GLM-OCR завершил распознавание${suffix}`;
+      return `GLM-OCR читает чек${suffix}`;
+    }
+    if (progress.engine === 'local-fallback') return `GLM-OCR недоступен — запускаем локальный резерв${suffix}`;
     if (progress.engine === 'paddle') {
       if (progress.status === 'loading-model') return `Загружаем локальную модель PP-OCRv5${suffix}`;
       if (progress.status === 'enhancing') return `Усиливаем текст на фотографии${suffix}`;
@@ -58,6 +65,7 @@ export default function ImportOperationsModal({
   const processingControllerRef = useRef(null);
   const previewUrlRef = useRef('');
   const { getRate } = useCurrencies(workspaceId);
+  const [recognitionMode, setRecognitionMode] = useState(() => receiptOcrClient.isConfigured ? 'server' : 'local');
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [fileName, setFileName] = useState('');
   const [documentMeta, setDocumentMeta] = useState(null);
@@ -95,9 +103,9 @@ export default function ImportOperationsModal({
   }, []);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || recognitionMode !== 'local') return;
     prewarmDocumentOcr().catch(() => {});
-  }, [open]);
+  }, [open, recognitionMode]);
 
   if (!open) return null;
 
@@ -223,6 +231,13 @@ export default function ImportOperationsModal({
       const extracted = await extractDocument(file, setProcessingProgress, {
         signal: controller.signal,
         timeoutMs: OCR_TIMEOUT_MS,
+        serverOcr: recognitionMode === 'server'
+          ? (image, options) => receiptOcrClient.recognize(image, {
+            ...options,
+            workspaceId,
+          })
+          : null,
+        allowLocalFallback: true,
       });
       let operations;
       let bank = extracted.parsed?.bank || 'unknown';
@@ -419,14 +434,58 @@ export default function ImportOperationsModal({
 
         {!documentMeta && rows.length === 0 && (
           <div className="space-y-4">
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/30">
+            <fieldset className="grid gap-2 sm:grid-cols-2">
+              <legend className="mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100">Способ распознавания</legend>
+              <label className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-sm ${recognitionMode === 'server' ? 'border-primary-400 bg-primary-50 dark:border-primary-700 dark:bg-primary-950/30' : 'border-gray-200 dark:border-gray-700'} ${!receiptOcrClient.isConfigured ? 'cursor-not-allowed opacity-60' : ''}`}>
+                <input
+                  type="radio"
+                  name="receipt-recognition-mode"
+                  value="server"
+                  checked={recognitionMode === 'server'}
+                  disabled={!receiptOcrClient.isConfigured || processing}
+                  onChange={() => {
+                    setRecognitionMode('server');
+                    setPrivacyAccepted(false);
+                  }}
+                  className="mt-1 h-4 w-4"
+                />
+                <span><strong className="block">GLM-OCR · высокое качество</strong><span className="text-xs text-gray-500">{receiptOcrClient.isConfigured ? 'Ваш постоянно прогретый OCR-сервер' : 'Сервер ещё не подключён в окружении'}</span></span>
+              </label>
+              <label className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-sm ${recognitionMode === 'local' ? 'border-amber-400 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30' : 'border-gray-200 dark:border-gray-700'}`}>
+                <input
+                  type="radio"
+                  name="receipt-recognition-mode"
+                  value="local"
+                  checked={recognitionMode === 'local'}
+                  disabled={processing}
+                  onChange={() => {
+                    setRecognitionMode('local');
+                    setPrivacyAccepted(false);
+                  }}
+                  className="mt-1 h-4 w-4"
+                />
+                <span><strong className="block">Только на устройстве</strong><span className="text-xs text-gray-500">Резервный режим: медленнее и заметно менее точный</span></span>
+              </label>
+            </fieldset>
+
+            <div className={`rounded-2xl border p-4 ${recognitionMode === 'server' ? 'border-primary-200 bg-primary-50 dark:border-primary-900 dark:bg-primary-950/30' : 'border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30'}`}>
               <div className="flex gap-3">
-                <ShieldCheck className="mt-0.5 shrink-0 text-emerald-600" size={22} />
-                <div className="text-sm text-emerald-950 dark:text-emerald-100">
-                  <p className="font-semibold">Документ обрабатывается локально в этой вкладке</p>
-                  <ul className="mt-2 list-disc space-y-1 pl-5 text-emerald-800 dark:text-emerald-200">
-                    <li>Исходный PDF, изображение и OCR-текст не загружаются на сервер и не передаются AI API.</li>
-                    <li>При первом запуске браузер скачивает OCR-модели; содержимое документа в этот запрос не входит.</li>
+                <ShieldCheck className={`mt-0.5 shrink-0 ${recognitionMode === 'server' ? 'text-primary-600' : 'text-emerald-600'}`} size={22} />
+                <div className="text-sm text-gray-950 dark:text-gray-100">
+                  <p className="font-semibold">{recognitionMode === 'server' ? 'Высокоточное распознавание на вашем сервере' : 'Резервное распознавание в этой вкладке'}</p>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-gray-700 dark:text-gray-200">
+                    {recognitionMode === 'server' ? (
+                      <>
+                        <li>Изображение временно передаётся на ваш self-hosted GLM-OCR сервер только для этого распознавания.</li>
+                        <li>Файл и OCR-текст не сохраняются на сервере и не передаются OpenRouter или другим внешним AI API.</li>
+                        <li>Если сервер недоступен, приложение явно переключится на менее точный локальный резерв.</li>
+                      </>
+                    ) : (
+                      <>
+                        <li>Исходный PDF, изображение и OCR-текст не загружаются на сервер и не передаются AI API.</li>
+                        <li>При первом запуске браузер скачивает резервные OCR-модели; содержимое документа в этот запрос не входит.</li>
+                      </>
+                    )}
                     <li>ИИН/БИН, IBAN, карты, телефоны, ФИО и номера документов маскируются в описаниях.</li>
                     <li>После закрытия окна временный текст удаляется из памяти; сохраняются только подтверждённые операции и SHA-256 для поиска повторов.</li>
                   </ul>
@@ -435,7 +494,9 @@ export default function ImportOperationsModal({
             </div>
             <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 p-3 text-sm dark:border-gray-700">
               <input type="checkbox" checked={privacyAccepted} disabled={processing} onChange={(event) => setPrivacyAccepted(event.target.checked)} className="mt-1 h-4 w-4 disabled:opacity-50" />
-              <span>Я понимаю, что финансовый документ может содержать персональные данные, и согласен на локальное распознавание и автоматическое маскирование.</span>
+              <span>{recognitionMode === 'server'
+                ? 'Я понимаю, что документ может содержать персональные данные, и согласен на временную передачу изображения на мой OCR-сервер и автоматическое маскирование.'
+                : 'Я понимаю, что финансовый документ может содержать персональные данные, и согласен на локальное распознавание и автоматическое маскирование.'}</span>
             </label>
             <input ref={inputRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.csv,application/pdf,image/*,text/csv" onChange={handleFile} className="hidden" />
             <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={handleFile} className="hidden" />
@@ -488,7 +549,7 @@ export default function ImportOperationsModal({
         {documentMeta && rows.length > 0 && (
           <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-xl bg-gray-50 p-3 dark:bg-gray-900/50"><p className="text-xs text-gray-500">Документ</p><p className="truncate font-medium">{fileName}</p><p className="text-xs text-gray-500">{documentMeta.bank} · {documentMeta.sourceKind}</p></div>
+              <div className="rounded-xl bg-gray-50 p-3 dark:bg-gray-900/50"><p className="text-xs text-gray-500">Документ</p><p className="truncate font-medium">{fileName}</p><p className="text-xs text-gray-500">{documentMeta.bank} · {documentMeta.sourceKind}{documentMeta.ocrEngine ? ` · ${documentMeta.ocrEngine}` : ''}</p></div>
               <div className="rounded-xl bg-green-50 p-3 dark:bg-green-900/20"><p className="text-xs text-green-700 dark:text-green-400">Выбрано</p><p className="text-2xl font-semibold text-green-800 dark:text-green-300">{selectedRows.length} / {rows.length}</p></div>
               <div className="rounded-xl bg-amber-50 p-3 dark:bg-amber-900/20"><p className="text-xs text-amber-700 dark:text-amber-400">Возможные повторы</p><p className="text-2xl font-semibold text-amber-800 dark:text-amber-300">{rows.filter((row) => row.duplicate).length}</p></div>
             </div>

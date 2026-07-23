@@ -1,9 +1,9 @@
 # Privacy-first bank document import
 
-## ADR-001: P1 receipt evidence is local recognition, not file attachment storage
+## ADR-001: P1 receipt evidence is transient recognition, not file attachment storage
 
-- **Status:** Accepted
-- **Date:** 12 July 2026
+- **Status:** Accepted, amended for self-hosted GLM-OCR
+- **Date:** 24 July 2026
 - **Decision owner:** FinTrackApp product and engineering
 
 ### Context
@@ -12,11 +12,13 @@ The original P1 wording, “receipt attachments and photos”, could be read as 
 
 ### Decision
 
-For P1, the accepted receipt scope is **privacy-first local recognition**:
+For P1, the accepted receipt scope is **privacy-first transient recognition**:
 
 - the user may select a receipt PDF/image or capture a photo;
-- extraction, OCR, parsing and redaction run in the current browser tab;
-- the original file, image/PDF bytes, original filename and raw OCR text are not uploaded to or stored by FinTrackApp;
+- CSV and PDF text-layer extraction, parsing and redaction run in the current browser tab;
+- image OCR primarily runs on a self-hosted, permanently warm GLM-OCR server after explicit user consent; browser PP-OCR/Tesseract is a lower-quality fallback;
+- the original filename is never sent to the OCR server, and image/PDF bytes plus raw OCR text are kept in memory only for the bounded recognition request;
+- the OCR server does not write originals or raw text to its filesystem, database, object storage, logs or analytics and does not forward them to OpenRouter or another external AI API;
 - only user-confirmed normalized operation fields, an optional user-editable redacted receipt-item comment, a SHA-256 document hash, row fingerprints and minimal import audit metadata may be persisted;
 - closing or reloading the tab discards the original and raw recognition data held in browser memory.
 
@@ -24,7 +26,8 @@ This is an explicit P1 scope decision. “Receipt support” in P1 does **not** 
 
 ### Consequences
 
-- P1 can satisfy receipt capture and recognition without creating a repository of sensitive originals.
+- P1 can satisfy materially better receipt recognition without creating a repository of sensitive originals.
+- The interface must clearly distinguish server recognition from the local fallback and obtain consent before sending document bytes.
 - Users must keep originals outside FinTrackApp when they need them for accounting, tax or legal evidence.
 - FinTrackApp cannot display or download an original receipt after import; it can show only the confirmed operation and optional redacted item comment.
 - A document hash is pseudonymous workspace metadata and remains protected by RLS.
@@ -45,13 +48,15 @@ The implementation was developed against the local fixtures in `artifacts/import
 ## Data lifecycle
 
 1. The browser checks size, extension and binary signature.
-2. PDF text extraction and OCR run locally in the browser. Tesseract language models may be downloaded, but document bytes are not sent with that request.
-3. Raw text is parsed in memory and is not placed in React state, Local Storage, Supabase Storage, logs or analytics.
-4. IIN/BIN, IBAN, cards, phone numbers, email, receipt references and labelled names are redacted before descriptions or receipt-item comments reach the draft.
-5. The user reviews and edits every draft row and the optional extracted item comment. Duplicate candidates are disabled by default.
-6. Only confirmed normalized operations and the edited item comment are written to Postgres.
-7. Import audit stores source type, bank, counts, SHA-256 document hash and row fingerprints. It never stores the original filename, file or OCR text.
-8. A category rule is saved only after an explicit “remember category” choice. It contains a normalized description fragment, operation type and category ID—not the source document or full OCR text.
+2. CSV and PDF text layers are extracted locally. For images and scanned PDF pages, the selected GLM-OCR mode sends only image bytes, MIME type, workspace ID and current user authorization to the configured self-hosted OCR server.
+3. The OCR gateway verifies the session and active workspace membership under the user's JWT, validates the image signature and size, then sends an in-memory data URL to a private `llama-server`. Neither service retains the image or response.
+4. If GLM-OCR is unavailable, the UI reports the fallback and may run local PP-OCR/Tesseract. Local model downloads never contain document data.
+5. Raw text is parsed in memory and is not placed in Local Storage, Supabase Storage, logs or analytics.
+6. IIN/BIN, IBAN, cards, phone numbers, email, receipt references and labelled names are redacted before descriptions or receipt-item comments reach the draft.
+7. The user reviews and edits every draft row and the optional extracted item comment. Duplicate candidates are disabled by default.
+8. Only confirmed normalized operations and the edited item comment are written to Postgres.
+9. Import audit stores source type, bank, counts, SHA-256 document hash and row fingerprints. It never stores the original filename, file or OCR text.
+10. A category rule is saved only after an explicit “remember category” choice. It contains a normalized description fragment, operation type and category ID—not the source document or full OCR text.
 
 Hashing is pseudonymisation, not anonymisation: a document hash remains protected workspace metadata. Access is restricted by RLS.
 
@@ -59,13 +64,14 @@ Hashing is pseudonymisation, not anonymisation: a document hash remains protecte
 
 P1 receipt recognition is accepted when all of the following are true:
 
-1. File selection is unavailable until the user acknowledges local processing and masking.
-2. PDF/image extraction and OCR execute in the browser; no request contains the selected document bytes, original filename or raw OCR text.
-3. Sensitive identifiers are redacted before an operation draft or receipt-item comment is displayed or persisted.
-4. Every detected row remains an editable draft; incomplete receipts are not silently confirmed, and duplicate candidates are disabled by default.
-5. Persistence is limited to confirmed normalized operations, an optional edited/redacted item comment, hashes/fingerprints and minimal import audit metadata.
-6. The database has no P1 column or object-storage path for an original receipt, filename or raw OCR text.
-7. Reloading or closing the tab removes the selected original and raw OCR text; a later session can retrieve only persisted normalized/redacted data.
+1. File selection is unavailable until the user acknowledges the selected processing mode and masking.
+2. Server mode explicitly states that image bytes are temporarily sent to the user's self-hosted GLM-OCR server; local fallback explicitly states its lower accuracy.
+3. The OCR request contains no original filename, is authorized for the selected workspace, goes only to the configured OCR host and is not forwarded to an external AI API.
+4. Sensitive identifiers are redacted before an operation draft or receipt-item comment is displayed or persisted.
+5. Every detected row remains an editable draft; incomplete receipts are not silently confirmed, and duplicate candidates are disabled by default.
+6. Persistence is limited to confirmed normalized operations, an optional edited/redacted item comment, hashes/fingerprints and minimal import audit metadata.
+7. The database has no P1 column or object-storage path for an original receipt, filename or raw OCR text.
+8. Reloading or closing the tab removes the selected original and raw OCR text; a later session can retrieve only persisted normalized/redacted data.
 
 Automated evidence:
 
@@ -75,16 +81,17 @@ Automated evidence:
 
 Manual release evidence (record browser/build version and result in the release checklist):
 
-1. Open DevTools **Network**, clear requests, select a uniquely named receipt image, complete recognition and confirm the draft. Verify that no request payload contains the file bytes, unique filename or a distinctive unredacted OCR phrase. Requests for Tesseract language/model assets are allowed only when they contain no document data.
-2. Verify in the preview and saved operation that seeded IIN/BIN, IBAN/card, phone/email, receipt reference and labelled name values are absent or masked.
-3. Inspect `import_sessions`, `operations` and `operation_comments` for the test import: only the documented metadata, normalized operation and optional edited/redacted item comment may exist. Verify that no receipt object appears in Supabase Storage.
-4. Reload the page and confirm that the original image/PDF and raw OCR text cannot be viewed or downloaded from FinTrackApp.
+1. Open DevTools **Network**, clear requests, select a uniquely named receipt image and complete recognition. In server mode verify one binary request to the configured OCR host with no filename; in local mode verify that no request contains document bytes. In both modes verify that raw OCR text is not sent to analytics or storage.
+2. Inspect reverse-proxy and application logs for the test request ID. Verify that neither request bodies nor upstream GLM-OCR responses were logged and that no file appeared on the OCR host filesystem.
+3. Verify in the preview and saved operation that seeded IIN/BIN, IBAN/card, phone/email, receipt reference and labelled name values are absent or masked.
+4. Inspect `import_sessions`, `operations` and `operation_comments` for the test import: only the documented metadata, normalized operation and optional edited/redacted item comment may exist. Verify that no receipt object appears in Supabase Storage.
+5. Reload the page and confirm that the original image/PDF and raw OCR text cannot be viewed or downloaded from FinTrackApp.
 
 ## Security and privacy rationale
 
 - Data minimisation and short retention follow privacy-by-design/default guidance.
-- Local processing avoids unnecessary disclosure to OCR or generative AI providers.
-- Explicit acknowledgement makes the processing purpose and limitations visible before file selection.
+- A self-hosted OCR model materially improves critical-field accuracy without disclosing receipts to a third-party AI provider.
+- Explicit mode selection and acknowledgement make the server transfer, fallback accuracy and processing limitations visible before file selection.
 - Allowlisted formats, size limits and binary-signature validation implement defence in depth for untrusted files.
 - The parser never executes embedded PDF actions, follows QR/receipt URLs or renders uploaded active content back to other users.
 
