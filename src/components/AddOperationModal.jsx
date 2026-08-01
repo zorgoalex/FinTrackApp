@@ -30,6 +30,11 @@ const MOBILE_ENTITY_TABS = [
   { key: 'counterparty', label: 'Контрагент' },
 ];
 
+const MOBILE_DETAILS_TABS = [
+  { key: 'description', label: 'Описание' },
+  { key: 'tags', label: 'Теги' },
+];
+
 function todayDateString() {
   const d = new Date();
   const yyyy = d.getFullYear();
@@ -141,6 +146,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
   const [error,   setError]   = useState('');
   const [amountFocused, setAmountFocused] = useState(false);
   const [mobileEntityTab, setMobileEntityTab] = useState('account');
+  const [mobileDetailsTab, setMobileDetailsTab] = useState('description');
 
   // Inline category creation
   const [showNewCat, setShowNewCat] = useState(false);
@@ -538,22 +544,60 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
             </div>
           )}
 
-          {/* Описание */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Описание</label>
-            <textarea
-              aria-label="Описание операции"
-              value={form.description}
-              onChange={set('description')}
-              className="input-field"
-              rows={2}
-              placeholder="Комментарий к операции"
-            />
-          </div>
+          {/* Compact mobile description/tags tabs; regular fields on larger screens */}
+          <div className="space-y-4">
+            <div
+              className="grid grid-cols-2 overflow-hidden rounded-xl border border-gray-300 bg-gray-50 dark:border-gray-600 dark:bg-gray-900 sm:hidden"
+              role="tablist"
+              aria-label="Описание и теги операции"
+            >
+              {MOBILE_DETAILS_TABS.map((tab) => {
+                const selected = mobileDetailsTab === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    role="tab"
+                    id={`operation-${tab.key}-tab`}
+                    aria-selected={selected}
+                    aria-controls={`operation-${tab.key}-panel`}
+                    onClick={() => setMobileDetailsTab(tab.key)}
+                    className={`min-h-11 min-w-0 border-r border-gray-300 px-1.5 text-[clamp(0.6875rem,3vw,0.875rem)] font-medium transition-colors last:border-r-0 dark:border-gray-600 ${
+                      selected
+                        ? 'bg-primary-600 text-white dark:bg-primary-500'
+                        : 'text-gray-600 hover:bg-white dark:text-gray-300 dark:hover:bg-gray-800'
+                    }`}
+                  >
+                    <span className="block truncate">{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
 
-          {/* Теги */}
-          <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Теги</label>
+            <div
+              id="operation-description-panel"
+              role="tabpanel"
+              aria-labelledby="operation-description-tab"
+              className={`${mobileDetailsTab === 'description' ? 'block' : 'hidden'} sm:block`}
+            >
+              <label className="mb-1 hidden text-sm font-medium text-gray-700 dark:text-gray-300 sm:block">Описание</label>
+              <textarea
+                aria-label="Описание операции"
+                value={form.description}
+                onChange={set('description')}
+                className="input-field"
+                rows={2}
+                placeholder="Комментарий к операции"
+              />
+            </div>
+
+            <div
+              id="operation-tags-panel"
+              role="tabpanel"
+              aria-labelledby="operation-tags-tab"
+              className={`${mobileDetailsTab === 'tags' ? 'block' : 'hidden'} sm:block`}
+            >
+              <label className="mb-1 hidden text-sm font-medium text-gray-700 dark:text-gray-300 sm:block">Теги</label>
               <TagInput
                 ref={tagInputRef}
                 allTags={tags}
@@ -562,6 +606,7 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
                 placeholder="Добавить тег..."
               />
             </div>
+          </div>
 
           {/* Debt selector (expense/income only) */}
           {form.type !== 'transfer' && !form.type.endsWith('_salary') && (
