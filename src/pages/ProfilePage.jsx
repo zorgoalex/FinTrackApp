@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ExternalLink, KeyRound, Layers, LogOut, MessageCircle, RefreshCw, Unlink, User } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { AlertTriangle, ExternalLink, KeyRound, Layers, LogOut, MessageCircle, RefreshCw, Trash2, Unlink, User } from 'lucide-react';
 import { supabase, useAuth } from '../contexts/AuthContext';
+import { isStrongPassword, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolicy';
 
 async function invokeTelegram(action) {
   const result = await supabase.functions.invoke('telegram-link', { body: { action } });
@@ -30,6 +31,10 @@ export default function ProfilePage() {
   const [telegramError, setTelegramError] = useState('');
   const [telegramMessage, setTelegramMessage] = useState('');
   const [now, setNow] = useState(() => Date.now());
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
+  const [deleteEmail, setDeleteEmail] = useState('');
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   const loadTelegram = useCallback(async ({ silent = false } = {}) => {
     const { data, error: invokeError } = await invokeTelegram('status');
@@ -114,7 +119,7 @@ export default function ProfilePage() {
     event.preventDefault();
     setError('');
     setMessage('');
-    if (password.length < 6) { setError('Пароль должен содержать не менее 6 символов'); return; }
+    if (!isStrongPassword(password)) { setError(PASSWORD_POLICY_MESSAGE); return; }
     if (password !== confirmation) { setError('Пароли не совпадают'); return; }
     setSaving(true);
     const success = await updatePassword(password);
@@ -127,6 +132,26 @@ export default function ProfilePage() {
 
   const signOut = async () => {
     await logout();
+    navigate('/login', { replace: true });
+  };
+
+  const deleteAccount = async () => {
+    setDeleteError('');
+    if (deleteEmail.trim().toLowerCase() !== user?.email?.toLowerCase()) {
+      setDeleteError('Введите email текущего аккаунта полностью');
+      return;
+    }
+    setDeleteBusy(true);
+    const { error: deletionError } = await supabase.rpc('delete_my_account', {
+      p_confirmation_email: deleteEmail.trim(),
+    });
+    setDeleteBusy(false);
+    if (deletionError) {
+      setDeleteError(deletionError.message || 'Не удалось удалить аккаунт');
+      return;
+    }
+    localStorage.removeItem('user');
+    await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
     navigate('/login', { replace: true });
   };
 
@@ -208,7 +233,7 @@ export default function ProfilePage() {
       <section className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
         <div className="mb-4 flex items-center gap-2"><KeyRound size={19} className="text-primary-600" /><h2 className="font-semibold">Сменить пароль</h2></div>
         <form onSubmit={changePassword} className="space-y-3">
-          <input type="password" autoComplete="new-password" className="input-field" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Новый пароль" aria-label="Новый пароль" />
+          <input type="password" autoComplete="new-password" className="input-field" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Новый пароль — не менее 8 символов" aria-label="Новый пароль" minLength={8} />
           <input type="password" autoComplete="new-password" className="input-field" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} placeholder="Повторите пароль" aria-label="Повторите пароль" />
           {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
           {message && <p role="status" className="text-sm text-green-600">{message}</p>}
@@ -217,6 +242,30 @@ export default function ProfilePage() {
       </section>
 
       <button type="button" onClick={signOut} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-3 text-sm font-semibold text-red-600 hover:bg-red-50 dark:border-red-900 dark:bg-gray-800 dark:hover:bg-red-950/30"><LogOut size={18} /> Выйти из аккаунта</button>
+
+      <section className="rounded-2xl border border-red-200 bg-white p-4 dark:border-red-900 dark:bg-gray-800">
+        <div className="flex items-start gap-3">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-red-50 text-red-600 dark:bg-red-950/40"><Trash2 size={20} /></span>
+          <div className="min-w-0 flex-1">
+            <h2 className="font-semibold text-red-700 dark:text-red-300">Удаление аккаунта</h2>
+            <p className="mt-1 text-xs leading-5 text-gray-500">Действие необратимо. Ваши пространства и их данные будут удалены для всех участников; записи, созданные вами в чужих пространствах, останутся у владельца пространства.</p>
+          </div>
+        </div>
+        {!showDeleteAccount ? (
+          <button type="button" onClick={() => setShowDeleteAccount(true)} className="mt-3 min-h-11 w-full rounded-xl border border-red-300 px-4 text-sm font-semibold text-red-600 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950/30">Начать удаление</button>
+        ) : (
+          <div className="mt-4 space-y-3 rounded-xl bg-red-50 p-3 dark:bg-red-950/30">
+            <p className="flex items-start gap-2 text-xs leading-5 text-red-800 dark:text-red-200"><AlertTriangle size={16} className="mt-0.5 shrink-0" />Сначала сохраните JSON-backup нужных пространств. Для подтверждения введите email <strong>{user?.email}</strong>.</p>
+            <input type="email" className="input-field" value={deleteEmail} onChange={(event) => setDeleteEmail(event.target.value)} placeholder="Email текущего аккаунта" aria-label="Email для подтверждения удаления аккаунта" autoComplete="email" />
+            {deleteError && <p role="alert" className="text-sm text-red-700 dark:text-red-300">{deleteError}</p>}
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button type="button" disabled={deleteBusy} onClick={() => { setShowDeleteAccount(false); setDeleteEmail(''); setDeleteError(''); }} className="btn-secondary min-h-11">Отмена</button>
+              <button type="button" disabled={deleteBusy || deleteEmail.trim().toLowerCase() !== user?.email?.toLowerCase()} onClick={deleteAccount} className="min-h-11 rounded-xl bg-red-600 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{deleteBusy ? 'Удаляем…' : 'Удалить навсегда'}</button>
+            </div>
+          </div>
+        )}
+      </section>
+      <p className="text-center text-xs text-gray-500"><Link to="/legal" className="underline hover:text-primary-600">Условия, конфиденциальность и удаление данных</Link></p>
       <p className="flex items-center justify-center gap-1.5 text-xs text-gray-400"><User size={13} /> Настройки относятся ко всему аккаунту</p>
     </div>
   );

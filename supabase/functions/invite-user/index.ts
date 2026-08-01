@@ -5,8 +5,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const FROM_EMAIL = 'onboarding@resend.dev';
-const FROM_NAME = 'FinTrackApp (Test)';
+const FROM_EMAIL = Deno.env.get('INVITATION_FROM_EMAIL')?.trim() ?? '';
+const FROM_NAME = Deno.env.get('EMAIL_FROM_NAME')?.trim() || 'FinTrackApp';
 
 function escapeHtml(value: unknown) {
   return String(value ?? '')
@@ -158,7 +158,7 @@ Deno.serve(async (req) => {
     // Update invitation record and track email delivery
     let emailSent = false;
     let emailError = '';
-    if (!resendApiKey) {
+    if (!resendApiKey || !FROM_EMAIL) {
       emailError = 'Email delivery is not configured yet';
     } else {
       const resendResponse = await fetch('https://api.resend.com/emails', {
@@ -204,7 +204,8 @@ Deno.serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('Unexpected Error:', error.message);
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Unexpected Error:', message);
     return new Response(JSON.stringify({ error: 'An unexpected error occurred.' }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,

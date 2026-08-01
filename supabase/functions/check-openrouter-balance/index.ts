@@ -35,6 +35,7 @@ function shouldNotify(previous: { alert_level?: string; alert_sent_at?: string }
 }
 
 async function sendAlert(apiKey: string, recipients: string[], level: AlertLevel, remaining: number | null, error?: string) {
+  const from = requiredEnv('ALERT_FROM_EMAIL');
   const subject = level === 'healthy'
     ? 'FinTrack AI: баланс OpenRouter восстановлен'
     : `FinTrack AI: OpenRouter — ${level.toUpperCase()}`;
@@ -46,7 +47,7 @@ async function sendAlert(apiKey: string, recipients: string[], level: AlertLevel
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      from: Deno.env.get('ALERT_FROM_EMAIL') || 'FinTrackApp <onboarding@resend.dev>',
+      from,
       to: recipients,
       subject,
       text: `${detail}\n\nПровайдер: OpenRouter\nУровень: ${level}\nВремя: ${new Date().toISOString()}`,

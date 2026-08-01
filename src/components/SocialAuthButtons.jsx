@@ -1,7 +1,7 @@
 import { LogIn } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
-export default function SocialAuthButtons({ mode = 'login' }) {
+export default function SocialAuthButtons({ mode = 'login', disabled = false }) {
   const { loginWithWorkOS, workosEnabled, loading } = useAuth();
   if (!workosEnabled) return null;
 
@@ -10,7 +10,7 @@ export default function SocialAuthButtons({ mode = 'login' }) {
       <button
         type="button"
         onClick={loginWithWorkOS}
-        disabled={loading}
+        disabled={loading || disabled}
         className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 transition hover:border-primary-400 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:border-primary-500 dark:hover:bg-gray-700"
       >
         <span className="grid h-6 w-6 place-items-center rounded-md bg-gray-950 text-xs font-bold text-white dark:bg-white dark:text-gray-950">W</span>

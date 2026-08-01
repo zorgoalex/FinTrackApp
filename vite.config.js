@@ -17,14 +17,19 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    // Keep application source out of public production artifacts. Error
+    // monitoring can upload hidden maps in a separate authenticated step.
+    sourcemap: false,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-supabase': ['@supabase/supabase-js'],
-          'vendor-ui': ['lucide-react'],
-          'vendor-date': ['date-fns'],
+        manualChunks(id) {
+          const moduleId = id.replaceAll('\\', '/')
+          if (!moduleId.includes('/node_modules/')) return undefined
+          if (/\/node_modules\/(react|react-dom|react-router|react-router-dom)\//.test(moduleId)) return 'vendor-react'
+          if (moduleId.includes('/node_modules/@supabase/')) return 'vendor-supabase'
+          if (moduleId.includes('/node_modules/lucide-react/')) return 'vendor-ui'
+          if (moduleId.includes('/node_modules/date-fns/')) return 'vendor-date'
+          return undefined
         }
       }
     }

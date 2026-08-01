@@ -6,7 +6,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN') ?? '';
 const NOTIFICATION_CRON_SECRET = Deno.env.get('NOTIFICATION_CRON_SECRET') ?? '';
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') ?? '';
-const NOTIFICATION_FROM_EMAIL = Deno.env.get('NOTIFICATION_FROM_EMAIL') ?? 'FinTrackApp <onboarding@resend.dev>';
+const NOTIFICATION_FROM_EMAIL = Deno.env.get('NOTIFICATION_FROM_EMAIL')?.trim() ?? '';
 const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY') ?? '';
 const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY') ?? '';
 const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? '';
@@ -86,7 +86,7 @@ async function sendTelegram(chatId: number, title: string, body: string) {
 }
 
 async function sendEmail(email: string, subject: string, title: string, lines: string[]) {
-  if (!RESEND_API_KEY) throw new Error('Email delivery is not configured');
+  if (!RESEND_API_KEY || !NOTIFICATION_FROM_EMAIL) throw new Error('Email delivery is not configured');
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${RESEND_API_KEY}` },

@@ -72,7 +72,7 @@ SELECT set_config('request.jwt.claim.sub', '15000000-0000-0000-0000-000000000003
 SELECT throws_ok($$SELECT public.split_operation(
   (SELECT id FROM public.operations WHERE description='Physical split operation' AND workspace_id='25000000-0000-0000-0000-000000000001'),
   '[]'::jsonb
-)$$, 'P0001', 'Недостаточно прав для разделения операции', 'outsider cannot split an operation by guessing its id');
+)$$, 'P0001', 'Операция не найдена', 'outsider cannot discover or split an operation by guessing its id');
 
 SELECT * FROM finish();
 ROLLBACK;

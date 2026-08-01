@@ -26,6 +26,7 @@ const BudgetsPage = lazy(() => import('./pages/BudgetsPage'));
 const AssistantPage = lazy(() => import('./pages/AssistantPage'));
 const CashflowPage = lazy(() => import('./pages/CashflowPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const LegalPage = lazy(() => import('./pages/LegalPage'));
 
 function LoadingFallback() {
   return (
@@ -61,6 +62,10 @@ const router = createBrowserRouter([
   {
     path: '/reset-password',
     element: <ResetPasswordPage />
+  },
+  {
+    path: '/legal',
+    element: <LegalPage />
   },
   {
     path: '/accept-invitation',

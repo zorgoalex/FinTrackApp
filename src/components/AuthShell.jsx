@@ -46,7 +46,8 @@ export default function AuthShell({ eyebrow = 'ФинУчёт', title, subtitle,
               {subtitle && <p className="mt-2 text-sm leading-6 text-gray-500 dark:text-gray-400">{subtitle}</p>}
               <div className="mt-7">{children}</div>
             </section>
-            <p className="mt-5 text-center text-[11px] text-gray-400 dark:text-gray-600" data-testid="build-version">Версия {BUILD_LABEL}</p>
+            <p className="mt-5 text-center text-[11px] text-gray-400 dark:text-gray-500"><a href="/legal" className="underline">Условия и конфиденциальность</a></p>
+            <p className="mt-2 text-center text-[11px] text-gray-400 dark:text-gray-600" data-testid="build-version">Версия {BUILD_LABEL}</p>
           </div>
         </main>
       </div>

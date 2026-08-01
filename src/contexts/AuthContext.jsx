@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { createClient } from "@supabase/supabase-js";
+import { isStrongPassword, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolicy';
 
 const AuthContext = createContext({});
 
@@ -88,8 +89,8 @@ export function AuthProvider({ children }) {
 
   const signUp = async (username, email, password) => {
     setError("");
-    if (!password || password.length < 6) {
-      setError("Пароль должен быть не менее 6 символов");
+    if (!isStrongPassword(password)) {
+      setError(PASSWORD_POLICY_MESSAGE);
       return false;
     }
     setLoading(true);
@@ -158,8 +159,8 @@ export function AuthProvider({ children }) {
 
   const updatePassword = async (password) => {
     setError("");
-    if (!password || password.length < 6) {
-      setError("Пароль должен быть не менее 6 символов");
+    if (!isStrongPassword(password)) {
+      setError(PASSWORD_POLICY_MESSAGE);
       return false;
     }
     setLoading(true);

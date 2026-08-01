@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import AuthShell from '../components/AuthShell';
 import SocialAuthButtons from '../components/SocialAuthButtons';
+import { isStrongPassword, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolicy';
 
 export default function SignupPage() {
   const navigate = useNavigate();
@@ -13,12 +14,17 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [localError, setLocalError] = useState("");
   const [confirmationSent, setConfirmationSent] = useState(false);
+  const [legalAccepted, setLegalAccepted] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLocalError("");
-    if (!password || password.length < 6) {
-      setLocalError("Пароль должен быть не менее 6 символов");
+    if (!legalAccepted) {
+      setLocalError("Подтвердите условия beta-теста и обработки данных");
+      return;
+    }
+    if (!isStrongPassword(password)) {
+      setLocalError(PASSWORD_POLICY_MESSAGE);
       return;
     }
     if (!/^[\p{L}\p{N}_]{3,21}$/u.test(username)) {
@@ -46,12 +52,16 @@ export default function SignupPage() {
         {(error || localError) && !confirmationSent && (
           <div className="text-red-600 dark:text-red-400 text-sm mb-3">{error || localError}</div>
         )}
-        {!confirmationSent && <SocialAuthButtons mode="signup" />}
+        {!confirmationSent && <SocialAuthButtons mode="signup" disabled={!legalAccepted} />}
         {!confirmationSent && <form onSubmit={handleSubmit} className="space-y-3">
           <input type="text" className="input-field" placeholder="Логин" value={username} onChange={(e)=>setUsername(e.target.value)} autoComplete="username" minLength={3} maxLength={21} required />
           <input type="email" className="input-field" placeholder="Email" value={email} onChange={(e)=>setEmail(e.target.value)} required />
-          <input type="password" className="input-field" placeholder="Пароль" value={password} onChange={(e)=>setPassword(e.target.value)} required />
-          <button className="btn-primary min-h-11 w-full" disabled={loading}>
+          <input type="password" className="input-field" placeholder="Пароль — не менее 8 символов" value={password} onChange={(e)=>setPassword(e.target.value)} minLength={8} required />
+          <label className="flex items-start gap-2 text-xs leading-5 text-gray-600 dark:text-gray-300">
+            <input type="checkbox" checked={legalAccepted} onChange={(event) => setLegalAccepted(event.target.checked)} className="mt-1 h-4 w-4 shrink-0" required />
+            <span>Я принимаю <Link to="/legal" target="_blank" className="font-medium text-primary-600 underline">условия закрытого beta-теста и политику обработки данных</Link>.</span>
+          </label>
+          <button className="btn-primary min-h-11 w-full" disabled={loading || !legalAccepted}>
             {loading ? "Создаём..." : "Зарегистрироваться"}
           </button>
         </form>}

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import AuthShell from '../components/AuthShell';
+import { isStrongPassword, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolicy';
 
 export default function ResetPasswordPage() {
   const { updatePassword, loading, error } = useAuth();
@@ -13,8 +14,8 @@ export default function ResetPasswordPage() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setLocalError('');
-    if (password.length < 6) {
-      setLocalError('Пароль должен быть не менее 6 символов');
+    if (!isStrongPassword(password)) {
+      setLocalError(PASSWORD_POLICY_MESSAGE);
       return;
     }
     if (password !== confirmation) {
@@ -26,7 +27,7 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <AuthShell eyebrow="Безопасность" title="Новый пароль" subtitle="Придумайте пароль длиной не менее шести символов.">
+    <AuthShell eyebrow="Безопасность" title="Новый пароль" subtitle="Не менее 8 символов: строчные и заглавные латинские буквы и цифра.">
         {updated ? (
           <div className="rounded-lg bg-green-50 p-3 text-sm text-green-700 dark:bg-green-900/30 dark:text-green-300">
             Пароль изменён. Теперь можно войти с новым паролем.
@@ -43,7 +44,7 @@ export default function ResetPasswordPage() {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               autoComplete="new-password"
-              minLength={6}
+              minLength={8}
               required
             />
             <input
@@ -53,7 +54,7 @@ export default function ResetPasswordPage() {
               value={confirmation}
               onChange={(event) => setConfirmation(event.target.value)}
               autoComplete="new-password"
-              minLength={6}
+              minLength={8}
               required
             />
             <button className="btn-primary min-h-11 w-full" disabled={loading}>
