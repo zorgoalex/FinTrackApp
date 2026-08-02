@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import AuthShell from '../components/AuthShell';
+import PasswordInput from '../components/PasswordInput';
 import { isStrongPassword, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolicy';
 
 export default function ResetPasswordPage() {
@@ -37,9 +38,7 @@ export default function ResetPasswordPage() {
             {(error || localError) && (
               <div className="text-sm text-red-600 dark:text-red-400">{error || localError}</div>
             )}
-            <input
-              type="password"
-              className="input-field"
+            <PasswordInput
               placeholder="Новый пароль"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
@@ -47,9 +46,7 @@ export default function ResetPasswordPage() {
               minLength={8}
               required
             />
-            <input
-              type="password"
-              className="input-field"
+            <PasswordInput
               placeholder="Повторите пароль"
               value={confirmation}
               onChange={(event) => setConfirmation(event.target.value)}

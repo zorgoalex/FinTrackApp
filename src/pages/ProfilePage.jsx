@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AlertTriangle, ExternalLink, KeyRound, Layers, LogOut, MessageCircle, RefreshCw, Trash2, Unlink, User } from 'lucide-react';
 import { supabase, useAuth } from '../contexts/AuthContext';
+import PasswordInput from '../components/PasswordInput';
 import { isStrongPassword, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolicy';
 
 async function invokeTelegram(action) {
@@ -233,8 +234,8 @@ export default function ProfilePage() {
       <section className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
         <div className="mb-4 flex items-center gap-2"><KeyRound size={19} className="text-primary-600" /><h2 className="font-semibold">Сменить пароль</h2></div>
         <form onSubmit={changePassword} className="space-y-3">
-          <input type="password" autoComplete="new-password" className="input-field" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Новый пароль — не менее 8 символов" aria-label="Новый пароль" minLength={8} />
-          <input type="password" autoComplete="new-password" className="input-field" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} placeholder="Повторите пароль" aria-label="Повторите пароль" />
+          <PasswordInput autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Новый пароль — не менее 8 символов" aria-label="Новый пароль" minLength={8} />
+          <PasswordInput autoComplete="new-password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} placeholder="Повторите пароль" aria-label="Повторите пароль" />
           {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
           {message && <p role="status" className="text-sm text-green-600">{message}</p>}
           <button type="submit" disabled={saving || !password || !confirmation} className="btn-primary min-h-11 w-full disabled:opacity-50">{saving ? 'Сохраняем…' : 'Обновить пароль'}</button>

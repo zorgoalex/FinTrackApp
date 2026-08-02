@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import AuthShell from '../components/AuthShell';
+import PasswordInput from '../components/PasswordInput';
 import SocialAuthButtons from '../components/SocialAuthButtons';
 import { isStrongPassword, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolicy';
 
@@ -56,7 +57,7 @@ export default function SignupPage() {
         {!confirmationSent && <form onSubmit={handleSubmit} className="space-y-3">
           <input type="text" className="input-field" placeholder="Логин" value={username} onChange={(e)=>setUsername(e.target.value)} autoComplete="username" minLength={3} maxLength={21} required />
           <input type="email" className="input-field" placeholder="Email" value={email} onChange={(e)=>setEmail(e.target.value)} required />
-          <input type="password" className="input-field" placeholder="Пароль — не менее 8 символов" value={password} onChange={(e)=>setPassword(e.target.value)} minLength={8} required />
+          <PasswordInput placeholder="Пароль — не менее 8 символов" value={password} onChange={(e)=>setPassword(e.target.value)} autoComplete="new-password" minLength={8} required />
           <label className="flex items-start gap-2 text-xs leading-5 text-gray-600 dark:text-gray-300">
             <input type="checkbox" checked={legalAccepted} onChange={(event) => setLegalAccepted(event.target.checked)} className="mt-1 h-4 w-4 shrink-0" required />
             <span>Я принимаю <Link to="/legal" target="_blank" className="font-medium text-primary-600 underline">условия закрытого beta-теста и политику обработки данных</Link>.</span>
