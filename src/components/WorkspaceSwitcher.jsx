@@ -3,6 +3,7 @@ import { ChevronDown, Building2, Plus, Users, Crown, Cog, Eye, User } from 'luci
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { getOwnerDisplay } from '../utils/workspaceOwner';
 
 const roleIcons = {
   owner: Crown,
@@ -77,11 +78,6 @@ export default function WorkspaceSwitcher() {
     if (workspace?.is_personal) return 'owner';
 
     return 'member';
-  };
-
-  const getOwnerDisplay = (workspace) => {
-    if (!workspace) return '';
-    return workspace.ownerName || workspace.ownerEmail || workspace.owner_id || '';
   };
 
   if (!currentWorkspace) {

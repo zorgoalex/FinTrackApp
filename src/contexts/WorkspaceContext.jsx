@@ -3,6 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from './AuthContext';
 import { useAuth } from './AuthContext';
 import { cacheReference, getCachedReference } from '../utils/offlineStore';
+import { findOwnerEmail } from '../utils/workspaceOwner';
 
 const WorkspaceContext = createContext({});
 
@@ -91,6 +92,7 @@ export function WorkspaceProvider({ children }) {
 
       // Отдельно подтягиваем owner_id из workspaces для списка переключателя
       let ownersByWorkspaceId = {};
+      let ownerEmailsByWorkspaceId = {};
       if (workspaceIds.length > 0) {
         const { data: ownersData, error: ownersError } = await supabase
           .from('workspaces')
@@ -105,6 +107,24 @@ export function WorkspaceProvider({ children }) {
             acc[row.id] = row.owner_id;
             return acc;
           }, {});
+
+          const ownerProfileResults = await Promise.all((ownersData || []).map(async row => {
+            if (row.owner_id === user.id) {
+              return [row.id, user.email || ''];
+            }
+
+            const { data: profiles, error: profilesError } = await supabase
+              .rpc('get_workspace_member_profiles', { p_workspace_id: row.id });
+
+            if (profilesError) {
+              console.error('WorkspaceContext: Error loading workspace owner profile', profilesError);
+              return [row.id, ''];
+            }
+
+            return [row.id, findOwnerEmail(profiles)];
+          }));
+
+          ownerEmailsByWorkspaceId = Object.fromEntries(ownerProfileResults);
         }
       }
 
@@ -115,9 +135,7 @@ export function WorkspaceProvider({ children }) {
         .map(item => ({
           ...item.workspaces,
           owner_id: ownersByWorkspaceId[item.workspace_id] || null,
-          ownerName: ownersByWorkspaceId[item.workspace_id] === user.id
-            ? (user.email || 'Вы')
-            : 'Владелец',
+          ownerEmail: ownerEmailsByWorkspaceId[item.workspace_id] || null,
           userRole: item.role,
           joinedAt: item.joined_at,
           lastAccessedAt: item.last_accessed_at
