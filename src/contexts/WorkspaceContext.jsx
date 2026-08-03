@@ -4,6 +4,7 @@ import { supabase } from './AuthContext';
 import { useAuth } from './AuthContext';
 import { cacheReference, getCachedReference } from '../utils/offlineStore';
 import { findOwnerEmail } from '../utils/workspaceOwner';
+import { toDatabaseWorkspaceRole } from '../utils/workspaceRole';
 
 const WorkspaceContext = createContext({});
 
@@ -374,10 +375,15 @@ export function WorkspaceProvider({ children }) {
       throw new Error('Только владелец может изменять роли');
     }
 
+    const databaseRole = toDatabaseWorkspaceRole(newRole);
+    if (!databaseRole || databaseRole === 'Owner') {
+      throw new Error('Недопустимая роль участника');
+    }
+
     try {
       const { error } = await supabase
         .from('workspace_members')
-        .update({ role: newRole })
+        .update({ role: databaseRole })
         .eq('workspace_id', workspaceId)
         .eq('user_id', userId);
 
