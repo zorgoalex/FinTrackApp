@@ -25,7 +25,9 @@ export default function NotificationCenter({ notifications }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [draft, setDraft] = useState(notifications.preferences);
   const [saving, setSaving] = useState(false);
+  const [testingBrowser, setTestingBrowser] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
 
   useEffect(() => setDraft(notifications.preferences), [notifications.preferences]);
 
@@ -50,14 +52,28 @@ export default function NotificationCenter({ notifications }) {
 
   const enableBrowser = async () => {
     setError('');
+    setNotice('');
     const result = await notifications.enableBrowser();
-    if (result.error) setError(result.error); else setDraft((current) => ({ ...current, channels: [...new Set([...(current.channels || []), 'browser'])] }));
+    if (result.error) setError(result.error); else {
+      setDraft((current) => ({ ...current, channels: [...new Set([...(current.channels || []), 'browser'])] }));
+      setNotice('Web Push включён. Можно отправить тестовое уведомление.');
+    }
   };
 
   const disableBrowser = async () => {
     setError('');
+    setNotice('');
     const result = await notifications.disableBrowser();
     if (result.error) setError(result.error); else setDraft((current) => ({ ...current, channels: (current.channels || []).filter((channel) => channel !== 'browser') }));
+  };
+
+  const sendTestBrowser = async () => {
+    setTestingBrowser(true);
+    setError('');
+    setNotice('');
+    const result = await notifications.sendTestBrowser();
+    setTestingBrowser(false);
+    if (result.error) setError(result.error); else setNotice(`Тестовое уведомление отправлено на устройств: ${result.delivered}.`);
   };
 
   return (
@@ -95,6 +111,12 @@ export default function NotificationCenter({ notifications }) {
                 })}
               </SettingsSpoiler>
 
+              {draft.channels?.includes('browser') && (
+                <button type="button" disabled={testingBrowser} onClick={sendTestBrowser} className="btn-secondary min-h-11 w-full">
+                  {testingBrowser ? 'Отправляем…' : 'Отправить тестовое уведомление'}
+                </button>
+              )}
+
               <SettingsSpoiler
                 label="События"
                 summary={`${(draft.event_types || []).length} из ${EVENT_OPTIONS.length}`}
@@ -112,6 +134,7 @@ export default function NotificationCenter({ notifications }) {
               </div>
               <p className="flex items-center gap-1.5 text-xs text-gray-500"><Clock3 size={13} /> Часовой пояс: {draft.timezone}</p>
               {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+              {notice && <p role="status" className="text-sm text-green-600 dark:text-green-400">{notice}</p>}
               <button type="button" disabled={saving} onClick={save} className="btn-primary min-h-11 w-full">{saving ? 'Сохраняем…' : 'Сохранить настройки'}</button>
             </div>
           )}

@@ -111,7 +111,17 @@ export function useNotifications(workspaceId) {
     }
   }, [preferences, savePreferences, workspaceId]);
 
-  return { items, unreadCount: items.filter((item) => !item.read_at).length, preferences, telegramLinked, loading, load, savePreferences, markAllRead, enableBrowser, disableBrowser };
+  const sendTestBrowser = useCallback(async () => {
+    if (!workspaceId || !user) return { error: 'Нет активного пространства' };
+    const { data, error } = await supabase.functions.invoke('send-test-push', {
+      body: { workspaceId },
+    });
+    if (error) return { error: error.message || 'Не удалось отправить тестовое уведомление' };
+    if (!data?.delivered) return { error: data?.error || 'Web Push не был доставлен' };
+    return { error: null, delivered: data.delivered };
+  }, [user, workspaceId]);
+
+  return { items, unreadCount: items.filter((item) => !item.read_at).length, preferences, telegramLinked, loading, load, savePreferences, markAllRead, enableBrowser, disableBrowser, sendTestBrowser };
 }
 
 function urlBase64ToUint8Array(value) {
