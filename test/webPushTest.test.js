@@ -8,7 +8,18 @@ test('test push endpoint targets only the authenticated user in the selected wor
   assert.match(source, /\.eq\('workspace_id', workspaceId\)/);
   assert.match(source, /\.eq\('user_id', userData\.user\.id\)/);
   assert.match(source, /webpush\.sendNotification/);
+  assert.match(source, /isAllowedWebPushEndpoint/);
+  assert.match(source, /consume_security_rate_limit/);
   assert.match(source, /statusCode === 404 \|\| statusCode === 410/);
+});
+
+test('push endpoint validator allows only known Web Push providers', async () => {
+  const source = await readFile('supabase/functions/_shared/pushEndpoint.ts', 'utf8');
+  assert.match(source, /fcm\.googleapis\.com/);
+  assert.match(source, /updates\.push\.services\.mozilla\.com/);
+  assert.match(source, /web\.push\.apple\.com/);
+  assert.match(source, /notify\\\.windows\\\.com/);
+  assert.doesNotMatch(source, /hostname\.endsWith/);
 });
 
 test('notification settings expose an isolated Web Push test action', async () => {

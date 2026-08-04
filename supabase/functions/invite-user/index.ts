@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { consumeRateLimit, opaqueValue } from '../_shared/rateLimit.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -108,6 +109,18 @@ Deno.serve(async (req) => {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 403,
         });
+    }
+
+    const [userAllowed, workspaceAllowed, recipientAllowed] = await Promise.all([
+      consumeRateLimit(supabaseAdmin, 'invite:user', invitingUser.id, 10, 86400),
+      consumeRateLimit(supabaseAdmin, 'invite:workspace', workspaceId, 20, 86400),
+      opaqueValue(normalizedEmail).then((subject) => consumeRateLimit(supabaseAdmin, 'invite:recipient', subject, 3, 86400)),
+    ]);
+    if (!userAllowed || !workspaceAllowed || !recipientAllowed) {
+      return new Response(JSON.stringify({ error: 'Invitation limit exceeded. Try again later.' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 429,
+      });
     }
 
     // Create the invitation record in the database

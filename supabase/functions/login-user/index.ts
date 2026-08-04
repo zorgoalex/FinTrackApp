@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { consumeRateLimit, opaqueClientSubject, opaqueValue } from '../_shared/rateLimit.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -22,6 +23,21 @@ Deno.serve(async (req) => {
 
   const url = Deno.env.get('SUPABASE_URL') ?? '';
   const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+  try {
+    const [clientSubject, identifierSubject] = await Promise.all([
+      opaqueClientSubject(req),
+      opaqueValue(normalized),
+    ]);
+    const [clientAllowed, identifierAllowed] = await Promise.all([
+      consumeRateLimit(admin, 'login:ip', clientSubject, 20, 300),
+      consumeRateLimit(admin, 'login:identifier', identifierSubject, 10, 300),
+    ]);
+    if (!clientAllowed || !identifierAllowed) {
+      return response({ error: 'Слишком много попыток. Повторите через несколько минут' }, 429);
+    }
+  } catch {
+    return response({ error: 'Вход временно недоступен' }, 503);
+  }
   const { data: profile } = await admin
     .from('profiles')
     .select('user_id')

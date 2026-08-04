@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import webpush from 'npm:web-push@3.6.7';
 import { corsHeaders } from '../_shared/cors.ts';
+import { isAllowedWebPushEndpoint } from '../_shared/pushEndpoint.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -51,6 +52,15 @@ Deno.serve(async (request) => {
   if (membershipError) return json({ error: 'Could not verify workspace access' }, 500);
   if (!membership) return json({ error: 'Workspace access denied' }, 403);
 
+  const { data: withinLimit, error: rateLimitError } = await admin.rpc('consume_security_rate_limit', {
+    p_bucket: 'push:test',
+    p_subject: userData.user.id,
+    p_limit: 5,
+    p_window_seconds: 3600,
+  });
+  if (rateLimitError) return json({ error: 'Could not check request limit' }, 500);
+  if (!withinLimit) return json({ error: 'Too many test notifications' }, 429);
+
   const { data, error: subscriptionsError } = await admin
     .from('push_subscriptions')
     .select('id,endpoint,p256dh,auth')
@@ -64,6 +74,10 @@ Deno.serve(async (request) => {
   webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
   let delivered = 0;
   for (const subscription of subscriptions) {
+    if (!isAllowedWebPushEndpoint(subscription.endpoint)) {
+      await admin.from('push_subscriptions').delete().eq('id', subscription.id).eq('user_id', userData.user.id);
+      continue;
+    }
     try {
       await webpush.sendNotification({
         endpoint: subscription.endpoint,

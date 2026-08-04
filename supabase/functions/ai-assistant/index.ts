@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { consumeRateLimit } from '../_shared/rateLimit.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -65,6 +66,14 @@ Deno.serve(async (request) => {
     const { data: userResult, error: userError } = await supabase.auth.getUser();
     if (userError || !userResult.user) return json({ error: 'Сессия истекла' }, 401);
 
+    const admin = createClient(
+      Deno.env.get('SUPABASE_URL') || '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
+    );
+    if (!await consumeRateLimit(admin, 'assistant:user', userResult.user.id, 30, 3600)) {
+      return json({ error: 'Лимит запросов к помощнику исчерпан' }, 429);
+    }
+
     const { data: context, error: contextError } = await supabase.rpc('get_ai_financial_context', {
       p_workspace_id: workspaceId,
       p_date_from: dateFrom,
@@ -72,14 +81,15 @@ Deno.serve(async (request) => {
     });
     if (contextError) return json({ error: contextError.message }, 403);
 
-    const apiKey = Deno.env.get('OPENROUTER_API_KEY')?.trim();
+    const externalProviderEnabled = Deno.env.get('BETA_EXTERNAL_AI_ENABLED') === 'true';
+    const apiKey = externalProviderEnabled ? Deno.env.get('OPENROUTER_API_KEY')?.trim() : '';
     const model = Deno.env.get('OPENROUTER_MODEL')?.trim() || 'openrouter/free';
     if (!apiKey) {
       const answer = fallbackAnswer(context as FinancialContext);
       await supabase.from('ai_assistant_logs').insert({
         workspace_id: workspaceId, user_id: userResult.user.id, question, model: 'local-summary', status: 'mock',
       });
-      return json({ answer, model: 'local-summary', mode: 'mock' });
+      return json({ answer, model: 'local-summary', mode: 'local' });
     }
 
     try {

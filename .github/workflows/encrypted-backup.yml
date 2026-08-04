@@ -1,0 +1,124 @@
+name: Encrypted production backup
+
+on:
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-database-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      BACKUP_AGE_RECIPIENT: ${{ secrets.BACKUP_AGE_RECIPIENT }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate required configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY R2_ENDPOINT_URL R2_BUCKET SUPABASE_DB_URL BACKUP_AGE_RECIPIENT; do
+            if [ -z "${!name:-}" ]; then
+              echo "Required backup secret is missing: ${name}" >&2
+              exit 1
+            fi
+          done
+          if [[ ! "$BACKUP_AGE_RECIPIENT" =~ ^age1[0-9a-z]+$ ]]; then
+            echo "BACKUP_AGE_RECIPIENT is not a valid age public recipient" >&2
+            exit 1
+          fi
+
+      - name: Install backup tools
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends age postgresql-client awscli jq
+
+      - name: Create, encrypt and verify logical dump
+        id: dump
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+          plain="${RUNNER_TEMP}/fintrack-${stamp}.dump"
+          encrypted="${plain}.age"
+          pg_dump --dbname="$SUPABASE_DB_URL" --format=custom --no-owner --no-acl --file="$plain"
+          pg_restore --list "$plain" >/dev/null
+          age --recipient "$BACKUP_AGE_RECIPIENT" --output "$encrypted" "$plain"
+          shred --remove "$plain"
+          test -s "$encrypted"
+          echo "path=$encrypted" >> "$GITHUB_OUTPUT"
+          echo "name=fintrack-${stamp}.dump.age" >> "$GITHUB_OUTPUT"
+          echo "day=$(date -u +%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Apply retention and enforce the free-tier storage gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          daily_cutoff="$(date -u -d '14 days ago' +%Y-%m-%dT%H:%M:%SZ)"
+          monthly_cutoff="$(date -u -d '100 days ago' +%Y-%m-%dT%H:%M:%SZ)"
+          objects="$(aws s3api list-objects-v2 --endpoint-url "$R2_ENDPOINT_URL" --bucket "$R2_BUCKET" --output json)"
+          while IFS= read -r key; do
+            [ -z "$key" ] || aws s3api delete-object --endpoint-url "$R2_ENDPOINT_URL" --bucket "$R2_BUCKET" --key "$key" >/dev/null
+          done < <(jq -r --arg cutoff "$daily_cutoff" '.Contents[]? | select(.Key | startswith("daily/")) | select(.LastModified < $cutoff) | .Key' <<<"$objects")
+          while IFS= read -r key; do
+            [ -z "$key" ] || aws s3api delete-object --endpoint-url "$R2_ENDPOINT_URL" --bucket "$R2_BUCKET" --key "$key" >/dev/null
+          done < <(jq -r --arg cutoff "$monthly_cutoff" '.Contents[]? | select(.Key | startswith("monthly/")) | select(.LastModified < $cutoff) | .Key' <<<"$objects")
+
+          current_bytes="$(aws s3api list-objects-v2 --endpoint-url "$R2_ENDPOINT_URL" --bucket "$R2_BUCKET" --query 'sum(Contents[].Size)' --output text)"
+          [[ "$current_bytes" =~ ^[0-9]+$ ]] || current_bytes=0
+          new_bytes="$(stat --format=%s '${{ steps.dump.outputs.path }}')"
+          copies=1
+          [ '${{ steps.dump.outputs.day }}' = '01' ] && copies=2
+          hard_limit=$((8 * 1024 * 1024 * 1024))
+          if (( current_bytes + new_bytes * copies > hard_limit )); then
+            echo "Encrypted backup would exceed the 8 GiB zero-cost gate" >&2
+            exit 1
+          fi
+
+      - name: Upload encrypted backup to private R2
+        shell: bash
+        run: |
+          set -euo pipefail
+          name='${{ steps.dump.outputs.name }}'
+          path='${{ steps.dump.outputs.path }}'
+          aws s3 cp "$path" "s3://${R2_BUCKET}/daily/${name}" --endpoint-url "$R2_ENDPOINT_URL" --only-show-errors
+          if [ '${{ steps.dump.outputs.day }}' = '01' ]; then
+            aws s3 cp "$path" "s3://${R2_BUCKET}/monthly/${name}" --endpoint-url "$R2_ENDPOINT_URL" --only-show-errors
+          fi
+          local_size="$(stat --format=%s "$path")"
+          remote_size="$(aws s3api head-object --endpoint-url "$R2_ENDPOINT_URL" --bucket "$R2_BUCKET" --key "daily/${name}" --query ContentLength --output text)"
+          test "$local_size" = "$remote_size"
+          shred --remove "$path"
+
+      - name: Send failure alert through existing Resend account
+        if: failure()
+        continue-on-error: true
+        shell: bash
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          BACKUP_ALERT_TO: ${{ secrets.BACKUP_ALERT_TO }}
+          NOTIFICATION_FROM_EMAIL: ${{ secrets.NOTIFICATION_FROM_EMAIL }}
+        run: |
+          set -euo pipefail
+          [ -n "${RESEND_API_KEY:-}" ] && [ -n "${BACKUP_ALERT_TO:-}" ] && [ -n "${NOTIFICATION_FROM_EMAIL:-}" ] || exit 0
+          curl --fail --silent --show-error https://api.resend.com/emails \
+            --header "Authorization: Bearer ${RESEND_API_KEY}" \
+            --header 'Content-Type: application/json' \
+            --data "$(jq -n --arg from "$NOTIFICATION_FROM_EMAIL" --arg to "$BACKUP_ALERT_TO" --arg run "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" '{from:$from,to:[$to],subject:"FinTrackApp backup failed",text:("Production encrypted backup failed. Inspect: " + $run)}')"
+

@@ -50,8 +50,8 @@ export function AuthProvider({ children }) {
 
   const login = async (identifier, password) => {
     setError("");
-    if (!password || password.length < 6) {
-      setError("Пароль должен быть не менее 6 символов");
+    if (!password || password.length < 8) {
+      setError("Пароль должен быть не менее 8 символов");
       return false;
     }
     setLoading(true);
@@ -157,7 +157,7 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const updatePassword = async (password) => {
+  const updatePassword = async (password, currentPassword) => {
     setError("");
     if (!isStrongPassword(password)) {
       setError(PASSWORD_POLICY_MESSAGE);
@@ -165,8 +165,12 @@ export function AuthProvider({ children }) {
     }
     setLoading(true);
     try {
-      const { error: updateError } = await supabase.auth.updateUser({ password });
+      const attributes = currentPassword
+        ? { password, current_password: currentPassword }
+        : { password };
+      const { error: updateError } = await supabase.auth.updateUser(attributes);
       if (updateError) throw updateError;
+      if (currentPassword) await supabase.auth.signOut({ scope: 'others' });
       return true;
     } catch (e) {
       setError(e.message || "Не удалось изменить пароль");

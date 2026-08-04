@@ -23,6 +23,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -34,6 +35,7 @@ export default function ProfilePage() {
   const [now, setNow] = useState(() => Date.now());
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [deleteEmail, setDeleteEmail] = useState('');
+  const [deletePassword, setDeletePassword] = useState('');
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState('');
 
@@ -122,12 +124,14 @@ export default function ProfilePage() {
     setMessage('');
     if (!isStrongPassword(password)) { setError(PASSWORD_POLICY_MESSAGE); return; }
     if (password !== confirmation) { setError('Пароли не совпадают'); return; }
+    if (!currentPassword) { setError('Введите текущий пароль'); return; }
     setSaving(true);
-    const success = await updatePassword(password);
+    const success = await updatePassword(password, currentPassword);
     setSaving(false);
     if (!success) { setError('Не удалось изменить пароль'); return; }
     setPassword('');
     setConfirmation('');
+    setCurrentPassword('');
     setMessage('Пароль успешно изменён');
   };
 
@@ -142,7 +146,20 @@ export default function ProfilePage() {
       setDeleteError('Введите email текущего аккаунта полностью');
       return;
     }
+    if (!deletePassword) {
+      setDeleteError('Введите текущий пароль');
+      return;
+    }
     setDeleteBusy(true);
+    const { error: reauthError } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: deletePassword,
+    });
+    if (reauthError) {
+      setDeleteBusy(false);
+      setDeleteError('Текущий пароль неверен');
+      return;
+    }
     const { error: deletionError } = await supabase.rpc('delete_my_account', {
       p_confirmation_email: deleteEmail.trim(),
     });
@@ -234,6 +251,7 @@ export default function ProfilePage() {
       <section className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
         <div className="mb-4 flex items-center gap-2"><KeyRound size={19} className="text-primary-600" /><h2 className="font-semibold">Сменить пароль</h2></div>
         <form onSubmit={changePassword} className="space-y-3">
+          <PasswordInput autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} placeholder="Текущий пароль" aria-label="Текущий пароль" />
           <PasswordInput autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Новый пароль — не менее 8 символов" aria-label="Новый пароль" minLength={8} />
           <PasswordInput autoComplete="new-password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} placeholder="Повторите пароль" aria-label="Повторите пароль" />
           {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
@@ -258,10 +276,11 @@ export default function ProfilePage() {
           <div className="mt-4 space-y-3 rounded-xl bg-red-50 p-3 dark:bg-red-950/30">
             <p className="flex items-start gap-2 text-xs leading-5 text-red-800 dark:text-red-200"><AlertTriangle size={16} className="mt-0.5 shrink-0" />Сначала сохраните JSON-backup нужных пространств. Для подтверждения введите email <strong>{user?.email}</strong>.</p>
             <input type="email" className="input-field" value={deleteEmail} onChange={(event) => setDeleteEmail(event.target.value)} placeholder="Email текущего аккаунта" aria-label="Email для подтверждения удаления аккаунта" autoComplete="email" />
+            <PasswordInput autoComplete="current-password" value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} placeholder="Текущий пароль" aria-label="Текущий пароль для удаления аккаунта" />
             {deleteError && <p role="alert" className="text-sm text-red-700 dark:text-red-300">{deleteError}</p>}
             <div className="grid gap-2 sm:grid-cols-2">
-              <button type="button" disabled={deleteBusy} onClick={() => { setShowDeleteAccount(false); setDeleteEmail(''); setDeleteError(''); }} className="btn-secondary min-h-11">Отмена</button>
-              <button type="button" disabled={deleteBusy || deleteEmail.trim().toLowerCase() !== user?.email?.toLowerCase()} onClick={deleteAccount} className="min-h-11 rounded-xl bg-red-600 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{deleteBusy ? 'Удаляем…' : 'Удалить навсегда'}</button>
+              <button type="button" disabled={deleteBusy} onClick={() => { setShowDeleteAccount(false); setDeleteEmail(''); setDeletePassword(''); setDeleteError(''); }} className="btn-secondary min-h-11">Отмена</button>
+              <button type="button" disabled={deleteBusy || !deletePassword || deleteEmail.trim().toLowerCase() !== user?.email?.toLowerCase()} onClick={deleteAccount} className="min-h-11 rounded-xl bg-red-600 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{deleteBusy ? 'Удаляем…' : 'Удалить навсегда'}</button>
             </div>
           </div>
         )}

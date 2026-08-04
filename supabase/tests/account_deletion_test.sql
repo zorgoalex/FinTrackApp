@@ -1,11 +1,14 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
-SELECT plan(9);
+SELECT plan(10);
 
 INSERT INTO auth.users(id, email) VALUES
   ('1a000000-0000-0000-0000-000000000001', 'delete-me@example.test'),
   ('1a000000-0000-0000-0000-000000000002', 'shared-owner@example.test');
+
+INSERT INTO auth.sessions(id, user_id) VALUES
+  ('1a000000-0000-0000-0000-000000000099', '1a000000-0000-0000-0000-000000000001');
 
 INSERT INTO public.workspaces(id, owner_id, name, is_personal, workspace_type, base_currency) VALUES
   ('2a000000-0000-0000-0000-000000000001', '1a000000-0000-0000-0000-000000000001', 'Owned by deleting user', false, 'business', 'KZT'),
@@ -23,6 +26,25 @@ SELECT has_function('public', 'delete_my_account', ARRAY['text'], 'self-service 
 
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', '1a000000-0000-0000-0000-000000000001', true);
+SELECT set_config('request.jwt.claims', json_build_object(
+  'sub', '1a000000-0000-0000-0000-000000000001',
+  'role', 'authenticated',
+  'session_id', '1a000000-0000-0000-0000-000000000099',
+  'amr', json_build_array(json_build_object('method', 'password', 'timestamp', extract(epoch FROM now() - interval '10 minutes')::bigint))
+)::text, true);
+
+SELECT throws_ok(
+  $$SELECT public.delete_my_account('delete-me@example.test')$$,
+  'P0001', 'Повторно подтвердите текущий пароль',
+  'account deletion rejects a stale password session'
+);
+
+SELECT set_config('request.jwt.claims', json_build_object(
+  'sub', '1a000000-0000-0000-0000-000000000001',
+  'role', 'authenticated',
+  'session_id', '1a000000-0000-0000-0000-000000000099',
+  'amr', json_build_array(json_build_object('method', 'password', 'timestamp', extract(epoch FROM now())::bigint))
+)::text, true);
 
 SELECT throws_ok(
   $$SELECT public.delete_my_account('wrong@example.test')$$,

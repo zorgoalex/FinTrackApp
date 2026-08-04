@@ -58,7 +58,7 @@ SELECT throws_ok($$SELECT public.create_offline_expense(
 
 SELECT lives_ok($$SELECT public.upsert_push_subscription(
   '27000000-0000-0000-0000-000000000001',
-  'https://push.example.test/subscription/member-0001',
+  'https://fcm.googleapis.com/fcm/send/member-0001',
   'BCabcdefghijklmnopqrstuvwxyz0123456789',
   'auth-token-0001', 'pgTAP browser'
 )$$, 'member registers a Web Push subscription');

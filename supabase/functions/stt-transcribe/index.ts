@@ -3,6 +3,7 @@ import { corsHeaders } from '../_shared/cors.ts';
 import { SttError } from '../_shared/stt/errors.ts';
 import { createSttProvider } from '../_shared/stt/registry.ts';
 import type { TimestampGranularity } from '../_shared/stt/types.ts';
+import { consumeRateLimit } from '../_shared/rateLimit.ts';
 
 const DEFAULT_MAX_BYTES = 18 * 1024 * 1024;
 const GROQ_FREE_TIER_MAX_BYTES = 25 * 1024 * 1024;
@@ -75,6 +76,21 @@ Deno.serve(async (request) => {
     const { data: authData, error: authError } = await supabase.auth.getUser();
     if (authError || !authData.user) {
       return json({ error: { code: 'UNAUTHORIZED', message: 'Сессия истекла', retryable: false } }, 401);
+    }
+    if (Deno.env.get('BETA_EXTERNAL_STT_ENABLED') !== 'true') {
+      return json({
+        error: { code: 'FEATURE_DISABLED', message: 'Голосовой ввод временно отключён в beta', retryable: false },
+      }, 503);
+    }
+
+    const admin = createClient(
+      Deno.env.get('SUPABASE_URL') || '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
+    );
+    if (!await consumeRateLimit(admin, 'stt:user', authData.user.id, 10, 3600)) {
+      return json({
+        error: { code: 'RATE_LIMITED', message: 'Лимит голосовых запросов исчерпан', retryable: true, retry_after_seconds: 3600 },
+      }, 429, { 'Retry-After': '3600' });
     }
 
     const contentType = request.headers.get('content-type') || '';

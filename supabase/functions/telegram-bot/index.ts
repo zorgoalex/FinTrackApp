@@ -4,32 +4,78 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN') ?? '';
 const TELEGRAM_WEBHOOK_SECRET = Deno.env.get('TELEGRAM_WEBHOOK_SECRET') ?? '';
+const MAX_COMMAND_LENGTH = 1000;
+const MAX_AMOUNT = 999_999_999_999;
 
 const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 // --- Telegram API helpers ---
 
 async function sendMessage(chatId: number, text: string) {
-  await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+  const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       chat_id: chatId,
-      text,
-      parse_mode: 'HTML',
+      text: text.slice(0, 3500),
     }),
   });
+  if (!response.ok) throw new Error(`Telegram send failed with HTTP ${response.status}`);
 }
 
 // --- DB helpers ---
 
 async function getTelegramUser(telegramId: number) {
-  const { data } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from('telegram_users')
-    .select('*')
+    .select('telegram_id,chat_id,user_id,default_workspace_id')
     .eq('telegram_id', telegramId)
-    .single();
+    .maybeSingle();
+  if (error) throw new Error('Could not load Telegram account');
   return data;
+}
+
+type WorkspaceRole = 'Owner' | 'Admin' | 'Member' | 'Viewer';
+
+async function getWorkspaceRole(userId: string, workspaceId: string): Promise<WorkspaceRole | null> {
+  const { data, error } = await supabaseAdmin
+    .from('workspace_members')
+    .select('role')
+    .eq('workspace_id', workspaceId)
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .maybeSingle();
+  if (error) throw new Error('Could not verify workspace access');
+  return (data?.role as WorkspaceRole | undefined) || null;
+}
+
+async function requireWorkspaceRole(
+  chatId: number,
+  userId: string,
+  workspaceId: string,
+  allowedRoles: WorkspaceRole[],
+) {
+  const role = await getWorkspaceRole(userId, workspaceId);
+  if (!role) {
+    await sendMessage(chatId, 'Нет доступа к выбранному пространству. Выберите другое через /workspaces.');
+    return false;
+  }
+  if (!allowedRoles.includes(role)) {
+    await sendMessage(chatId, 'Недостаточно прав для этой команды.');
+    return false;
+  }
+  return true;
+}
+
+async function consumeRateLimit(bucket: string, subject: string, limit: number, windowSeconds: number) {
+  const { data, error } = await supabaseAdmin.rpc('consume_security_rate_limit', {
+    p_bucket: bucket,
+    p_subject: subject,
+    p_limit: limit,
+    p_window_seconds: windowSeconds,
+  });
+  if (error) throw new Error('Could not check rate limit');
+  return data === true;
 }
 
 async function getUserWorkspaces(userId: string) {
@@ -100,12 +146,12 @@ async function handleStart(chatId: number, telegramId: number, args: string[], s
       await sendMessage(chatId, 'Ссылка привязки недействительна или истекла. Создайте новую ссылку в личном кабинете ФинУчёта.');
       return;
     }
-    await sendMessage(chatId, '<b>Telegram успешно подключён к ФинУчёту.</b>\nТеперь сюда будут приходить выбранные уведомления.');
+    await sendMessage(chatId, 'Telegram успешно подключён к FinTrackApp.\nТеперь сюда будут приходить выбранные уведомления.');
     return;
   }
   await sendMessage(
     chatId,
-      `<b>FinTrackApp Bot</b>\n\n` +
+      `FinTrackApp Bot\n\n` +
       `Подключите Telegram в личном кабинете приложения.\n\n` +
       `Команды:\n` +
       `/unlink — отвязать аккаунт\n` +
@@ -133,7 +179,8 @@ async function handleUnlink(chatId: number, telegramId: number) {
     .eq('telegram_id', telegramId);
 
   if (error) {
-    return await sendMessage(chatId, `Ошибка: ${error.message}`);
+    console.error('Telegram unlink failed:', error.code);
+    return await sendMessage(chatId, 'Не удалось отвязать аккаунт. Повторите позже.');
   }
   await sendMessage(chatId, 'Аккаунт отвязан.');
 }
@@ -147,7 +194,7 @@ async function handleWorkspaces(chatId: number, userId: string) {
   const lines = workspaces.map(
     (w: any, i: number) => `${i + 1}. ${w.workspaces?.name || w.workspace_id} (${w.role})`,
   );
-  await sendMessage(chatId, `<b>Пространства:</b>\n${lines.join('\n')}\n\nИспользуйте /ws номер для выбора.`);
+  await sendMessage(chatId, `Пространства:\n${lines.join('\n')}\n\nИспользуйте /ws номер для выбора.`);
 }
 
 async function handleSelectWorkspace(chatId: number, telegramId: number, userId: string, args: string[]) {
@@ -174,7 +221,7 @@ async function handleBalance(chatId: number, workspaceId: string) {
   const summary = await getOperationsSummary(workspaceId, monthStartStr(), monthEndStr());
   await sendMessage(
     chatId,
-    `<b>Баланс за месяц:</b>\n` +
+    `Баланс за месяц:\n` +
       `Доходы: ${formatMoney(summary.income)}\n` +
       `Расходы: ${formatMoney(summary.expense)}\n` +
       `Зарплаты сотрудникам: ${formatMoney(summary.salary)}\n` +
@@ -187,7 +234,7 @@ async function handleToday(chatId: number, workspaceId: string) {
   const summary = await getOperationsSummary(workspaceId, today, today);
   await sendMessage(
     chatId,
-    `<b>Сегодня (${today}):</b>\n` +
+    `Сегодня (${today}):\n` +
       `Доходы: ${formatMoney(summary.income)}\n` +
       `Расходы: ${formatMoney(summary.expense)}\n` +
       `Зарплаты сотрудникам: ${formatMoney(summary.salary)}\n` +
@@ -211,11 +258,11 @@ async function handleAdd(
   }
 
   const amount = parseFloat(args[0].replace(',', '.'));
-  if (isNaN(amount) || amount <= 0) {
+  if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_AMOUNT) {
     return await sendMessage(chatId, 'Некорректная сумма.');
   }
 
-  const description = args.slice(1).join(' ') || null;
+  const description = args.slice(1).join(' ').slice(0, 500) || null;
 
   // Get default account
   const { data: defaultAcc } = await supabaseAdmin
@@ -240,7 +287,8 @@ async function handleAdd(
     .single();
 
   if (error) {
-    return await sendMessage(chatId, `Ошибка: ${error.message}`);
+    console.error('Telegram operation insert failed:', error.code);
+    return await sendMessage(chatId, 'Не удалось сохранить операцию. Повторите позже.');
   }
 
   const label = type === 'income' ? 'Доход' : 'Расход';
@@ -259,11 +307,11 @@ async function handleCategories(chatId: number, workspaceId: string) {
     .order('type')
     .order('name');
 
-  if (error) return await sendMessage(chatId, `Ошибка: ${error.message}`);
+  if (error) return await sendMessage(chatId, 'Не удалось загрузить категории.');
   if (!data || data.length === 0) return await sendMessage(chatId, 'Нет категорий.');
 
   const lines = data.map((c: any) => `• ${c.name} (${c.type}) ${c.color}`);
-  await sendMessage(chatId, `<b>Категории:</b>\n${lines.join('\n')}`);
+  await sendMessage(chatId, `Категории:\n${lines.join('\n')}`);
 }
 
 async function handleAddCategory(
@@ -281,8 +329,11 @@ async function handleAddCategory(
     return await sendMessage(chatId, 'Тип должен быть income или expense');
   }
 
-  const name = args[1];
+  const name = args[1]?.trim().slice(0, 100);
   const color = args[2] || '#6B7280';
+  if (!name || !/^#[0-9a-f]{6}$/i.test(color)) {
+    return await sendMessage(chatId, 'Название или цвет некорректны. Цвет: #RRGGBB');
+  }
 
   const { data, error } = await supabaseAdmin
     .from('categories')
@@ -292,7 +343,8 @@ async function handleAddCategory(
 
   if (error) {
     if (error.code === '23505') return await sendMessage(chatId, 'Категория уже существует.');
-    return await sendMessage(chatId, `Ошибка: ${error.message}`);
+    console.error('Telegram category insert failed:', error.code);
+    return await sendMessage(chatId, 'Не удалось создать категорию.');
   }
 
   await sendMessage(chatId, `Категория создана: ${data.name} (${data.type})`);
@@ -306,11 +358,11 @@ async function handleTags(chatId: number, workspaceId: string) {
     .eq('is_archived', false)
     .order('name');
 
-  if (error) return await sendMessage(chatId, `Ошибка: ${error.message}`);
+  if (error) return await sendMessage(chatId, 'Не удалось загрузить теги.');
   if (!data || data.length === 0) return await sendMessage(chatId, 'Нет тегов.');
 
   const lines = data.map((t: any) => `• ${t.name} ${t.color}`);
-  await sendMessage(chatId, `<b>Теги:</b>\n${lines.join('\n')}`);
+  await sendMessage(chatId, `Теги:\n${lines.join('\n')}`);
 }
 
 async function handleAddTag(
@@ -323,8 +375,11 @@ async function handleAddTag(
     return await sendMessage(chatId, 'Использование: /addtag название [цвет]');
   }
 
-  const name = args[0];
+  const name = args[0]?.trim().slice(0, 100);
   const color = args[1] || '#6B7280';
+  if (!name || !/^#[0-9a-f]{6}$/i.test(color)) {
+    return await sendMessage(chatId, 'Название или цвет некорректны. Цвет: #RRGGBB');
+  }
 
   const { data, error } = await supabaseAdmin
     .from('tags')
@@ -334,7 +389,8 @@ async function handleAddTag(
 
   if (error) {
     if (error.code === '23505') return await sendMessage(chatId, 'Тег уже существует.');
-    return await sendMessage(chatId, `Ошибка: ${error.message}`);
+    console.error('Telegram tag insert failed:', error.code);
+    return await sendMessage(chatId, 'Не удалось создать тег.');
   }
 
   await sendMessage(chatId, `Тег создан: ${data.name}`);
@@ -349,7 +405,7 @@ async function handleRecent(chatId: number, workspaceId: string) {
     .order('created_at', { ascending: false })
     .limit(15);
 
-  if (error) return await sendMessage(chatId, `Ошибка: ${error.message}`);
+  if (error) return await sendMessage(chatId, 'Не удалось загрузить операции.');
   if (!data || data.length === 0) return await sendMessage(chatId, 'Нет операций.');
 
   // Filter out 'in' transfers to avoid duplicates
@@ -361,7 +417,7 @@ async function handleRecent(chatId: number, workspaceId: string) {
     return `${op.operation_date} ${sign}${formatMoney(Number(op.amount))}${desc}`;
   });
 
-  await sendMessage(chatId, `<b>Последние операции:</b>\n${lines.join('\n')}`);
+  await sendMessage(chatId, `Последние операции:\n${lines.join('\n')}`);
 }
 
 async function handleAccounts(chatId: number, workspaceId: string) {
@@ -373,7 +429,7 @@ async function handleAccounts(chatId: number, workspaceId: string) {
     .order('is_default', { ascending: false })
     .order('name');
 
-  if (error) return await sendMessage(chatId, `Ошибка: ${error.message}`);
+  if (error) return await sendMessage(chatId, 'Не удалось загрузить счета.');
   if (!accounts || accounts.length === 0) return await sendMessage(chatId, 'Нет счетов.');
 
   // Get balances
@@ -387,7 +443,7 @@ async function handleAccounts(chatId: number, workspaceId: string) {
     return `${i + 1}. ${a.name}${def}: ${formatMoney(bal)}`;
   });
 
-  await sendMessage(chatId, `<b>Счета:</b>\n${lines.join('\n')}`);
+  await sendMessage(chatId, `Счета:\n${lines.join('\n')}`);
 }
 
 async function handleTransfer(
@@ -404,9 +460,9 @@ async function handleTransfer(
   const fromNum = parseInt(args[0], 10);
   const toNum = parseInt(args[1], 10);
   const amount = parseFloat(args[2].replace(',', '.'));
-  const description = args.slice(3).join(' ') || null;
+  const description = args.slice(3).join(' ').slice(0, 500) || null;
 
-  if (!fromNum || !toNum || isNaN(amount) || amount <= 0) {
+  if (!fromNum || !toNum || !Number.isFinite(amount) || amount <= 0 || amount > MAX_AMOUNT) {
     return await sendMessage(chatId, 'Некорректные параметры. Пример: /transfer 1 2 1000');
   }
 
@@ -440,7 +496,10 @@ async function handleTransfer(
     p_operation_date: todayStr(),
   });
 
-  if (error) return await sendMessage(chatId, `Ошибка: ${error.message}`);
+  if (error) {
+    console.error('Telegram transfer failed:', error.code);
+    return await sendMessage(chatId, 'Не удалось выполнить перевод.');
+  }
   await sendMessage(chatId, `Перевод: ${fromAcc.name} → ${toAcc.name}: ${formatMoney(amount)}${description ? ` — ${description}` : ''}`);
 }
 
@@ -460,6 +519,15 @@ Deno.serve(async (req) => {
 
   try {
     const update = await req.json();
+    if (!Number.isSafeInteger(update?.update_id) || update.update_id < 0) {
+      return new Response('OK', { status: 200 });
+    }
+    const { data: claimed, error: claimError } = await supabaseAdmin.rpc('claim_telegram_webhook_update', {
+      p_update_id: update.update_id,
+    });
+    if (claimError) throw new Error('Could not claim Telegram update');
+    if (!claimed) return new Response('OK', { status: 200 });
+
     const message = update.message;
     if (!message?.text || !message?.from) {
       return new Response('OK', { status: 200 });
@@ -468,6 +536,18 @@ Deno.serve(async (req) => {
     const chatId = message.chat.id;
     const telegramId = message.from.id;
     const text = message.text.trim();
+    if (message.chat.type !== 'private' || chatId !== telegramId) {
+      await sendMessage(chatId, 'Для безопасности FinTrackApp работает только в личном чате с ботом.');
+      return new Response('OK', { status: 200 });
+    }
+    if (!Number.isSafeInteger(chatId) || !Number.isSafeInteger(telegramId) || !text || text.length > MAX_COMMAND_LENGTH) {
+      await sendMessage(chatId, 'Команда некорректна или слишком длинная.');
+      return new Response('OK', { status: 200 });
+    }
+    if (!await consumeRateLimit('telegram:command', String(telegramId), 30, 60)) {
+      await sendMessage(chatId, 'Слишком много команд. Повторите через минуту.');
+      return new Response('OK', { status: 200 });
+    }
     const parts = text.split(/\s+/);
     const command = parts[0].toLowerCase().replace(/@\w+$/, ''); // strip @botname
     const args = parts.slice(1);
@@ -480,7 +560,7 @@ Deno.serve(async (req) => {
 
     // All other commands require linked account
     const tgUser = await getTelegramUser(telegramId);
-    if (!tgUser) {
+    if (!tgUser || Number(tgUser.chat_id) !== chatId) {
       await sendMessage(chatId, 'Аккаунт не привязан. Откройте личный кабинет ФинУчёта и нажмите «Подключить Telegram».');
       return new Response('OK', { status: 200 });
     }
@@ -508,6 +588,14 @@ Deno.serve(async (req) => {
       await sendMessage(chatId, 'Не выбрано пространство. Используйте /workspaces и /ws номер');
       return new Response('OK', { status: 200 });
     }
+    if (!await requireWorkspaceRole(chatId, userId, workspaceId, ['Owner', 'Admin', 'Member', 'Viewer'])) {
+      await supabaseAdmin
+        .from('telegram_users')
+        .update({ default_workspace_id: null })
+        .eq('telegram_id', telegramId)
+        .eq('user_id', userId);
+      return new Response('OK', { status: 200 });
+    }
 
     switch (command) {
       case '/balance':
@@ -520,22 +608,30 @@ Deno.serve(async (req) => {
         await handleMonth(chatId, workspaceId);
         break;
       case '/add':
-        await handleAdd(chatId, userId, workspaceId, 'expense', args);
+        if (await requireWorkspaceRole(chatId, userId, workspaceId, ['Owner', 'Admin', 'Member'])) {
+          await handleAdd(chatId, userId, workspaceId, 'expense', args);
+        }
         break;
       case '/income':
-        await handleAdd(chatId, userId, workspaceId, 'income', args);
+        if (await requireWorkspaceRole(chatId, userId, workspaceId, ['Owner', 'Admin', 'Member'])) {
+          await handleAdd(chatId, userId, workspaceId, 'income', args);
+        }
         break;
       case '/categories':
         await handleCategories(chatId, workspaceId);
         break;
       case '/addcat':
-        await handleAddCategory(chatId, userId, workspaceId, args);
+        if (await requireWorkspaceRole(chatId, userId, workspaceId, ['Owner', 'Admin'])) {
+          await handleAddCategory(chatId, userId, workspaceId, args);
+        }
         break;
       case '/tags':
         await handleTags(chatId, workspaceId);
         break;
       case '/addtag':
-        await handleAddTag(chatId, userId, workspaceId, args);
+        if (await requireWorkspaceRole(chatId, userId, workspaceId, ['Owner', 'Admin'])) {
+          await handleAddTag(chatId, userId, workspaceId, args);
+        }
         break;
       case '/recent':
         await handleRecent(chatId, workspaceId);
@@ -544,7 +640,9 @@ Deno.serve(async (req) => {
         await handleAccounts(chatId, workspaceId);
         break;
       case '/transfer':
-        await handleTransfer(chatId, userId, workspaceId, args);
+        if (await requireWorkspaceRole(chatId, userId, workspaceId, ['Owner', 'Admin', 'Member'])) {
+          await handleTransfer(chatId, userId, workspaceId, args);
+        }
         break;
       default:
         await sendMessage(chatId, 'Неизвестная команда. Используйте /start для списка команд.');
@@ -552,7 +650,7 @@ Deno.serve(async (req) => {
 
     return new Response('OK', { status: 200 });
   } catch (err) {
-    console.error('Telegram bot error:', err.message);
+    console.error('Telegram bot error:', err instanceof Error ? err.message : 'unknown error');
     return new Response('OK', { status: 200 });
   }
 });

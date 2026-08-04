@@ -1,0 +1,37 @@
+{
+  "version": "5",
+  "redirects": {
+    "https://esm.sh/@supabase/supabase-js@2": "https://esm.sh/@supabase/supabase-js@2.110.2"
+  },
+  "remote": {
+    "https://esm.sh/@supabase/supabase-js@2.110.2": "a764256c977bc03fc703d7b0031ac3138137a49b9f831775fd7a7f42019f652d"
+  },
+  "workspace": {
+    "packageJson": {
+      "dependencies": [
+        "npm:@paddleocr/paddleocr-js@~0.4.2",
+        "npm:@supabase/supabase-js@^2.53.0",
+        "npm:@types/react-dom@^18.3.1",
+        "npm:@types/react@^18.3.11",
+        "npm:@vitejs/plugin-react@^6.0.5",
+        "npm:autoprefixer@^10.4.16",
+        "npm:clsx@2",
+        "npm:date-fns@^2.30.0",
+        "npm:eslint-plugin-react-hooks@5",
+        "npm:eslint-plugin-react-refresh@~0.4.14",
+        "npm:eslint-plugin-react@^7.37.2",
+        "npm:eslint@^9.13.0",
+        "npm:lucide-react@~0.263.1",
+        "npm:pdfjs-dist@^6.1.200",
+        "npm:postcss@^8.4.32",
+        "npm:react-dom@^18.3.1",
+        "npm:react-router-dom@^7.18.2",
+        "npm:react@^18.3.1",
+        "npm:supabase@^2.33.9",
+        "npm:tailwindcss@^3.3.6",
+        "npm:tesseract.js@7",
+        "npm:vite@^8.2.0"
+      ]
+    }
+  }
+}

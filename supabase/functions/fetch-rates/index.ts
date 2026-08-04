@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
+import { consumeRateLimit } from '../_shared/rateLimit.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -93,6 +94,9 @@ Deno.serve(async (req) => {
       return errorResponse('Only owners/admins can fetch rates', 403);
     }
 
+    const rateAllowed = await consumeRateLimit(userClient, 'rates:workspace', `${workspace_id}:${user.id}`, 12, 3600);
+    if (!rateAllowed) return errorResponse('Rate refresh limit exceeded', 429);
+
     // Get workspace base currency
     const { data: ws } = await userClient
       .from('workspaces')
@@ -179,6 +183,6 @@ Deno.serve(async (req) => {
     });
   } catch (err) {
     console.error('fetch-rates error:', err);
-    return errorResponse(err.message || 'Internal error', 500);
+    return errorResponse(err instanceof Error ? err.message : 'Internal error', 500);
   }
 });

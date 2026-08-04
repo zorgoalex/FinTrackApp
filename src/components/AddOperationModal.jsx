@@ -308,7 +308,9 @@ export default function AddOperationModal({ type: initialType, defaultCategory, 
             </select>
           </div>
 
-          <VoiceOperationInput disabled={loading} onTranscript={handleVoiceTranscript} />
+          {import.meta.env.VITE_EXTERNAL_STT_ENABLED === 'true' && (
+            <VoiceOperationInput disabled={loading} onTranscript={handleVoiceTranscript} />
+          )}
 
           {/* Compact mobile entity tabs; regular fields on larger screens */}
           {form.type !== 'transfer' && (
