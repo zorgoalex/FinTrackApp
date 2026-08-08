@@ -64,6 +64,7 @@ jobs:
           plain="${RUNNER_TEMP}/${dump_name}"
           encrypted="${plain}.age"
           docker run --rm \
+            --user "$(id -u):$(id -g)" \
             --env SUPABASE_DB_URL \
             --env "BACKUP_FILE=/backup/${dump_name}" \
             --volume "${RUNNER_TEMP}:/backup" \

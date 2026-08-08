@@ -4,6 +4,7 @@ Workflow `.github/workflows/encrypted-backup.yml` ежедневно созда�
 
 Для совместимости с production PostgreSQL 17 dump и его структурная проверка выполняются официальным `postgres:17.6-bookworm` client-контейнером на одноразовом GitHub runner.
 AWS CLI для R2 устанавливается в одноразовое Python virtual environment runner, поскольку пакет `awscli` отсутствует в стандартном APT-репозитории актуального Ubuntu GitHub runner.
+PostgreSQL client-контейнер запускается от UID/GID runner, чтобы plaintext dump оставался доступен для обязательного `shred` сразу после шифрования.
 
 ## GitHub Actions secrets
 
