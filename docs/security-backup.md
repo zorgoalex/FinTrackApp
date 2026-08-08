@@ -17,6 +17,7 @@ PostgreSQL client-контейнер запускается от UID/GID runner,
 Приватный `AGE-SECRET-KEY-...` нельзя помещать в GitHub, Supabase, Vercel или приложение. Владелец хранит две offline-копии. Без него backup необратимо нерасшифровываем.
 
 Retention: 14 дней для daily и около 3 месяцев для monthly. Workflow останавливается до upload, если прогнозируемый объём превышает 8 GiB. Это сохраняет запас относительно R2 Standard free tier 10 GB-month, но владелец всё равно должен оставить bucket приватным и контролировать Cloudflare usage.
+Пустой bucket учитывается как `0` байт, поэтому первый backup проходит тот же size gate без специальной ручной подготовки.
 
 ## Restore drill
 

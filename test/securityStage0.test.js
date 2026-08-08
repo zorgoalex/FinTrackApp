@@ -37,7 +37,9 @@ test('password change and account deletion require the current password', async 
 test('zero-cost backup encrypts before private R2 upload and enforces a size gate', async () => {
   const workflow = await readFile('.github/workflows/encrypted-backup.yml', 'utf8');
   assert.match(workflow, /pg_dump/);
+  assert.match(workflow, /--user "\$\(id -u\):\$\(id -g\)"/);
   assert.match(workflow, /age --recipient/);
+  assert.match(workflow, /\.Contents\[\]\?\.Size.*add \/\/ 0/);
   assert.match(workflow, /8 \* 1024 \* 1024 \* 1024/);
   assert.match(workflow, /s3:\/\/\$\{R2_BUCKET\}/);
   assert.doesNotMatch(workflow, /upload-artifact/);

@@ -91,7 +91,7 @@ jobs:
             [ -z "$key" ] || aws s3api delete-object --endpoint-url "$R2_ENDPOINT_URL" --bucket "$R2_BUCKET" --key "$key" >/dev/null
           done < <(jq -r --arg cutoff "$monthly_cutoff" '.Contents[]? | select(.Key | startswith("monthly/")) | select(.LastModified < $cutoff) | .Key' <<<"$objects")
 
-          current_bytes="$(aws s3api list-objects-v2 --endpoint-url "$R2_ENDPOINT_URL" --bucket "$R2_BUCKET" --query 'sum(Contents[].Size)' --output text)"
+          current_bytes="$(jq '[.Contents[]?.Size] | add // 0' <<<"$objects")"
           [[ "$current_bytes" =~ ^[0-9]+$ ]] || current_bytes=0
           new_bytes="$(stat --format=%s '${{ steps.dump.outputs.path }}')"
           copies=1
