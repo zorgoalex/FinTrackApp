@@ -3,6 +3,7 @@
 Workflow `.github/workflows/encrypted-backup.yml` ежедневно создаёт logical PostgreSQL dump, проверяет его через `pg_restore --list`, шифрует `age` и только затем загружает ciphertext в приватный Cloudflare R2 Standard bucket.
 
 Для совместимости с production PostgreSQL 17 dump и его структурная проверка выполняются официальным `postgres:17.6-bookworm` client-контейнером на одноразовом GitHub runner.
+AWS CLI для R2 устанавливается в одноразовое Python virtual environment runner, поскольку пакет `awscli` отсутствует в стандартном APT-репозитории актуального Ubuntu GitHub runner.
 
 ## GitHub Actions secrets
 

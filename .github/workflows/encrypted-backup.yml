@@ -45,8 +45,12 @@ jobs:
       - name: Install backup tools
         shell: bash
         run: |
+          set -euo pipefail
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends age awscli jq
+          sudo apt-get install --yes --no-install-recommends age jq python3-venv
+          python3 -m venv "${RUNNER_TEMP}/awscli"
+          "${RUNNER_TEMP}/awscli/bin/pip" install --disable-pip-version-check awscli
+          echo "${RUNNER_TEMP}/awscli/bin" >> "$GITHUB_PATH"
           docker pull postgres:17.6-bookworm
 
       - name: Create, encrypt and verify logical dump
