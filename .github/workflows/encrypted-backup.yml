@@ -46,7 +46,8 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends age postgresql-client awscli jq
+          sudo apt-get install --yes --no-install-recommends age awscli jq
+          docker pull postgres:17.6-bookworm
 
       - name: Create, encrypt and verify logical dump
         id: dump
@@ -55,10 +56,15 @@ jobs:
           set -euo pipefail
           umask 077
           stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-          plain="${RUNNER_TEMP}/fintrack-${stamp}.dump"
+          dump_name="fintrack-${stamp}.dump"
+          plain="${RUNNER_TEMP}/${dump_name}"
           encrypted="${plain}.age"
-          pg_dump --dbname="$SUPABASE_DB_URL" --format=custom --no-owner --no-acl --file="$plain"
-          pg_restore --list "$plain" >/dev/null
+          docker run --rm \
+            --env SUPABASE_DB_URL \
+            --env "BACKUP_FILE=/backup/${dump_name}" \
+            --volume "${RUNNER_TEMP}:/backup" \
+            postgres:17.6-bookworm \
+            sh -eu -c 'pg_dump --dbname="$SUPABASE_DB_URL" --format=custom --no-owner --no-acl --file="$BACKUP_FILE" && pg_restore --list "$BACKUP_FILE" >/dev/null'
           age --recipient "$BACKUP_AGE_RECIPIENT" --output "$encrypted" "$plain"
           shred --remove "$plain"
           test -s "$encrypted"
@@ -121,4 +127,3 @@ jobs:
             --header "Authorization: Bearer ${RESEND_API_KEY}" \
             --header 'Content-Type: application/json' \
             --data "$(jq -n --arg from "$NOTIFICATION_FROM_EMAIL" --arg to "$BACKUP_ALERT_TO" --arg run "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" '{from:$from,to:[$to],subject:"FinTrackApp backup failed",text:("Production encrypted backup failed. Inspect: " + $run)}')"
-
