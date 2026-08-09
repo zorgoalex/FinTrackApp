@@ -159,7 +159,9 @@ jobs:
         run: |
           set -u
           for path in '${{ steps.dump.outputs.plain }}' '${{ steps.dump.outputs.encrypted }}'; do
-            [ -n "$path" ] && [ -f "$path" ] && shred --remove "$path"
+            if [ -n "$path" ] && [ -f "$path" ]; then
+              shred --remove "$path"
+            fi
           done
 
       - name: Send failure alert through existing Resend account

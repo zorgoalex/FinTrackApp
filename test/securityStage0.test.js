@@ -42,5 +42,7 @@ test('zero-cost backup encrypts before private R2 upload and enforces a size gat
   assert.match(workflow, /\.Contents\[\]\?\.Size.*add \/\/ 0/);
   assert.match(workflow, /8 \* 1024 \* 1024 \* 1024/);
   assert.match(workflow, /s3:\/\/\$\{R2_BUCKET\}/);
+  assert.match(workflow, /if \[ -n "\$path" \] && \[ -f "\$path" \]; then/);
+  assert.doesNotMatch(workflow, /\[ -f "\$path" \] && shred --remove/);
   assert.doesNotMatch(workflow, /upload-artifact/);
 });
