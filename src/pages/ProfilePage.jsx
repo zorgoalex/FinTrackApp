@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AlertTriangle, ExternalLink, KeyRound, Layers, LogOut, MessageCircle, RefreshCw, Trash2, Unlink, User } from 'lucide-react';
+import { AlertTriangle, ExternalLink, HardDrive, KeyRound, Layers, LogOut, MessageCircle, RefreshCw, Trash2, Unlink, User } from 'lucide-react';
 import { supabase, useAuth } from '../contexts/AuthContext';
 import PasswordInput from '../components/PasswordInput';
 import { isStrongPassword, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolicy';
+import { isOfflineStorageEnabled, setOfflineStorageEnabled } from '../utils/offlineStore';
 
 async function invokeTelegram(action) {
   const result = await supabase.functions.invoke('telegram-link', { body: { action } });
@@ -38,6 +39,10 @@ export default function ProfilePage() {
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [offlineStorageEnabled, setOfflineStorageState] = useState(() => isOfflineStorageEnabled());
+  const [offlineStorageBusy, setOfflineStorageBusy] = useState(false);
+  const [offlineStorageMessage, setOfflineStorageMessage] = useState('');
+  const [offlineStorageError, setOfflineStorageError] = useState('');
 
   const loadTelegram = useCallback(async ({ silent = false } = {}) => {
     const { data, error: invokeError } = await invokeTelegram('status');
@@ -136,8 +141,31 @@ export default function ProfilePage() {
   };
 
   const signOut = async () => {
-    await logout();
+    await logout().catch(() => undefined);
     navigate('/login', { replace: true });
+  };
+
+  const changeOfflineStorage = async (event) => {
+    const enabled = event.target.checked;
+    if (!enabled && !window.confirm('Удалить локальные справочники и все ещё не синхронизированные расходы с этого устройства?')) {
+      event.target.checked = offlineStorageEnabled;
+      return;
+    }
+    setOfflineStorageBusy(true);
+    setOfflineStorageMessage('');
+    setOfflineStorageError('');
+    try {
+      await setOfflineStorageEnabled(enabled, user?.id);
+      setOfflineStorageState(enabled);
+      setOfflineStorageMessage(enabled
+        ? 'Офлайн-хранение включено для этого устройства.'
+        : 'Локальные офлайн-данные удалены с этого устройства.');
+    } catch (storageError) {
+      setOfflineStorageState(isOfflineStorageEnabled());
+      setOfflineStorageError(storageError.message || 'Не удалось изменить настройки офлайн-хранения');
+    } finally {
+      setOfflineStorageBusy(false);
+    }
   };
 
   const deleteAccount = async () => {
@@ -168,8 +196,7 @@ export default function ProfilePage() {
       setDeleteError(deletionError.message || 'Не удалось удалить аккаунт');
       return;
     }
-    localStorage.removeItem('user');
-    await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
+    await logout().catch(() => undefined);
     navigate('/login', { replace: true });
   };
 
@@ -247,6 +274,23 @@ export default function ProfilePage() {
         <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary-50 text-primary-600 dark:bg-primary-950/40 dark:text-primary-300"><Layers size={20} /></span>
         <span><span className="block text-sm font-semibold">Мои пространства</span><span className="block text-xs text-gray-500">Выбор и создание пространств</span></span>
       </button>
+
+      <section className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+        <div className="flex items-start gap-3">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"><HardDrive size={20} /></span>
+          <div className="min-w-0 flex-1">
+            <h2 className="font-semibold">Офлайн-данные</h2>
+            <p className="mt-1 text-xs leading-5 text-gray-500">Не включайте хранение финансовых данных на общем устройстве. Данные привязаны к аккаунту и удаляются при выходе.</p>
+          </div>
+        </div>
+        <label className="mt-4 flex min-h-12 cursor-pointer items-center justify-between gap-4 rounded-xl bg-gray-50 px-3 py-2 dark:bg-gray-900/40">
+          <span className="text-sm">Хранить справочники и очередь расходов на этом устройстве</span>
+          <input type="checkbox" checked={offlineStorageEnabled} disabled={offlineStorageBusy} onChange={changeOfflineStorage} className="h-5 w-5 shrink-0 accent-primary-600" />
+        </label>
+        <p className="mt-2 text-xs leading-5 text-gray-500">При отключении локальные справочники и несинхронизированные расходы удаляются; добавление расходов без интернета становится недоступно.</p>
+        {offlineStorageMessage && <p role="status" className="mt-2 text-sm text-green-600">{offlineStorageMessage}</p>}
+        {offlineStorageError && <p role="alert" className="mt-2 text-sm text-red-600">{offlineStorageError}</p>}
+      </section>
 
       <section className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
         <div className="mb-4 flex items-center gap-2"><KeyRound size={19} className="text-primary-600" /><h2 className="font-semibold">Сменить пароль</h2></div>

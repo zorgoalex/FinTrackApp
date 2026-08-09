@@ -4,6 +4,11 @@ import react from '@vitejs/plugin-react'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    // Force every dependency to share the application's React instance. This
+    // also keeps linked/hybrid installs from creating invalid hook calls.
+    dedupe: ['react', 'react-dom'],
+  },
   define: {
     'globalThis.__FINTRACK_BUILD__': JSON.stringify({
       version: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || process.env.npm_package_version || 'local',

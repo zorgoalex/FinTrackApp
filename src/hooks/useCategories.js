@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
-import { supabase } from '../contexts/AuthContext';
+import { supabase, useAuth } from '../contexts/AuthContext';
 import { cacheReference, getCachedReference } from '../utils/offlineStore';
 
 export function useCategories(workspaceId) {
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const loadCategories = useCallback(async () => {
-    if (!workspaceId) {
+    if (!userId || !workspaceId) {
       setCategories([]);
       return;
     }
@@ -23,10 +25,10 @@ export function useCategories(workspaceId) {
 
       if (loadErr) throw loadErr;
       setCategories(data || []);
-      await cacheReference('categories', workspaceId, data || []);
+      await cacheReference(userId, 'categories', workspaceId, data || []);
     } catch (e) {
       console.error('useCategories: load error', e);
-      const cached = await getCachedReference('categories', workspaceId).catch(() => null);
+      const cached = await getCachedReference(userId, 'categories', workspaceId).catch(() => null);
       if (cached) {
         setCategories(cached);
         setError(null);
@@ -37,7 +39,7 @@ export function useCategories(workspaceId) {
     } finally {
       setLoading(false);
     }
-  }, [workspaceId]);
+  }, [userId, workspaceId]);
 
   const addCategory = useCallback(async ({ name, type, color }) => {
     if (!workspaceId) return null;

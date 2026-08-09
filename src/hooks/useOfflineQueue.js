@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { supabase } from '../contexts/AuthContext';
+import { supabase, useAuth } from '../contexts/AuthContext';
 import {
   listOfflineExpenses,
   OFFLINE_QUEUE_CHANGED,
@@ -9,24 +9,26 @@ import {
 } from '../utils/offlineStore';
 
 export function useOfflineQueue(workspaceId) {
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
   const [items, setItems] = useState([]);
   const [online, setOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine);
   const [syncing, setSyncing] = useState(false);
 
   const refresh = useCallback(async () => {
-    setItems(await listOfflineExpenses(workspaceId));
-  }, [workspaceId]);
+    setItems(await listOfflineExpenses(userId, workspaceId));
+  }, [userId, workspaceId]);
 
   const sync = useCallback(async () => {
-    if (!workspaceId || !navigator.onLine) return;
+    if (!userId || !workspaceId || !navigator.onLine) return;
     setSyncing(true);
     try {
-      await syncOfflineExpenses(supabase, workspaceId);
+      await syncOfflineExpenses(supabase, userId, workspaceId);
       await refresh();
     } finally {
       setSyncing(false);
     }
-  }, [refresh, workspaceId]);
+  }, [refresh, userId, workspaceId]);
 
   useEffect(() => {
     const handleOnline = () => { setOnline(true); sync(); };
@@ -44,14 +46,14 @@ export function useOfflineQueue(workspaceId) {
   }, [refresh, sync]);
 
   const retry = useCallback(async (id) => {
-    await retryOfflineExpense(id);
+    await retryOfflineExpense(userId, id);
     await sync();
-  }, [sync]);
+  }, [sync, userId]);
 
   const remove = useCallback(async (id) => {
-    await removeOfflineExpense(id);
+    await removeOfflineExpense(userId, id);
     await refresh();
-  }, [refresh]);
+  }, [refresh, userId]);
 
   return { items, online, syncing, sync, retry, remove };
 }

@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 
 export default function WorkspaceSelectPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [workspaces, setWorkspaces] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -143,9 +143,9 @@ export default function WorkspaceSelectPage() {
         
         <div className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
           <button 
-            onClick={() => {
-              supabase.auth.signOut();
-              navigate('/login');
+            onClick={async () => {
+              await logout().catch(() => undefined);
+              navigate('/login', { replace: true });
             }}
             className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
           >

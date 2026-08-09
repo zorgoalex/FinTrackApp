@@ -1,6 +1,7 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { createClient } from "@supabase/supabase-js";
 import { isStrongPassword, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolicy';
+import { clearLocalFinancialData } from '../utils/offlineStore';
 
 const AuthContext = createContext({});
 
@@ -10,28 +11,60 @@ const workosConnectionId = import.meta.env.VITE_WORKOS_CONNECTION_ID?.trim();
 const workosEnabled = import.meta.env.VITE_WORKOS_AUTH_ENABLED === 'true' && Boolean(workosConnectionId);
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+function readStoredUserId() {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    return JSON.parse(localStorage.getItem('user'))?.id || null;
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const activeUserIdRef = useRef(readStoredUserId());
 
   useEffect(() => {
     // Получаем текущую сессию
     const getInitialSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (session?.user) {
-        const profile = { id: session.user.id, email: session.user.email };
-        localStorage.setItem("user", JSON.stringify(profile));
-        setUser(profile);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const nextUserId = session?.user?.id || null;
+        const previousUserId = activeUserIdRef.current;
+        if (previousUserId && previousUserId !== nextUserId) {
+          await clearLocalFinancialData(previousUserId);
+        }
+        activeUserIdRef.current = nextUserId;
+
+        if (session?.user) {
+          const profile = { id: session.user.id, email: session.user.email };
+          localStorage.setItem("user", JSON.stringify(profile));
+          setUser(profile);
+        } else {
+          localStorage.removeItem('user');
+          setUser(null);
+        }
+      } catch (sessionError) {
+        console.error('AuthContext: initial session error', sessionError);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     
     getInitialSession();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       const supaUser = session?.user || null;
+      const nextUserId = supaUser?.id || null;
+      const previousUserId = activeUserIdRef.current;
+      if (previousUserId && previousUserId !== nextUserId) {
+        await clearLocalFinancialData(previousUserId).catch((cleanupError) => {
+          console.error('AuthContext: local financial data cleanup failed', cleanupError);
+        });
+      }
+      activeUserIdRef.current = nextUserId;
       if (supaUser) {
         const profile = { id: supaUser.id, email: supaUser.email };
         localStorage.setItem("user", JSON.stringify(profile));
@@ -181,9 +214,20 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
-    localStorage.removeItem("user");
-    setUser(null);
+    const userId = activeUserIdRef.current || user?.id || readStoredUserId();
+    let signOutError = null;
+    try {
+      const result = await supabase.auth.signOut();
+      signOutError = result.error;
+    } finally {
+      await clearLocalFinancialData(userId).catch((cleanupError) => {
+        console.error('AuthContext: local financial data cleanup failed', cleanupError);
+      });
+      localStorage.removeItem("user");
+      activeUserIdRef.current = null;
+      setUser(null);
+    }
+    if (signOutError) throw signOutError;
   };
 
   const value = {

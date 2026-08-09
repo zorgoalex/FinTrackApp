@@ -63,7 +63,7 @@ export function WorkspaceProvider({ children }) {
 
   const loadAllWorkspaces = async () => {
     if (!user) return;
-    const cachedWorkspaces = await getCachedReference('workspaces', user.id).catch(() => null);
+    const cachedWorkspaces = await getCachedReference(user.id, 'workspaces', 'all').catch(() => null);
     if (cachedWorkspaces) setAllWorkspaces(cachedWorkspaces);
 
     try {
@@ -144,7 +144,7 @@ export function WorkspaceProvider({ children }) {
       
       console.log('WorkspaceContext: All workspaces loaded', workspaces);
       setAllWorkspaces(workspaces);
-      await cacheReference('workspaces', user.id, workspaces);
+      await cacheReference(user.id, 'workspaces', 'all', workspaces);
       
     } catch (err) {
       console.error('WorkspaceContext: Error loading all workspaces', err);
@@ -153,7 +153,7 @@ export function WorkspaceProvider({ children }) {
 
   const loadWorkspace = async () => {
     if (!user || !workspaceId) return;
-    const cachedWorkspace = await getCachedReference('workspace', `${user.id}:${workspaceId}`).catch(() => null);
+    const cachedWorkspace = await getCachedReference(user.id, 'workspace', workspaceId).catch(() => null);
     if (cachedWorkspace) {
       setCurrentWorkspace(cachedWorkspace);
       setUserRole(cachedWorkspace.userRole || null);
@@ -204,7 +204,7 @@ export function WorkspaceProvider({ children }) {
       console.log('WorkspaceContext: Workspace loaded', workspace);
       setCurrentWorkspace(workspace);
       setUserRole(memberData?.role || 'viewer');
-      await cacheReference('workspace', `${user.id}:${workspaceId}`, workspace);
+      await cacheReference(user.id, 'workspace', workspaceId, workspace);
       
       // Fire-and-forget: don't wait for lastAccessed update
       updateLastAccessed().catch(e => console.error('updateLastAccessed error', e));

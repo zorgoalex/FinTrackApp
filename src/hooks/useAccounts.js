@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
-import { supabase } from '../contexts/AuthContext';
+import { supabase, useAuth } from '../contexts/AuthContext';
 import { cacheReference, getCachedReference } from '../utils/offlineStore';
 
 export function useAccounts(workspaceId) {
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const loadAccounts = useCallback(async () => {
-    if (!workspaceId) {
+    if (!userId || !workspaceId) {
       setAccounts([]);
       return;
     }
@@ -24,10 +26,10 @@ export function useAccounts(workspaceId) {
 
       if (loadErr) throw loadErr;
       setAccounts(data || []);
-      await cacheReference('accounts', workspaceId, data || []);
+      await cacheReference(userId, 'accounts', workspaceId, data || []);
     } catch (e) {
       console.error('useAccounts: load error', e);
-      const cached = await getCachedReference('accounts', workspaceId).catch(() => null);
+      const cached = await getCachedReference(userId, 'accounts', workspaceId).catch(() => null);
       if (cached) {
         setAccounts(cached);
         setError(null);
@@ -183,7 +185,7 @@ export function useAccounts(workspaceId) {
       console.error('useAccounts: loadBalances error', e);
       return {};
     }
-  }, [workspaceId]);
+  }, [userId, workspaceId]);
 
   const loadBalanceHistory = useCallback(async ({ dateFrom, dateTo, granularity = 'day', accountIds = null }) => {
     if (!workspaceId || !dateFrom || !dateTo) return [];

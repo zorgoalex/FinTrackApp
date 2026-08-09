@@ -393,7 +393,7 @@ export function useOperations(workspaceId, options = {}) {
     };
 
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      const queued = await enqueueOfflineExpense({ workspaceId, payload: createParams });
+      const queued = await enqueueOfflineExpense({ userId, workspaceId, payload: createParams });
       setError(null);
       return {
         id: queued.client_request_id,
