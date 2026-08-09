@@ -24,6 +24,9 @@ jobs:
       R2_BUCKET: ${{ secrets.R2_BUCKET }}
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       BACKUP_AGE_RECIPIENT: ${{ secrets.BACKUP_AGE_RECIPIENT }}
+      SUPABASE_NETWORK_GATE_TOKEN: ${{ secrets.SUPABASE_NETWORK_GATE_TOKEN }}
+      SUPABASE_NETWORK_GATE_URL: ${{ vars.SUPABASE_NETWORK_GATE_URL }}
+      NETWORK_RESTRICTIONS_ENABLED: ${{ vars.SUPABASE_DB_NETWORK_RESTRICTIONS_ENABLED }}
     steps:
       - uses: actions/checkout@v4
 
@@ -41,6 +44,14 @@ jobs:
             echo "BACKUP_AGE_RECIPIENT is not a valid age public recipient" >&2
             exit 1
           fi
+          if [ "$NETWORK_RESTRICTIONS_ENABLED" = 'true' ]; then
+            for name in SUPABASE_NETWORK_GATE_TOKEN SUPABASE_NETWORK_GATE_URL; do
+              if [ -z "${!name:-}" ]; then
+                echo "Required network-restriction configuration is missing: ${name}" >&2
+                exit 1
+              fi
+            done
+          fi
 
       - name: Install backup tools
         shell: bash
@@ -53,7 +64,13 @@ jobs:
           echo "${RUNNER_TEMP}/awscli/bin" >> "$GITHUB_PATH"
           docker pull postgres:17.6-bookworm
 
-      - name: Create, encrypt and verify logical dump
+      - name: Open the temporary database network window
+        id: network_window
+        if: env.NETWORK_RESTRICTIONS_ENABLED == 'true'
+        shell: bash
+        run: bash .github/scripts/supabase-db-network-window.sh open
+
+      - name: Create and verify logical dump
         id: dump
         shell: bash
         run: |
@@ -63,6 +80,10 @@ jobs:
           dump_name="fintrack-${stamp}.dump"
           plain="${RUNNER_TEMP}/${dump_name}"
           encrypted="${plain}.age"
+          echo "plain=$plain" >> "$GITHUB_OUTPUT"
+          echo "encrypted=$encrypted" >> "$GITHUB_OUTPUT"
+          echo "name=fintrack-${stamp}.dump.age" >> "$GITHUB_OUTPUT"
+          echo "day=$(date -u +%d)" >> "$GITHUB_OUTPUT"
           docker run --rm \
             --user "$(id -u):$(id -g)" \
             --env SUPABASE_DB_URL \
@@ -70,12 +91,26 @@ jobs:
             --volume "${RUNNER_TEMP}:/backup" \
             postgres:17.6-bookworm \
             sh -eu -c 'pg_dump --dbname="$SUPABASE_DB_URL" --format=custom --no-owner --no-acl --file="$BACKUP_FILE" && pg_restore --list "$BACKUP_FILE" >/dev/null'
+
+      - name: Close the database network window
+        id: network_close
+        if: always() && env.NETWORK_RESTRICTIONS_ENABLED == 'true'
+        shell: bash
+        run: bash .github/scripts/supabase-db-network-window.sh close
+
+      - name: Encrypt and verify logical dump
+        id: encrypt
+        if: steps.dump.outcome == 'success' && (env.NETWORK_RESTRICTIONS_ENABLED != 'true' || steps.network_close.outcome == 'success')
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          plain='${{ steps.dump.outputs.plain }}'
+          encrypted='${{ steps.dump.outputs.encrypted }}'
           age --recipient "$BACKUP_AGE_RECIPIENT" --output "$encrypted" "$plain"
           shred --remove "$plain"
           test -s "$encrypted"
           echo "path=$encrypted" >> "$GITHUB_OUTPUT"
-          echo "name=fintrack-${stamp}.dump.age" >> "$GITHUB_OUTPUT"
-          echo "day=$(date -u +%d)" >> "$GITHUB_OUTPUT"
 
       - name: Apply retention and enforce the free-tier storage gate
         shell: bash
@@ -93,7 +128,7 @@ jobs:
 
           current_bytes="$(jq '[.Contents[]?.Size] | add // 0' <<<"$objects")"
           [[ "$current_bytes" =~ ^[0-9]+$ ]] || current_bytes=0
-          new_bytes="$(stat --format=%s '${{ steps.dump.outputs.path }}')"
+          new_bytes="$(stat --format=%s '${{ steps.encrypt.outputs.path }}')"
           copies=1
           [ '${{ steps.dump.outputs.day }}' = '01' ] && copies=2
           hard_limit=$((8 * 1024 * 1024 * 1024))
@@ -107,7 +142,7 @@ jobs:
         run: |
           set -euo pipefail
           name='${{ steps.dump.outputs.name }}'
-          path='${{ steps.dump.outputs.path }}'
+          path='${{ steps.encrypt.outputs.path }}'
           aws s3 cp "$path" "s3://${R2_BUCKET}/daily/${name}" --endpoint-url "$R2_ENDPOINT_URL" --only-show-errors
           if [ '${{ steps.dump.outputs.day }}' = '01' ]; then
             aws s3 cp "$path" "s3://${R2_BUCKET}/monthly/${name}" --endpoint-url "$R2_ENDPOINT_URL" --only-show-errors
@@ -116,6 +151,16 @@ jobs:
           remote_size="$(aws s3api head-object --endpoint-url "$R2_ENDPOINT_URL" --bucket "$R2_BUCKET" --key "daily/${name}" --query ContentLength --output text)"
           test "$local_size" = "$remote_size"
           shred --remove "$path"
+
+      - name: Remove any local backup material
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          for path in '${{ steps.dump.outputs.plain }}' '${{ steps.dump.outputs.encrypted }}'; do
+            [ -n "$path" ] && [ -f "$path" ] && shred --remove "$path"
+          done
 
       - name: Send failure alert through existing Resend account
         if: failure()
@@ -131,4 +176,4 @@ jobs:
           curl --fail --silent --show-error https://api.resend.com/emails \
             --header "Authorization: Bearer ${RESEND_API_KEY}" \
             --header 'Content-Type: application/json' \
-            --data "$(jq -n --arg from "$NOTIFICATION_FROM_EMAIL" --arg to "$BACKUP_ALERT_TO" --arg run "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" '{from:$from,to:[$to],subject:"FinTrackApp backup failed",text:("Production encrypted backup failed. Inspect: " + $run)}')"
+            --data "$(jq -n --arg from "$NOTIFICATION_FROM_EMAIL" --arg to "$BACKUP_ALERT_TO" --arg run "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" '{from:$from,to:[$to],subject:"FinTrackApp backup failed",text:("Production encrypted backup or database network-window cleanup failed. Inspect urgently: " + $run)}')"

@@ -1,0 +1,12 @@
+name = "fintrackapp-supabase-network-gate"
+main = "src/index.js"
+compatibility_date = "2026-08-10"
+workers_dev = true
+keep_vars = true
+
+[secrets]
+required = [ "NETWORK_GATE_TOKEN", "SUPABASE_MANAGEMENT_TOKEN" ]
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1

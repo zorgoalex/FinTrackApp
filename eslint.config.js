@@ -63,6 +63,21 @@ export default [
     },
   },
   {
+    files: ['cloudflare/supabase-network-gate/src/**/*.js'],
+    languageOptions: {
+      globals: {
+        console: 'readonly',
+        crypto: 'readonly',
+        fetch: 'writable',
+        Request: 'readonly',
+        Response: 'readonly',
+        setTimeout: 'readonly',
+        TextEncoder: 'readonly',
+        URL: 'readonly',
+      },
+    },
+  },
+  {
     files: ['eslint.config.js', 'vite.config.js', 'postcss.config.js', 'tailwind.config.js', 'scripts/**/*.mjs'],
     languageOptions: {
       globals: {
