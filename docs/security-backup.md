@@ -21,6 +21,8 @@ Retention: 14 дней для daily и около 3 месяцев для monthl
 
 ## Restore drill
 
+Проверенный drill 2026-08-09 использовал ciphertext из `daily/` и официальный image `supabase/postgres:17.6.1.141`, совпадающий с production. `age` передал расшифрованный поток напрямую в `pg_restore`; plaintext-файл на диск не записывался. Чистая целевая БД была создана из `template0` внутри одноразового container с сохранением глобальных Supabase roles и extension packages. Результат: 37 public-таблиц, 11 non-system схем, 98 RLS policies и 78 public functions; container после проверки удалён.
+
 1. Скачать один `.dump.age` из R2.
 2. На доверенном компьютере выполнить `age --decrypt --identity <offline-key> --output restore.dump <backup.dump.age>`.
 3. Восстановить в отдельный staging-проект: `pg_restore --clean --if-exists --no-owner --no-acl --dbname "$STAGING_DB_URL" restore.dump`.
