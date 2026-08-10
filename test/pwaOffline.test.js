@@ -3,58 +3,85 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { URL } from 'node:url';
 import {
-  buildReferenceKey,
+  clearLocalFinancialData,
   clearFinTrackCaches,
   enqueueOfflineExpense,
-  isOfflineExpenseType,
   isOfflineStorageEnabled,
-  isOwnedOfflineRecord,
   setOfflineStorageEnabled,
 } from '../src/utils/offlineStore.js';
+import { INTERNET_REQUIRED_MESSAGE, isInternetAvailable } from '../src/utils/connectivity.js';
 
-test('offline queue accepts outgoing expense types only', () => {
-  assert.equal(isOfflineExpenseType('expense'), true);
-  assert.equal(isOfflineExpenseType('employee_salary'), true);
-  assert.equal(isOfflineExpenseType('income'), false);
-  assert.equal(isOfflineExpenseType('transfer'), false);
+test('internet availability treats an explicitly offline browser as disconnected', () => {
+  assert.equal(isInternetAvailable({ onLine: true }), true);
+  assert.equal(isInternetAvailable({ onLine: false }), false);
+  assert.match(INTERNET_REQUIRED_MESSAGE, /подключение к интернету/);
 });
 
-test('offline records and reference keys are isolated by authenticated user', () => {
-  assert.equal(buildReferenceKey('user-a', 'accounts', 'workspace-1'), 'user-a:accounts:workspace-1');
-  assert.equal(buildReferenceKey('user-b', 'accounts', 'workspace-1'), 'user-b:accounts:workspace-1');
-  assert.equal(buildReferenceKey(null, 'accounts', 'workspace-1'), null);
-  assert.equal(isOwnedOfflineRecord({ user_id: 'user-a' }, 'user-a'), true);
-  assert.equal(isOwnedOfflineRecord({ user_id: 'user-a' }, 'user-b'), false);
-  assert.equal(isOwnedOfflineRecord({ workspace_id: 'workspace-1' }, 'user-a'), false);
+test('login and cached session restoration are blocked while offline', async () => {
+  const [loginPage, authContext] = await Promise.all([
+    readFile(new URL('../src/pages/LoginPage.jsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contexts/AuthContext.jsx', import.meta.url), 'utf8'),
+  ]);
+  assert.match(loginPage, /disabled=\{loading \|\| !online\}/);
+  assert.match(loginPage, /Нет соединения/);
+  assert.match(authContext, /window\.addEventListener\('offline', handleOffline\)/);
+  assert.match(authContext, /if \(!isInternetAvailable\(\)\)/);
+  assert.match(authContext, /await supabase\.auth\.getUser\(\)/);
+  assert.match(authContext, /event === 'INITIAL_SESSION'/);
 });
 
-test('offline expense cannot be queued without an authenticated owner', async () => {
+test('offline financial queue is disabled even for an authenticated owner', async () => {
+  assert.equal(isOfflineStorageEnabled(), false);
   await assert.rejects(
-    enqueueOfflineExpense({ workspaceId: 'workspace-1', payload: { p_type: 'expense' } }),
-    /определить пользователя/,
+    enqueueOfflineExpense({ userId: 'user-a', workspaceId: 'workspace-1', payload: { p_type: 'expense' } }),
+    /подключение к интернету/,
   );
 });
 
-test('device owner can disable and re-enable offline financial storage', async () => {
+test('offline financial storage cannot be re-enabled in beta', async () => {
   const originalLocalStorage = globalThis.localStorage;
+  const originalIndexedDB = globalThis.indexedDB;
   const values = new Map();
   globalThis.localStorage = {
     getItem: (key) => values.get(key) ?? null,
     setItem: (key, value) => values.set(key, value),
   };
+  globalThis.indexedDB = {
+    deleteDatabase: () => {
+      const request = {};
+      Promise.resolve().then(() => request.onsuccess?.());
+      return request;
+    },
+  };
   try {
-    assert.equal(isOfflineStorageEnabled(), true);
-    await setOfflineStorageEnabled(false, 'user-a');
-    assert.equal(isOfflineStorageEnabled(), false);
-    await assert.rejects(
-      enqueueOfflineExpense({ userId: 'user-a', workspaceId: 'workspace-1', payload: { p_type: 'expense' } }),
-      /Офлайн-хранение отключено/,
-    );
     await setOfflineStorageEnabled(true, 'user-a');
-    assert.equal(isOfflineStorageEnabled(), true);
+    assert.equal(isOfflineStorageEnabled(), false);
+    assert.equal(values.get('fintrack:offline-storage-enabled'), 'false');
   } finally {
     if (originalLocalStorage === undefined) delete globalThis.localStorage;
     else globalThis.localStorage = originalLocalStorage;
+    if (originalIndexedDB === undefined) delete globalThis.indexedDB;
+    else globalThis.indexedDB = originalIndexedDB;
+  }
+});
+
+test('startup cleanup deletes the legacy offline database', async () => {
+  const originalIndexedDB = globalThis.indexedDB;
+  const deleted = [];
+  globalThis.indexedDB = {
+    deleteDatabase: (name) => {
+      deleted.push(name);
+      const request = {};
+      Promise.resolve().then(() => request.onsuccess?.());
+      return request;
+    },
+  };
+  try {
+    await clearLocalFinancialData();
+    assert.deepEqual(deleted, ['fintrack-offline']);
+  } finally {
+    if (originalIndexedDB === undefined) delete globalThis.indexedDB;
+    else globalThis.indexedDB = originalIndexedDB;
   }
 });
 
@@ -82,10 +109,11 @@ test('PWA manifest is installable and exposes the expense shortcut', async () =>
   assert.ok(manifest.shortcuts.some((shortcut) => shortcut.url.includes('new=expense')));
 });
 
-test('service worker handles offline navigation and Web Push', async () => {
+test('service worker keeps install navigation and Web Push support', async () => {
   const worker = await readFile(new URL('../public/sw.js', import.meta.url), 'utf8');
   assert.match(worker, /request\.mode === 'navigate'/);
-  assert.match(worker, /caches\.match\('\/index\.html'\)/);
+  assert.doesNotMatch(worker, /caches\.match\('\/index\.html'\)/);
+  assert.match(worker, /event\.respondWith\(globalThis\.fetch\(request\)\)/);
   assert.match(worker, /addEventListener\('push'/);
   assert.match(worker, /showNotification/);
   assert.match(worker, /addEventListener\('notificationclick'/);

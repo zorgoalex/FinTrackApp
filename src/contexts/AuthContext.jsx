@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { createClient } from "@supabase/supabase-js";
 import { isStrongPassword, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolicy';
 import { clearLocalFinancialData } from '../utils/offlineStore';
+import { INTERNET_REQUIRED_MESSAGE, isInternetAvailable } from '../utils/connectivity';
 
 const AuthContext = createContext({});
 
@@ -24,65 +25,133 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [online, setOnline] = useState(() => isInternetAvailable());
   const activeUserIdRef = useRef(readStoredUserId());
 
   useEffect(() => {
-    // Получаем текущую сессию
-    const getInitialSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const nextUserId = session?.user?.id || null;
-        const previousUserId = activeUserIdRef.current;
-        if (previousUserId && previousUserId !== nextUserId) {
-          await clearLocalFinancialData(previousUserId);
-        }
-        activeUserIdRef.current = nextUserId;
+    let active = true;
 
-        if (session?.user) {
-          const profile = { id: session.user.id, email: session.user.email };
-          localStorage.setItem("user", JSON.stringify(profile));
-          setUser(profile);
-        } else {
-          localStorage.removeItem('user');
-          setUser(null);
-        }
-      } catch (sessionError) {
-        console.error('AuthContext: initial session error', sessionError);
-      } finally {
-        setLoading(false);
+    const applySession = async (session) => {
+      if (!active) return;
+      if (!isInternetAvailable()) {
+        setOnline(false);
+        localStorage.removeItem('user');
+        activeUserIdRef.current = null;
+        setUser(null);
+        return;
       }
-    };
-    
-    getInitialSession();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      const supaUser = session?.user || null;
-      const nextUserId = supaUser?.id || null;
+      setOnline(true);
+      const nextUserId = session?.user?.id || null;
       const previousUserId = activeUserIdRef.current;
       if (previousUserId && previousUserId !== nextUserId) {
-        await clearLocalFinancialData(previousUserId).catch((cleanupError) => {
-          console.error('AuthContext: local financial data cleanup failed', cleanupError);
-        });
+        await clearLocalFinancialData();
       }
       activeUserIdRef.current = nextUserId;
-      if (supaUser) {
-        const profile = { id: supaUser.id, email: supaUser.email };
-        localStorage.setItem("user", JSON.stringify(profile));
+
+      if (session?.user) {
+        const profile = { id: session.user.id, email: session.user.email };
+        localStorage.setItem('user', JSON.stringify(profile));
         setUser(profile);
       } else {
-        localStorage.removeItem("user");
+        localStorage.removeItem('user');
         setUser(null);
       }
-      setLoading(false);
+    };
+
+    const restoreSession = async () => {
+      if (!isInternetAvailable()) {
+        await clearLocalFinancialData().catch(() => undefined);
+        if (!active) return;
+        setOnline(false);
+        localStorage.removeItem('user');
+        activeUserIdRef.current = null;
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          await applySession(null);
+          return;
+        }
+
+        // getSession() can read a cached token without touching the network.
+        // Require a successful Auth server response before restoring the user.
+        const { data: { user: verifiedUser }, error: verificationError } = await supabase.auth.getUser();
+        if (verificationError || !verifiedUser) {
+          throw verificationError || new Error('Не удалось проверить сессию');
+        }
+        await applySession({ ...session, user: verifiedUser });
+      } catch (sessionError) {
+        console.error('AuthContext: initial session error', sessionError);
+        if (!active) return;
+        localStorage.removeItem('user');
+        activeUserIdRef.current = null;
+        setUser(null);
+        if (!isInternetAvailable() || /fetch|network|load failed/i.test(String(sessionError?.message || sessionError))) {
+          setOnline(false);
+          setError(INTERNET_REQUIRED_MESSAGE);
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    clearLocalFinancialData().catch((cleanupError) => {
+      console.error('AuthContext: legacy offline data cleanup failed', cleanupError);
+    });
+    restoreSession();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // INITIAL_SESSION is local state and is handled by restoreSession(),
+      // which verifies it against the Auth server before exposing the user.
+      if (event === 'INITIAL_SESSION') return;
+      await applySession(session);
+      if (active) setLoading(false);
     });
 
+    const handleOffline = () => {
+      setOnline(false);
+      setLoading(false);
+      localStorage.removeItem('user');
+      activeUserIdRef.current = null;
+      setUser(null);
+      clearLocalFinancialData().catch((cleanupError) => {
+        console.error('AuthContext: offline cleanup failed', cleanupError);
+      });
+    };
+
+    const handleOnline = () => {
+      setOnline(true);
+      setError('');
+      setLoading(true);
+      restoreSession();
+    };
+
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
+
     return () => {
+      active = false;
       authListener.subscription.unsubscribe();
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnline);
     };
   }, []);
 
+  const requireInternet = () => {
+    if (isInternetAvailable()) return true;
+    setOnline(false);
+    setError(INTERNET_REQUIRED_MESSAGE);
+    return false;
+  };
+
   const login = async (identifier, password) => {
     setError("");
+    if (!requireInternet()) return false;
     if (!password || password.length < 8) {
       setError("Пароль должен быть не менее 8 символов");
       return false;
@@ -122,6 +191,7 @@ export function AuthProvider({ children }) {
 
   const signUp = async (username, email, password) => {
     setError("");
+    if (!requireInternet()) return { success: false, requiresEmailConfirmation: false };
     if (!isStrongPassword(password)) {
       setError(PASSWORD_POLICY_MESSAGE);
       return false;
@@ -151,6 +221,7 @@ export function AuthProvider({ children }) {
 
   const loginWithWorkOS = async () => {
     setError('');
+    if (!requireInternet()) return false;
     if (!workosEnabled) {
       setError('Вход через социальные аккаунты пока не настроен');
       return false;
@@ -175,6 +246,7 @@ export function AuthProvider({ children }) {
 
   const requestPasswordReset = async (email) => {
     setError("");
+    if (!requireInternet()) return false;
     setLoading(true);
     try {
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
@@ -192,6 +264,7 @@ export function AuthProvider({ children }) {
 
   const updatePassword = async (password, currentPassword) => {
     setError("");
+    if (!requireInternet()) return false;
     if (!isStrongPassword(password)) {
       setError(PASSWORD_POLICY_MESSAGE);
       return false;
@@ -241,6 +314,7 @@ export function AuthProvider({ children }) {
     updatePassword,
     loading,
     error,
+    online,
     isAuthenticated: !!user
   };
 

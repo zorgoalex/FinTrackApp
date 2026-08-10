@@ -1,5 +1,5 @@
-const CACHE_VERSION = 'fintrack-shell-v1';
-const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/app-icon.svg', '/favicon.svg'];
+const CACHE_VERSION = 'fintrack-shell-v2';
+const APP_SHELL = ['/manifest.webmanifest', '/app-icon.svg', '/favicon.svg'];
 
 globalThis.addEventListener('install', (event) => {
   event.waitUntil(globalThis.caches.open(CACHE_VERSION).then((cache) => cache.addAll(APP_SHELL)));
@@ -20,15 +20,9 @@ globalThis.addEventListener('fetch', (event) => {
   if (url.origin !== globalThis.location.origin) return;
 
   if (request.mode === 'navigate') {
-    event.respondWith(
-      globalThis.fetch(request)
-        .then((response) => {
-          const copy = response.clone();
-          globalThis.caches.open(CACHE_VERSION).then((cache) => cache.put('/index.html', copy));
-          return response;
-        })
-        .catch(() => globalThis.caches.match('/index.html'))
-    );
+    // Authentication and financial screens require a live network response.
+    // Do not serve a cached application shell while offline.
+    event.respondWith(globalThis.fetch(request));
     return;
   }
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../contexts/AuthContext';
-import { enqueueOfflineExpense, isOfflineExpenseType, OFFLINE_SYNC_COMPLETED } from '../utils/offlineStore';
+import { INTERNET_REQUIRED_MESSAGE, isInternetAvailable } from '../utils/connectivity';
 
 const EMPTY_PERIOD_SUMMARY = {
   income: 0,
@@ -292,8 +292,8 @@ export function useOperations(workspaceId, options = {}) {
       return null;
     }
 
-    if (typeof navigator !== 'undefined' && !navigator.onLine && !isOfflineExpenseType(type)) {
-      const offlineError = new Error('Офлайн можно добавить только расход. Доходы и переводы требуют соединения.');
+    if (!isInternetAvailable()) {
+      const offlineError = new Error(INTERNET_REQUIRED_MESSAGE);
       setError(offlineError.message);
       throw offlineError;
     }
@@ -391,18 +391,6 @@ export function useOperations(workspaceId, options = {}) {
       p_allocations: buildAllocationsPayload(data?.allocations, amount, baseAmount),
       p_tag_names: tagNames,
     };
-
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      const queued = await enqueueOfflineExpense({ userId, workspaceId, payload: createParams });
-      setError(null);
-      return {
-        id: queued.client_request_id,
-        ...data,
-        workspace_id: workspaceId,
-        user_id: userId,
-        offline_pending: true,
-      };
-    }
 
     try {
       setLoading(true);
@@ -630,14 +618,6 @@ export function useOperations(workspaceId, options = {}) {
   useEffect(() => {
     loadOperations();
   }, [loadOperations]);
-
-  useEffect(() => {
-    const handleOfflineSync = (event) => {
-      if (event.detail?.workspaceId === workspaceId) loadOperations();
-    };
-    window.addEventListener(OFFLINE_SYNC_COMPLETED, handleOfflineSync);
-    return () => window.removeEventListener(OFFLINE_SYNC_COMPLETED, handleOfflineSync);
-  }, [loadOperations, workspaceId]);
 
   const summary = useMemo(
     () => serverSummary || calculateSummary(operations),

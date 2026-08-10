@@ -8,4 +8,5 @@ test('public beta terms cover backup, transient OCR, retention, support and dele
   for (const required of ['JSON-backup', 'GLM-OCR', 'Срок хранения и удаление', 'VITE_SUPPORT_EMAIL', '7 календарных дней']) {
     assert.match(source, new RegExp(required));
   }
+  assert.match(source, /офлайн-работа с финансовыми данными отключена/);
 });
