@@ -34,27 +34,30 @@ test('password change and account deletion require the current password', async 
   assert.match(migration, /FROM auth\.sessions/);
 });
 
-test('privileged and destructive flows require a fresh TOTP AAL2 session', async () => {
+test('TOTP is optional while role changes and restore require a fresh password', async () => {
   const auth = await readFile('src/contexts/AuthContext.jsx', 'utf8');
   const workspace = await readFile('src/contexts/WorkspaceContext.jsx', 'utf8');
   const profile = await readFile('src/pages/ProfilePage.jsx', 'utf8');
   const operations = await readFile('src/pages/OperationPage.jsx', 'utf8');
   const analytics = await readFile('src/pages/AnalyticsPage.jsx', 'utf8');
   const backup = await readFile('src/pages/WorkspaceSettingsPage.jsx', 'utf8');
-  const gate = await readFile('src/components/PrivilegedMfaGate.jsx', 'utf8');
+  const gate = await readFile('src/components/OptionalMfaGate.jsx', 'utf8');
+  const settings = await readFile('src/components/MfaSettings.jsx', 'utf8');
   const api = await readFile('supabase/functions/api/index.ts', 'utf8');
-  const migration = await readFile('supabase/migrations/20260810020000_totp_aal2_enforcement.sql', 'utf8');
+  const migration = await readFile('supabase/migrations/20260811010000_critical_action_password_step_up.sql', 'utf8');
 
-  assert.match(auth, /requireAal2/);
-  assert.match(workspace, /Изменение роли участника требует свежего кода TOTP/);
-  assert.match(profile, /Удаление аккаунта требует свежего кода TOTP/);
-  assert.match(operations, /Экспорт операций требует свежего кода TOTP/);
-  assert.match(analytics, /Экспорт аналитики требует свежего кода TOTP/);
-  assert.match(backup, /Восстановление данных требует свежего кода TOTP/);
-  assert.match(gate, /current_user_requires_workspace_mfa/);
-  assert.match(api, /mfa\/totp/);
-  assert.match(migration, /AS RESTRICTIVE FOR ALL TO authenticated/);
-  assert.match(migration, /current_session_has_fresh_totp_aal2/);
+  assert.match(auth, /requireFreshPassword/);
+  assert.match(workspace, /Изменение роли участника требует повторного ввода текущего пароля/);
+  assert.match(backup, /Восстановление данных требует повторного ввода текущего пароля/);
+  assert.match(gate, /state\.factors\.length === 0/);
+  assert.doesNotMatch(gate, /current_user_requires_workspace_mfa/);
+  assert.match(settings, /Вы можете включить его добровольно/);
+  assert.doesNotMatch(profile, /Удаление аккаунта требует свежего кода TOTP/);
+  assert.doesNotMatch(operations, /Экспорт операций требует свежего кода TOTP/);
+  assert.doesNotMatch(analytics, /Экспорт аналитики требует свежего кода TOTP/);
+  assert.doesNotMatch(api, /Fresh TOTP confirmation required/);
+  assert.match(migration, /current_session_has_fresh_password/);
+  assert.match(migration, /interval '5 minutes'/);
 });
 
 test('zero-cost backup encrypts before private R2 upload and enforces a size gate', async () => {

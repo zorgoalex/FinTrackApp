@@ -19,7 +19,7 @@ async function invokeTelegram(action) {
 
 export default function ProfilePage() {
   const navigate = useNavigate();
-  const { user, updatePassword, logout, requireAal2 } = useAuth();
+  const { user, updatePassword, logout } = useAuth();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [password, setPassword] = useState('');
@@ -126,13 +126,6 @@ export default function ProfilePage() {
     if (!isStrongPassword(password)) { setError(PASSWORD_POLICY_MESSAGE); return; }
     if (password !== confirmation) { setError('Пароли не совпадают'); return; }
     if (!currentPassword) { setError('Введите текущий пароль'); return; }
-    try {
-      const confirmed = await requireAal2('Смена пароля требует свежего кода TOTP');
-      if (!confirmed) return;
-    } catch (mfaError) {
-      setError(mfaError.message || 'Не удалось подтвердить TOTP');
-      return;
-    }
     setSaving(true);
     const success = await updatePassword(password, currentPassword);
     setSaving(false);
@@ -166,17 +159,6 @@ export default function ProfilePage() {
     if (reauthError) {
       setDeleteBusy(false);
       setDeleteError('Текущий пароль неверен');
-      return;
-    }
-    try {
-      const confirmed = await requireAal2('Удаление аккаунта требует свежего кода TOTP');
-      if (!confirmed) {
-        setDeleteBusy(false);
-        return;
-      }
-    } catch (mfaError) {
-      setDeleteBusy(false);
-      setDeleteError(mfaError.message || 'Не удалось подтвердить TOTP');
       return;
     }
     const { error: deletionError } = await supabase.rpc('delete_my_account', {

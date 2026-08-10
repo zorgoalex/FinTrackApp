@@ -8,6 +8,10 @@ INSERT INTO auth.users(id,email) VALUES
  ('17000000-0000-0000-0000-000000000002','restore-member@example.test'),
  ('17000000-0000-0000-0000-000000000003','restore-outsider@example.test')
 ON CONFLICT (id) DO NOTHING;
+INSERT INTO auth.sessions(id,user_id) VALUES
+ ('57000000-0000-0000-0000-000000000001','17000000-0000-0000-0000-000000000001'),
+ ('57000000-0000-0000-0000-000000000002','17000000-0000-0000-0000-000000000002'),
+ ('57000000-0000-0000-0000-000000000003','17000000-0000-0000-0000-000000000003');
 INSERT INTO public.workspaces(id,owner_id,name,is_personal,workspace_type,base_currency)
 VALUES ('27000000-0000-0000-0000-000000000001','17000000-0000-0000-0000-000000000001','Restore fixture',false,'business','KZT');
 INSERT INTO public.workspace_members(workspace_id,user_id,role) VALUES
@@ -32,19 +36,19 @@ SELECT set_config('request.jwt.claim.sub','17000000-0000-0000-0000-000000000001'
 SELECT set_config('request.jwt.claims', json_build_object(
   'sub', '17000000-0000-0000-0000-000000000001',
   'role', 'authenticated',
-  'aal', 'aal1',
-  'amr', json_build_array(json_build_object('method', 'password', 'timestamp', extract(epoch FROM now())::bigint))
+  'session_id', '57000000-0000-0000-0000-000000000001',
+  'amr', json_build_array(json_build_object('method', 'password', 'timestamp', extract(epoch FROM now() - interval '10 minutes')::bigint))
 )::text, true);
 SELECT throws_ok(
   $$SELECT public.restore_workspace_backup('27000000-0000-0000-0000-000000000001',(SELECT document FROM restore_fixture),true)$$,
-  'P0001', 'Подтвердите восстановление свежим кодом TOTP',
-  'owner cannot preview restore with AAL1'
+  'P0001', 'Повторно подтвердите текущий пароль',
+  'owner cannot preview restore with a stale password session'
 );
 SELECT set_config('request.jwt.claims', json_build_object(
   'sub', '17000000-0000-0000-0000-000000000001',
   'role', 'authenticated',
-  'aal', 'aal2',
-  'amr', json_build_array(json_build_object('method', 'mfa/totp', 'timestamp', extract(epoch FROM now())::bigint))
+  'session_id', '57000000-0000-0000-0000-000000000001',
+  'amr', json_build_array(json_build_object('method', 'password', 'timestamp', extract(epoch FROM now())::bigint))
 )::text, true);
 SELECT lives_ok($$SELECT public.restore_workspace_backup('27000000-0000-0000-0000-000000000001',(SELECT document FROM restore_fixture),true)$$,'owner previews backup');
 SELECT is(((SELECT public.restore_workspace_backup('27000000-0000-0000-0000-000000000001',document,true) FROM restore_fixture)->>'totalRows')::integer,1,'preview returns total rows');
@@ -59,24 +63,24 @@ SELECT set_config('request.jwt.claim.sub','17000000-0000-0000-0000-000000000002'
 SELECT set_config('request.jwt.claims', json_build_object(
   'sub', '17000000-0000-0000-0000-000000000002',
   'role', 'authenticated',
-  'aal', 'aal2',
-  'amr', json_build_array(json_build_object('method', 'mfa/totp', 'timestamp', extract(epoch FROM now())::bigint))
+  'session_id', '57000000-0000-0000-0000-000000000002',
+  'amr', json_build_array(json_build_object('method', 'password', 'timestamp', extract(epoch FROM now())::bigint))
 )::text, true);
 SELECT throws_ok($$SELECT public.restore_workspace_backup('27000000-0000-0000-0000-000000000001',(SELECT document FROM restore_fixture),true)$$,'P0001','Только владелец или администратор может восстановить резервную копию','member cannot restore');
 SELECT set_config('request.jwt.claim.sub','17000000-0000-0000-0000-000000000003',true);
 SELECT set_config('request.jwt.claims', json_build_object(
   'sub', '17000000-0000-0000-0000-000000000003',
   'role', 'authenticated',
-  'aal', 'aal2',
-  'amr', json_build_array(json_build_object('method', 'mfa/totp', 'timestamp', extract(epoch FROM now())::bigint))
+  'session_id', '57000000-0000-0000-0000-000000000003',
+  'amr', json_build_array(json_build_object('method', 'password', 'timestamp', extract(epoch FROM now())::bigint))
 )::text, true);
 SELECT throws_ok($$SELECT public.restore_workspace_backup('27000000-0000-0000-0000-000000000001',(SELECT document FROM restore_fixture),true)$$,'P0001','Только владелец или администратор может восстановить резервную копию','outsider cannot restore');
 SELECT set_config('request.jwt.claim.sub','17000000-0000-0000-0000-000000000001',true);
 SELECT set_config('request.jwt.claims', json_build_object(
   'sub', '17000000-0000-0000-0000-000000000001',
   'role', 'authenticated',
-  'aal', 'aal2',
-  'amr', json_build_array(json_build_object('method', 'mfa/totp', 'timestamp', extract(epoch FROM now())::bigint))
+  'session_id', '57000000-0000-0000-0000-000000000001',
+  'amr', json_build_array(json_build_object('method', 'password', 'timestamp', extract(epoch FROM now())::bigint))
 )::text, true);
 SELECT throws_ok($$SELECT public.restore_workspace_backup('27000000-0000-0000-0000-000000000001',jsonb_build_object('format','fintrack-workspace-backup','version',1),true)$$,'P0001','Поддерживается резервная копия FinTrack версии 2','legacy version rejected');
 SELECT throws_ok($$SELECT public.restore_workspace_backup('27000000-0000-0000-0000-000000000001',jsonb_set((SELECT document FROM restore_fixture),'{workspace,id}','"aaaaaaaa-0000-0000-0000-000000000001"'),true)$$,'P0001','Копия создана для другого рабочего пространства','foreign backup rejected');

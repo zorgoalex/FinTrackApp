@@ -3,7 +3,7 @@ import { Copy, QrCode } from 'lucide-react';
 import { supabase } from '../contexts/AuthContext';
 import { normalizeTotpCode, totpQrCodeDataUrl } from '../utils/mfa';
 
-export default function MfaEnrollmentForm({ onVerified, onCancel, mandatory = false }) {
+export default function MfaEnrollmentForm({ onVerified, onCancel }) {
   const [enrollment, setEnrollment] = useState(null);
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(true);
@@ -62,7 +62,6 @@ export default function MfaEnrollmentForm({ onVerified, onCancel, mandatory = fa
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Откройте Google Authenticator, Microsoft Authenticator, Aegis или другое TOTP-приложение и отсканируйте QR-код.</p>
         </div>
       </div>
-      {mandatory && <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">Для владельцев и администраторов TOTP обязателен. Доступ откроется после проверки первого кода.</p>}
       {busy && !enrollment && <p className="text-sm text-gray-500">Создаём защищённый фактор…</p>}
       {enrollment?.totp && (
         <>

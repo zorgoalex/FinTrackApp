@@ -4,36 +4,28 @@ import { useLocation } from 'react-router-dom';
 import { supabase, useAuth } from '../contexts/AuthContext';
 import { getVerifiedTotpFactors, hasTotpAal2 } from '../utils/mfa';
 import MfaChallengeForm from './MfaChallengeForm';
-import MfaEnrollmentForm from './MfaEnrollmentForm';
 
-const enforcementEnabled = import.meta.env.VITE_PRIVILEGED_MFA_ENFORCEMENT !== 'false';
-
-export default function PrivilegedMfaGate({ children }) {
+export default function OptionalMfaGate({ children }) {
   const { user, logout } = useAuth();
   const location = useLocation();
-  const [state, setState] = useState({ loading: enforcementEnabled, privileged: false, assurance: null, factors: [], error: '' });
+  const [state, setState] = useState({ loading: true, assurance: null, factors: [], error: '' });
   const [verifyBusy, setVerifyBusy] = useState(false);
   const [verifyError, setVerifyError] = useState('');
 
   const refresh = useCallback(async () => {
-    if (!enforcementEnabled || !user?.id) {
-      setState({ loading: false, privileged: false, assurance: null, factors: [], error: '' });
-      return;
-    }
+    if (!user?.id) return;
     setState((current) => ({ ...current, loading: true, error: '' }));
-    const [{ data: privileged, error: membershipError }, { data: factorsData, error: factorsError }, { data: assurance, error: assuranceError }] = await Promise.all([
-      supabase.rpc('current_user_requires_workspace_mfa'),
+    const [{ data: factorsData, error: factorsError }, { data: assurance, error: assuranceError }] = await Promise.all([
       supabase.auth.mfa.listFactors(),
       supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
     ]);
-    const loadError = membershipError || factorsError || assuranceError;
+    const loadError = factorsError || assuranceError;
     if (loadError) {
-      setState({ loading: false, privileged: false, assurance: null, factors: [], error: loadError.message || 'Не удалось проверить двухфакторную защиту' });
+      setState({ loading: false, assurance: null, factors: [], error: loadError.message || 'Не удалось проверить двухфакторную защиту' });
       return;
     }
     setState({
       loading: false,
-      privileged: Boolean(privileged),
       assurance,
       factors: getVerifiedTotpFactors(factorsData?.all),
       error: '',
@@ -46,10 +38,8 @@ export default function PrivilegedMfaGate({ children }) {
     return () => window.removeEventListener('focus', refresh);
   }, [refresh]);
 
-  if (!enforcementEnabled) return children;
-
   if (state.loading) {
-    return <div className="min-h-screen grid place-items-center bg-gray-50 p-4 text-gray-600 dark:bg-gray-900 dark:text-gray-300">Проверяем двухфакторную защиту…</div>;
+    return <div className="min-h-screen grid place-items-center bg-gray-50 p-4 text-gray-600 dark:bg-gray-900 dark:text-gray-300">Проверяем защиту аккаунта…</div>;
   }
 
   if (state.error) {
@@ -67,9 +57,7 @@ export default function PrivilegedMfaGate({ children }) {
     );
   }
 
-  if (!state.privileged) return children;
-
-  if (hasTotpAal2(state.assurance)) return children;
+  if (state.factors.length === 0 || hasTotpAal2(state.assurance)) return children;
 
   const verify = async (code) => {
     setVerifyBusy(true);
@@ -86,18 +74,14 @@ export default function PrivilegedMfaGate({ children }) {
   return (
     <div className="min-h-screen grid place-items-center bg-gray-50 p-4 dark:bg-gray-900">
       <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-sm dark:bg-gray-800">
-        <div className="mb-4 flex items-center gap-2 text-primary-600 dark:text-primary-300"><ShieldCheck size={22} /><span className="text-sm font-semibold">Защита привилегированного аккаунта</span></div>
-        {state.factors.length === 0 ? (
-          <MfaEnrollmentForm mandatory onVerified={refresh} />
-        ) : (
-          <MfaChallengeForm
-            title="Введите код TOTP"
-            description="Для владельцев и администраторов вход завершается только после второго фактора."
-            busy={verifyBusy}
-            error={verifyError}
-            onVerify={verify}
-          />
-        )}
+        <div className="mb-4 flex items-center gap-2 text-primary-600 dark:text-primary-300"><ShieldCheck size={22} /><span className="text-sm font-semibold">Добровольная двухфакторная защита</span></div>
+        <MfaChallengeForm
+          title="Введите код TOTP"
+          description="Вы включили двухфакторную защиту для своего аккаунта."
+          busy={verifyBusy}
+          error={verifyError}
+          onVerify={verify}
+        />
         <button type="button" onClick={() => logout()} className="mt-3 min-h-11 w-full text-sm text-gray-500 hover:text-gray-800 dark:hover:text-gray-200">Выйти из аккаунта</button>
       </div>
     </div>

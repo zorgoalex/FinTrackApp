@@ -4,7 +4,6 @@ import { corsHeaders } from '../_shared/cors.ts';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 const OPERATION_TYPES = new Set(['income', 'expense', 'personal_salary', 'employee_salary']);
-const FRESH_AAL2_MAX_AGE_SECONDS = 10 * 60;
 
 function jsonResponse(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -15,29 +14,6 @@ function jsonResponse(data: unknown, status = 200) {
 
 function errorResponse(error: string, status: number) {
   return jsonResponse({ error }, status);
-}
-
-function verifiedJwtClaims(token: string): Record<string, unknown> | null {
-  try {
-    const encoded = token.split('.')[1];
-    if (!encoded) return null;
-    const normalized = encoded.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(encoded.length / 4) * 4, '=');
-    return JSON.parse(atob(normalized));
-  } catch {
-    return null;
-  }
-}
-
-function hasFreshTotpAal2(claims: Record<string, unknown> | null, nowSeconds = Math.floor(Date.now() / 1000)) {
-  if (claims?.aal !== 'aal2' || !Array.isArray(claims.amr)) return false;
-  return claims.amr.some((entry: unknown) => {
-    if (!entry || typeof entry !== 'object') return false;
-    const method = entry as Record<string, unknown>;
-    const timestamp = Number(method.timestamp);
-    return method.method === 'mfa/totp'
-      && Number.isFinite(timestamp)
-      && timestamp >= nowSeconds - FRESH_AAL2_MAX_AGE_SECONDS;
-  });
 }
 
 async function getAuthenticatedClient(req: Request) {
@@ -51,7 +27,7 @@ async function getAuthenticatedClient(req: Request) {
   const { data: { user }, error } = await supabase.auth.getUser(token);
   if (error || !user) return null;
 
-  return { supabase, user, claims: verifiedJwtClaims(token) };
+  return { supabase, user };
 }
 
 function validDate(value: unknown): value is string {
@@ -665,7 +641,7 @@ Deno.serve(async (req) => {
     const auth = await getAuthenticatedClient(req);
     if (!auth) return errorResponse('Unauthorized', 401);
 
-    const { supabase, user, claims } = auth;
+    const { supabase, user } = auth;
     const url = new URL(req.url);
 
     // Strip function prefix: /api/... → parse segments after /api
@@ -703,7 +679,6 @@ Deno.serve(async (req) => {
         }
         // GET /workspaces/:id/operations/export
         if (segments.length === 4 && segments[3] === 'export' && method === 'GET') {
-          if (!hasFreshTotpAal2(claims)) return errorResponse('Fresh TOTP confirmation required', 403);
           return await exportOperations(supabase, workspaceId, url);
         }
         if (segments.length === 4) {

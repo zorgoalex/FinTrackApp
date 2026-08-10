@@ -11,6 +11,9 @@ VALUES
   ('10000000-0000-0000-0000-000000000002', 'member-security@example.test')
 ON CONFLICT (id) DO NOTHING;
 
+INSERT INTO auth.sessions(id,user_id) VALUES
+  ('50000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001');
+
 INSERT INTO public.workspaces (id, owner_id, name, is_personal)
 VALUES (
   '20000000-0000-0000-0000-000000000001',
@@ -65,12 +68,13 @@ SELECT lives_ok(
   'member can leave workspace'
 );
 
-SELECT is_empty(
+SELECT throws_ok(
   $$UPDATE public.workspace_members
     SET is_active = true
     WHERE workspace_id = '20000000-0000-0000-0000-000000000001'
-      AND user_id = '10000000-0000-0000-0000-000000000002'
-    RETURNING user_id$$,
+      AND user_id = '10000000-0000-0000-0000-000000000002'$$,
+  'P0001',
+  'Участник не может изменить собственную роль или восстановить доступ',
   'member cannot reactivate self'
 );
 
@@ -99,28 +103,29 @@ SELECT set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001
 SELECT set_config('request.jwt.claims', json_build_object(
   'sub', '10000000-0000-0000-0000-000000000001',
   'role', 'authenticated',
-  'aal', 'aal1',
-  'amr', json_build_array(json_build_object('method', 'password', 'timestamp', extract(epoch FROM now())::bigint))
+  'session_id', '50000000-0000-0000-0000-000000000001',
+  'amr', json_build_array(json_build_object('method', 'password', 'timestamp', extract(epoch FROM now() - interval '10 minutes')::bigint))
 )::text, true);
-SELECT is_empty(
+SELECT throws_ok(
   $$UPDATE public.workspace_members SET role = 'Admin'
     WHERE workspace_id = '20000000-0000-0000-0000-000000000001'
-      AND user_id = '10000000-0000-0000-0000-000000000002'
-    RETURNING user_id$$,
-  'owner cannot change a role with AAL1'
+      AND user_id = '10000000-0000-0000-0000-000000000002'$$,
+  'P0001',
+  'Повторно подтвердите текущий пароль',
+  'owner cannot change a role with a stale password session'
 );
 
 SELECT set_config('request.jwt.claims', json_build_object(
   'sub', '10000000-0000-0000-0000-000000000001',
   'role', 'authenticated',
-  'aal', 'aal2',
-  'amr', json_build_array(json_build_object('method', 'mfa/totp', 'timestamp', extract(epoch FROM now())::bigint))
+  'session_id', '50000000-0000-0000-0000-000000000001',
+  'amr', json_build_array(json_build_object('method', 'password', 'timestamp', extract(epoch FROM now())::bigint))
 )::text, true);
 SELECT lives_ok(
   $$UPDATE public.workspace_members SET role = 'Admin'
     WHERE workspace_id = '20000000-0000-0000-0000-000000000001'
       AND user_id = '10000000-0000-0000-0000-000000000002'$$,
-  'owner can change a role with fresh TOTP AAL2'
+  'owner can change a role after a fresh password check'
 );
 
 SELECT * FROM finish();

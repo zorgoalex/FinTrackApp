@@ -58,10 +58,9 @@ SELECT is(
     WHERE schemaname = 'public'
       AND tablename = 'counterparties'
       AND cmd IN ('DELETE', 'ALL')
-      AND permissive = 'PERMISSIVE'
   ),
   0,
-  'counterparties expose no permissive authenticated delete policy'
+  'counterparties expose no authenticated delete policy'
 );
 
 SELECT ok(

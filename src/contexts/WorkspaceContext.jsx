@@ -21,7 +21,7 @@ export function WorkspaceProvider({ children }) {
   const [searchParams] = useSearchParams();
   // Workspace ID can come from URL path (/workspace/:id) or from query param (?workspaceId=...)
   const workspaceId = workspaceIdFromParams || searchParams.get('workspaceId') || null;
-  const { user, requireAal2 } = useAuth();
+  const { user, requireFreshPassword } = useAuth();
   const navigate = useNavigate();
   
   // Основное состояние
@@ -381,7 +381,7 @@ export function WorkspaceProvider({ children }) {
     }
 
     try {
-      const confirmed = await requireAal2('Изменение роли участника требует свежего кода TOTP');
+      const confirmed = await requireFreshPassword('Изменение роли участника требует повторного ввода текущего пароля');
       if (!confirmed) return false;
       const { error } = await supabase
         .from('workspace_members')

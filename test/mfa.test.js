@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { getVerifiedTotpFactors, hasFreshTotpAal2, hasTotpAal2, normalizeTotpCode, totpQrCodeDataUrl } from '../src/utils/mfa.js';
+import { getVerifiedTotpFactors, hasFreshPassword, hasFreshTotpAal2, hasTotpAal2, normalizeTotpCode, totpQrCodeDataUrl } from '../src/utils/mfa.js';
 
 test('fresh TOTP AAL2 requires a recent mfa/totp authentication method', () => {
   const now = 2_000_000_000;
@@ -10,9 +10,16 @@ test('fresh TOTP AAL2 requires a recent mfa/totp authentication method', () => {
   assert.equal(hasFreshTotpAal2({ currentLevel: 'aal2', currentAuthenticationMethods: [{ method: 'mfa/totp', timestamp: now - 600 }] }, now), true);
 });
 
-test('privileged access accepts TOTP AAL2 but rejects another AAL2 method', () => {
+test('optional TOTP login accepts TOTP AAL2 but rejects another AAL2 method', () => {
   assert.equal(hasTotpAal2({ currentLevel: 'aal2', currentAuthenticationMethods: [{ method: 'mfa/totp' }] }), true);
   assert.equal(hasTotpAal2({ currentLevel: 'aal2', currentAuthenticationMethods: [{ method: 'mfa/phone' }] }), false);
+});
+
+test('password step-up accepts only a password verified within five minutes', () => {
+  const now = 2_000_000_000;
+  assert.equal(hasFreshPassword({ currentAuthenticationMethods: [{ method: 'password', timestamp: now - 301 }] }, now), false);
+  assert.equal(hasFreshPassword({ currentAuthenticationMethods: [{ method: 'mfa/totp', timestamp: now }] }, now), false);
+  assert.equal(hasFreshPassword({ currentAuthenticationMethods: [{ method: 'password', timestamp: now - 300 }] }, now), true);
 });
 
 test('TOTP helpers keep only verified factors and normalize enrollment data', () => {

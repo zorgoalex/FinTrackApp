@@ -1,4 +1,5 @@
 export const FRESH_AAL2_MAX_AGE_SECONDS = 10 * 60;
+export const FRESH_PASSWORD_MAX_AGE_SECONDS = 5 * 60;
 
 export function getVerifiedTotpFactors(factors) {
   if (!Array.isArray(factors)) return [];
@@ -14,6 +15,14 @@ export function hasFreshTotpAal2(assurance, nowSeconds = Math.floor(Date.now() /
   if (!hasTotpAal2(assurance)) return false;
   return (assurance.currentAuthenticationMethods || []).some((method) => (
     method?.method === 'mfa/totp'
+    && Number.isFinite(Number(method.timestamp))
+    && Number(method.timestamp) >= nowSeconds - maxAgeSeconds
+  ));
+}
+
+export function hasFreshPassword(assurance, nowSeconds = Math.floor(Date.now() / 1000), maxAgeSeconds = FRESH_PASSWORD_MAX_AGE_SECONDS) {
+  return (assurance?.currentAuthenticationMethods || []).some((method) => (
+    method?.method === 'password'
     && Number.isFinite(Number(method.timestamp))
     && Number(method.timestamp) >= nowSeconds - maxAgeSeconds
   ));

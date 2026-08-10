@@ -42,7 +42,7 @@ const roleColors = {
 
 export default function WorkspaceSettingsPage() {
   const navigate = useNavigate();
-  const { requireAal2 } = useAuth();
+  const { requireFreshPassword } = useAuth();
   const { 
     currentWorkspace, 
     userRole,
@@ -169,11 +169,9 @@ export default function WorkspaceSettingsPage() {
   };
 
   const handleDownloadBackup = async () => {
+    setBackupLoading(true);
     setBackupError('');
     try {
-      const confirmed = await requireAal2('Экспорт резервной копии требует свежего кода TOTP');
-      if (!confirmed) return;
-      setBackupLoading(true);
       const backup = await createWorkspaceBackup(supabase, currentWorkspace.id);
       downloadWorkspaceBackup(backup);
     } catch (backupException) {
@@ -190,7 +188,7 @@ export default function WorkspaceSettingsPage() {
     setBackupError('');
     setRestoreSuccess('');
     try {
-      const confirmed = await requireAal2('Проверка и восстановление резервной копии требуют свежего кода TOTP');
+      const confirmed = await requireFreshPassword('Проверка резервной копии перед восстановлением требует текущего пароля');
       if (!confirmed) return;
       setRestoreLoading(true);
       const parsed = JSON.parse(await file.text());
@@ -211,7 +209,7 @@ export default function WorkspaceSettingsPage() {
     if (!window.confirm(`Восстановить ${restorePreview.totalRows} записей из «${restorePreview.fileName}»? Совпадающие записи будут обновлены атомарно.`)) return;
     setBackupError('');
     try {
-      const confirmed = await requireAal2('Восстановление данных требует свежего кода TOTP');
+      const confirmed = await requireFreshPassword('Восстановление данных требует повторного ввода текущего пароля');
       if (!confirmed) return;
       setRestoreLoading(true);
       await restoreWorkspaceBackup(supabase, currentWorkspace.id, restorePreview.backup, false);

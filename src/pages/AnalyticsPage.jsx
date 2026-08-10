@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useWorkspace } from '../contexts/WorkspaceContext';
-import { useAuth } from '../contexts/AuthContext';
 import useAnalytics from '../hooks/useAnalytics';
 import useAccounts from '../hooks/useAccounts';
 import { formatUnsignedAmount } from '../utils/formatters';
@@ -122,7 +121,6 @@ function getPeriodDates(periodKey, offset) {
 
 export default function AnalyticsPage() {
   const [searchParams] = useSearchParams();
-  const { requireAal2 } = useAuth();
   const { workspaceId: wsFromCtx, allWorkspaces, currencyCode, currencySymbol } = useWorkspace();
   const workspaceId = searchParams.get('workspaceId') || wsFromCtx;
 
@@ -136,7 +134,6 @@ export default function AnalyticsPage() {
   const [breakdownTab, setBreakdownTab] = useState('categories');
   const [categoryFlow, setCategoryFlow] = useState('expense');
   const [copied, setCopied] = useState(false);
-  const [exportError, setExportError] = useState('');
 
   // Reset selection when active workspace changes
   useEffect(() => {
@@ -229,25 +226,11 @@ export default function AnalyticsPage() {
   const maxCategoryAmount = Math.max(...visibleCategoryBreakdown.map(c => c.amount), 1);
   const maxTagAmount = Math.max(...tagBreakdown.map(t => t.amount), 1);
 
-  const handleExportCSV = async () => {
-    setExportError('');
-    try {
-      const confirmed = await requireAal2('Экспорт аналитики требует свежего кода TOTP');
-      if (confirmed) exportToCSV(analytics, dateFrom, dateTo);
-    } catch (mfaError) {
-      setExportError(mfaError.message || 'Не удалось подтвердить TOTP');
-    }
+  const handleExportCSV = () => {
+    exportToCSV(analytics, dateFrom, dateTo);
   };
 
   const handleCopyReport = async () => {
-    setExportError('');
-    try {
-      const confirmed = await requireAal2('Копирование финансового отчёта требует свежего кода TOTP');
-      if (!confirmed) return;
-    } catch (mfaError) {
-      setExportError(mfaError.message || 'Не удалось подтвердить TOTP');
-      return;
-    }
     const text = buildTextReport(analytics, dateFrom, dateTo, currencySymbol);
     try {
       await navigator.clipboard.writeText(text);
@@ -473,7 +456,6 @@ export default function AnalyticsPage() {
               {copied ? 'Скопировано!' : 'Копировать отчёт'}
             </button>
           </div>
-          {exportError && <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">{exportError}</p>}
         </>
       )}
     </div>
