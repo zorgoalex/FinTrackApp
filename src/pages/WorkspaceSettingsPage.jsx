@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, Mail, Settings, Trash2, UserPlus, Shield, Crown, Eye, User, Coins, Download, Sparkles, Upload, RotateCcw } from 'lucide-react';
 import { useWorkspace } from '../contexts/WorkspaceContext';
-import { supabase } from '../contexts/AuthContext';
+import { supabase, useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import ExchangeRateManager from '../components/ExchangeRateManager';
 import { createWorkspaceBackup, downloadWorkspaceBackup, restoreWorkspaceBackup, validateWorkspaceBackupDocument } from '../utils/workspaceBackup';
@@ -42,6 +42,7 @@ const roleColors = {
 
 export default function WorkspaceSettingsPage() {
   const navigate = useNavigate();
+  const { requireAal2 } = useAuth();
   const { 
     currentWorkspace, 
     userRole,
@@ -168,9 +169,11 @@ export default function WorkspaceSettingsPage() {
   };
 
   const handleDownloadBackup = async () => {
-    setBackupLoading(true);
     setBackupError('');
     try {
+      const confirmed = await requireAal2('Экспорт резервной копии требует свежего кода TOTP');
+      if (!confirmed) return;
+      setBackupLoading(true);
       const backup = await createWorkspaceBackup(supabase, currentWorkspace.id);
       downloadWorkspaceBackup(backup);
     } catch (backupException) {
@@ -186,8 +189,10 @@ export default function WorkspaceSettingsPage() {
     if (!file) return;
     setBackupError('');
     setRestoreSuccess('');
-    setRestoreLoading(true);
     try {
+      const confirmed = await requireAal2('Проверка и восстановление резервной копии требуют свежего кода TOTP');
+      if (!confirmed) return;
+      setRestoreLoading(true);
       const parsed = JSON.parse(await file.text());
       const localPreview = validateWorkspaceBackupDocument(parsed);
       const serverPreview = await restoreWorkspaceBackup(supabase, currentWorkspace.id, parsed, true);
@@ -204,9 +209,11 @@ export default function WorkspaceSettingsPage() {
   const handleRestoreBackup = async () => {
     if (!restorePreview?.backup) return;
     if (!window.confirm(`Восстановить ${restorePreview.totalRows} записей из «${restorePreview.fileName}»? Совпадающие записи будут обновлены атомарно.`)) return;
-    setRestoreLoading(true);
     setBackupError('');
     try {
+      const confirmed = await requireAal2('Восстановление данных требует свежего кода TOTP');
+      if (!confirmed) return;
+      setRestoreLoading(true);
       await restoreWorkspaceBackup(supabase, currentWorkspace.id, restorePreview.backup, false);
       setRestoreSuccess('Данные восстановлены. Обновите открытые экраны, чтобы увидеть изменения.');
       setRestorePreview(null);

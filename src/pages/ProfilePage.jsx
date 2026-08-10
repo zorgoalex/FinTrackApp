@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AlertTriangle, ExternalLink, KeyRound, Layers, LogOut, MessageCircle, RefreshCw, Trash2, Unlink, User } from 'lucide-react';
 import { supabase, useAuth } from '../contexts/AuthContext';
 import PasswordInput from '../components/PasswordInput';
+import MfaSettings from '../components/MfaSettings';
 import { isStrongPassword, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolicy';
 
 async function invokeTelegram(action) {
@@ -18,7 +19,7 @@ async function invokeTelegram(action) {
 
 export default function ProfilePage() {
   const navigate = useNavigate();
-  const { user, updatePassword, logout } = useAuth();
+  const { user, updatePassword, logout, requireAal2 } = useAuth();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [password, setPassword] = useState('');
@@ -125,6 +126,13 @@ export default function ProfilePage() {
     if (!isStrongPassword(password)) { setError(PASSWORD_POLICY_MESSAGE); return; }
     if (password !== confirmation) { setError('Пароли не совпадают'); return; }
     if (!currentPassword) { setError('Введите текущий пароль'); return; }
+    try {
+      const confirmed = await requireAal2('Смена пароля требует свежего кода TOTP');
+      if (!confirmed) return;
+    } catch (mfaError) {
+      setError(mfaError.message || 'Не удалось подтвердить TOTP');
+      return;
+    }
     setSaving(true);
     const success = await updatePassword(password, currentPassword);
     setSaving(false);
@@ -158,6 +166,17 @@ export default function ProfilePage() {
     if (reauthError) {
       setDeleteBusy(false);
       setDeleteError('Текущий пароль неверен');
+      return;
+    }
+    try {
+      const confirmed = await requireAal2('Удаление аккаунта требует свежего кода TOTP');
+      if (!confirmed) {
+        setDeleteBusy(false);
+        return;
+      }
+    } catch (mfaError) {
+      setDeleteBusy(false);
+      setDeleteError(mfaError.message || 'Не удалось подтвердить TOTP');
       return;
     }
     const { error: deletionError } = await supabase.rpc('delete_my_account', {
@@ -240,6 +259,10 @@ export default function ProfilePage() {
             <button type="button" disabled={telegramBusy || telegram.loading} onClick={connectTelegram} className="btn-primary min-h-11 w-full">{telegramBusy ? 'Создаём ссылку…' : 'Подключить Telegram'}</button>
           )}
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+        <MfaSettings />
       </section>
 
       <button type="button" onClick={() => navigate('/workspaces')} className="flex min-h-14 w-full items-center gap-3 rounded-2xl border border-gray-200 bg-white p-4 text-left hover:border-primary-300 dark:border-gray-700 dark:bg-gray-800">

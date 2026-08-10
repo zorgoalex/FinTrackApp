@@ -52,7 +52,7 @@ export function OperationPage() {
   const navigate = useNavigate();
   const params = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user } = useAuth();
+  const { user, requireAal2 } = useAuth();
   const { workspaceId: workspaceIdFromContext, currentWorkspace, updateQuickButtons, currencySymbol } = useWorkspace();
   const permissions = usePermissions();
 
@@ -456,10 +456,12 @@ export function OperationPage() {
   const handleExportOperations = async () => {
     const pageSize = 1000;
     const exportedOperations = [];
-    setExporting(true);
     setExportError('');
 
     try {
+      const confirmed = await requireAal2('Экспорт операций требует свежего кода TOTP');
+      if (!confirmed) return;
+      setExporting(true);
       for (let from = 0; ; from += pageSize) {
         const { data, error: operationsError } = await supabase
           .from('operations')

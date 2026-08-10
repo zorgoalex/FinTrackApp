@@ -1,7 +1,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
-SELECT plan(10);
+SELECT plan(11);
 
 INSERT INTO auth.users(id, email) VALUES
   ('1a000000-0000-0000-0000-000000000001', 'delete-me@example.test'),
@@ -29,8 +29,26 @@ SELECT set_config('request.jwt.claim.sub', '1a000000-0000-0000-0000-000000000001
 SELECT set_config('request.jwt.claims', json_build_object(
   'sub', '1a000000-0000-0000-0000-000000000001',
   'role', 'authenticated',
+  'aal', 'aal1',
   'session_id', '1a000000-0000-0000-0000-000000000099',
-  'amr', json_build_array(json_build_object('method', 'password', 'timestamp', extract(epoch FROM now() - interval '10 minutes')::bigint))
+  'amr', json_build_array(json_build_object('method', 'password', 'timestamp', extract(epoch FROM now())::bigint))
+)::text, true);
+
+SELECT throws_ok(
+  $$SELECT public.delete_my_account('delete-me@example.test')$$,
+  'P0001', 'Подтвердите действие свежим кодом TOTP',
+  'account deletion rejects AAL1 even after a fresh password'
+);
+
+SELECT set_config('request.jwt.claims', json_build_object(
+  'sub', '1a000000-0000-0000-0000-000000000001',
+  'role', 'authenticated',
+  'aal', 'aal2',
+  'session_id', '1a000000-0000-0000-0000-000000000099',
+  'amr', json_build_array(
+    json_build_object('method', 'password', 'timestamp', extract(epoch FROM now() - interval '10 minutes')::bigint),
+    json_build_object('method', 'mfa/totp', 'timestamp', extract(epoch FROM now())::bigint)
+  )
 )::text, true);
 
 SELECT throws_ok(
@@ -42,8 +60,12 @@ SELECT throws_ok(
 SELECT set_config('request.jwt.claims', json_build_object(
   'sub', '1a000000-0000-0000-0000-000000000001',
   'role', 'authenticated',
+  'aal', 'aal2',
   'session_id', '1a000000-0000-0000-0000-000000000099',
-  'amr', json_build_array(json_build_object('method', 'password', 'timestamp', extract(epoch FROM now())::bigint))
+  'amr', json_build_array(
+    json_build_object('method', 'password', 'timestamp', extract(epoch FROM now())::bigint),
+    json_build_object('method', 'mfa/totp', 'timestamp', extract(epoch FROM now())::bigint)
+  )
 )::text, true);
 
 SELECT throws_ok(

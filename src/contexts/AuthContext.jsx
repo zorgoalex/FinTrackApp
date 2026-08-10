@@ -1,8 +1,10 @@
-import { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { createContext, useCallback, useContext, useState, useEffect, useRef } from 'react';
 import { createClient } from "@supabase/supabase-js";
+import MfaChallengeForm from '../components/MfaChallengeForm';
 import { isStrongPassword, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolicy';
 import { clearLocalFinancialData } from '../utils/offlineStore';
 import { INTERNET_REQUIRED_MESSAGE, isInternetAvailable } from '../utils/connectivity';
+import { getVerifiedTotpFactors, hasFreshTotpAal2 } from '../utils/mfa';
 
 const AuthContext = createContext({});
 
@@ -26,7 +28,53 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [online, setOnline] = useState(() => isInternetAvailable());
+  const [aal2Request, setAal2Request] = useState(null);
   const activeUserIdRef = useRef(readStoredUserId());
+  const pendingAal2Ref = useRef(null);
+
+  const finishAal2Request = useCallback((result) => {
+    pendingAal2Ref.current?.resolve(result);
+    pendingAal2Ref.current = null;
+    setAal2Request(null);
+  }, []);
+
+  const requireAal2 = useCallback(async (reason = 'Это действие требует дополнительного подтверждения', { allowMissingFactor = false } = {}) => {
+    if (!isInternetAvailable()) throw new Error(INTERNET_REQUIRED_MESSAGE);
+
+    const { data: assurance, error: assuranceError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (assuranceError) throw assuranceError;
+    if (hasFreshTotpAal2(assurance)) return true;
+
+    const { data: factorsData, error: factorsError } = await supabase.auth.mfa.listFactors();
+    if (factorsError) throw factorsError;
+    const factor = getVerifiedTotpFactors(factorsData?.all)[0];
+    if (!factor) {
+      if (allowMissingFactor) return true;
+      const enrollmentError = new Error('Сначала подключите TOTP в личном кабинете');
+      enrollmentError.code = 'MFA_ENROLLMENT_REQUIRED';
+      throw enrollmentError;
+    }
+
+    if (pendingAal2Ref.current) finishAal2Request(false);
+    return new Promise((resolve) => {
+      pendingAal2Ref.current = { resolve };
+      setAal2Request({ reason, factorId: factor.id, busy: false, error: '' });
+    });
+  }, [finishAal2Request]);
+
+  const verifyAal2Request = useCallback(async (code) => {
+    if (!aal2Request?.factorId) return;
+    setAal2Request((current) => ({ ...current, busy: true, error: '' }));
+    const { error: verifyError } = await supabase.auth.mfa.challengeAndVerify({
+      factorId: aal2Request.factorId,
+      code,
+    });
+    if (verifyError) {
+      setAal2Request((current) => ({ ...current, busy: false, error: 'Код не подошёл. Проверьте его и попробуйте ещё раз.' }));
+      return;
+    }
+    finishAal2Request(true);
+  }, [aal2Request?.factorId, finishAal2Request]);
 
   useEffect(() => {
     let active = true;
@@ -136,6 +184,8 @@ export function AuthProvider({ children }) {
 
     return () => {
       active = false;
+      pendingAal2Ref.current?.resolve(false);
+      pendingAal2Ref.current = null;
       authListener.subscription.unsubscribe();
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('online', handleOnline);
@@ -269,6 +319,13 @@ export function AuthProvider({ children }) {
       setError(PASSWORD_POLICY_MESSAGE);
       return false;
     }
+    try {
+      const confirmed = await requireAal2('Смена пароля требует свежего кода TOTP', { allowMissingFactor: !currentPassword });
+      if (!confirmed) return false;
+    } catch (mfaError) {
+      setError(mfaError.message || 'Не удалось подтвердить TOTP');
+      return false;
+    }
     setLoading(true);
     try {
       const attributes = currentPassword
@@ -286,7 +343,23 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const updateEmail = async (email) => {
+    setError('');
+    if (!requireInternet()) return false;
+    try {
+      const confirmed = await requireAal2('Смена email требует свежего кода TOTP');
+      if (!confirmed) return false;
+      const { error: updateError } = await supabase.auth.updateUser({ email: email.trim() });
+      if (updateError) throw updateError;
+      return true;
+    } catch (updateError) {
+      setError(updateError.message || 'Не удалось изменить email');
+      return false;
+    }
+  };
+
   const logout = async () => {
+    if (pendingAal2Ref.current) finishAal2Request(false);
     const userId = activeUserIdRef.current || user?.id || readStoredUserId();
     let signOutError = null;
     try {
@@ -312,6 +385,8 @@ export function AuthProvider({ children }) {
     workosEnabled,
     requestPasswordReset,
     updatePassword,
+    updateEmail,
+    requireAal2,
     loading,
     error,
     online,
@@ -321,6 +396,20 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider value={value}>
       {children}
+      {aal2Request && (
+        <div className="fixed inset-0 z-[100] grid place-items-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-label="Подтверждение двухфакторной аутентификации">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl dark:bg-gray-800">
+            <MfaChallengeForm
+              title="Дополнительное подтверждение"
+              description={aal2Request.reason}
+              busy={aal2Request.busy}
+              error={aal2Request.error}
+              onVerify={verifyAal2Request}
+              onCancel={() => finishAal2Request(false)}
+            />
+          </div>
+        </div>
+      )}
     </AuthContext.Provider>
   );
 }

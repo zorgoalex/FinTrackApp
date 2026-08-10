@@ -3,7 +3,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
 
-SELECT plan(6);
+SELECT plan(8);
 
 INSERT INTO auth.users (id, email)
 VALUES
@@ -65,13 +65,12 @@ SELECT lives_ok(
   'member can leave workspace'
 );
 
-SELECT throws_ok(
+SELECT is_empty(
   $$UPDATE public.workspace_members
     SET is_active = true
     WHERE workspace_id = '20000000-0000-0000-0000-000000000001'
-      AND user_id = '10000000-0000-0000-0000-000000000002'$$,
-  'P0001',
-  'Участник не может изменить собственную роль или восстановить доступ',
+      AND user_id = '10000000-0000-0000-0000-000000000002'
+    RETURNING user_id$$,
   'member cannot reactivate self'
 );
 
@@ -94,6 +93,34 @@ SELECT throws_ok(
   '42501',
   NULL,
   'invitation path cannot grant Owner'
+);
+
+SELECT set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+SELECT set_config('request.jwt.claims', json_build_object(
+  'sub', '10000000-0000-0000-0000-000000000001',
+  'role', 'authenticated',
+  'aal', 'aal1',
+  'amr', json_build_array(json_build_object('method', 'password', 'timestamp', extract(epoch FROM now())::bigint))
+)::text, true);
+SELECT is_empty(
+  $$UPDATE public.workspace_members SET role = 'Admin'
+    WHERE workspace_id = '20000000-0000-0000-0000-000000000001'
+      AND user_id = '10000000-0000-0000-0000-000000000002'
+    RETURNING user_id$$,
+  'owner cannot change a role with AAL1'
+);
+
+SELECT set_config('request.jwt.claims', json_build_object(
+  'sub', '10000000-0000-0000-0000-000000000001',
+  'role', 'authenticated',
+  'aal', 'aal2',
+  'amr', json_build_array(json_build_object('method', 'mfa/totp', 'timestamp', extract(epoch FROM now())::bigint))
+)::text, true);
+SELECT lives_ok(
+  $$UPDATE public.workspace_members SET role = 'Admin'
+    WHERE workspace_id = '20000000-0000-0000-0000-000000000001'
+      AND user_id = '10000000-0000-0000-0000-000000000002'$$,
+  'owner can change a role with fresh TOTP AAL2'
 );
 
 SELECT * FROM finish();

@@ -1,7 +1,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
-SELECT plan(11);
+SELECT plan(12);
 
 INSERT INTO auth.users(id,email) VALUES
  ('17000000-0000-0000-0000-000000000001','restore-owner@example.test'),
@@ -29,6 +29,23 @@ GRANT SELECT ON restore_fixture TO authenticated;
 SELECT has_function('public','restore_workspace_backup',ARRAY['uuid','jsonb','boolean'],'restore RPC exists');
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','17000000-0000-0000-0000-000000000001',true);
+SELECT set_config('request.jwt.claims', json_build_object(
+  'sub', '17000000-0000-0000-0000-000000000001',
+  'role', 'authenticated',
+  'aal', 'aal1',
+  'amr', json_build_array(json_build_object('method', 'password', 'timestamp', extract(epoch FROM now())::bigint))
+)::text, true);
+SELECT throws_ok(
+  $$SELECT public.restore_workspace_backup('27000000-0000-0000-0000-000000000001',(SELECT document FROM restore_fixture),true)$$,
+  'P0001', 'Подтвердите восстановление свежим кодом TOTP',
+  'owner cannot preview restore with AAL1'
+);
+SELECT set_config('request.jwt.claims', json_build_object(
+  'sub', '17000000-0000-0000-0000-000000000001',
+  'role', 'authenticated',
+  'aal', 'aal2',
+  'amr', json_build_array(json_build_object('method', 'mfa/totp', 'timestamp', extract(epoch FROM now())::bigint))
+)::text, true);
 SELECT lives_ok($$SELECT public.restore_workspace_backup('27000000-0000-0000-0000-000000000001',(SELECT document FROM restore_fixture),true)$$,'owner previews backup');
 SELECT is(((SELECT public.restore_workspace_backup('27000000-0000-0000-0000-000000000001',document,true) FROM restore_fixture)->>'totalRows')::integer,1,'preview returns total rows');
 
@@ -39,10 +56,28 @@ SELECT lives_ok($$SELECT public.restore_workspace_backup('27000000-0000-0000-000
 SELECT isnt((SELECT name FROM public.categories WHERE id=((SELECT document#>>'{data,categories,0,id}' FROM restore_fixture)::uuid)),'Changed after backup','actual restore updates existing row');
 
 SELECT set_config('request.jwt.claim.sub','17000000-0000-0000-0000-000000000002',true);
+SELECT set_config('request.jwt.claims', json_build_object(
+  'sub', '17000000-0000-0000-0000-000000000002',
+  'role', 'authenticated',
+  'aal', 'aal2',
+  'amr', json_build_array(json_build_object('method', 'mfa/totp', 'timestamp', extract(epoch FROM now())::bigint))
+)::text, true);
 SELECT throws_ok($$SELECT public.restore_workspace_backup('27000000-0000-0000-0000-000000000001',(SELECT document FROM restore_fixture),true)$$,'P0001','Только владелец или администратор может восстановить резервную копию','member cannot restore');
 SELECT set_config('request.jwt.claim.sub','17000000-0000-0000-0000-000000000003',true);
+SELECT set_config('request.jwt.claims', json_build_object(
+  'sub', '17000000-0000-0000-0000-000000000003',
+  'role', 'authenticated',
+  'aal', 'aal2',
+  'amr', json_build_array(json_build_object('method', 'mfa/totp', 'timestamp', extract(epoch FROM now())::bigint))
+)::text, true);
 SELECT throws_ok($$SELECT public.restore_workspace_backup('27000000-0000-0000-0000-000000000001',(SELECT document FROM restore_fixture),true)$$,'P0001','Только владелец или администратор может восстановить резервную копию','outsider cannot restore');
 SELECT set_config('request.jwt.claim.sub','17000000-0000-0000-0000-000000000001',true);
+SELECT set_config('request.jwt.claims', json_build_object(
+  'sub', '17000000-0000-0000-0000-000000000001',
+  'role', 'authenticated',
+  'aal', 'aal2',
+  'amr', json_build_array(json_build_object('method', 'mfa/totp', 'timestamp', extract(epoch FROM now())::bigint))
+)::text, true);
 SELECT throws_ok($$SELECT public.restore_workspace_backup('27000000-0000-0000-0000-000000000001',jsonb_build_object('format','fintrack-workspace-backup','version',1),true)$$,'P0001','Поддерживается резервная копия FinTrack версии 2','legacy version rejected');
 SELECT throws_ok($$SELECT public.restore_workspace_backup('27000000-0000-0000-0000-000000000001',jsonb_set((SELECT document FROM restore_fixture),'{workspace,id}','"aaaaaaaa-0000-0000-0000-000000000001"'),true)$$,'P0001','Копия создана для другого рабочего пространства','foreign backup rejected');
 SELECT throws_ok($$SELECT public.restore_workspace_backup('27000000-0000-0000-0000-000000000001',jsonb_set((SELECT document FROM restore_fixture),'{data,categories,0,workspace_id}','"aaaaaaaa-0000-0000-0000-000000000001"'),true)$$,'P0001','Раздел categories содержит запись другого пространства','foreign row rejected in preview');

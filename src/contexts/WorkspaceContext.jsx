@@ -21,7 +21,7 @@ export function WorkspaceProvider({ children }) {
   const [searchParams] = useSearchParams();
   // Workspace ID can come from URL path (/workspace/:id) or from query param (?workspaceId=...)
   const workspaceId = workspaceIdFromParams || searchParams.get('workspaceId') || null;
-  const { user } = useAuth();
+  const { user, requireAal2 } = useAuth();
   const navigate = useNavigate();
   
   // Основное состояние
@@ -381,6 +381,8 @@ export function WorkspaceProvider({ children }) {
     }
 
     try {
+      const confirmed = await requireAal2('Изменение роли участника требует свежего кода TOTP');
+      if (!confirmed) return false;
       const { error } = await supabase
         .from('workspace_members')
         .update({ role: databaseRole })
@@ -391,6 +393,7 @@ export function WorkspaceProvider({ children }) {
 
       // Обновить список участников
       await loadWorkspaceMembers();
+      return true;
       
     } catch (err) {
       console.error('WorkspaceContext: Error changing user role', err);
