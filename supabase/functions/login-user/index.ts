@@ -15,10 +15,14 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
 
-  const { identifier, password } = await req.json();
+  const { identifier, password, captchaToken } = await req.json();
   const normalized = typeof identifier === 'string' ? identifier.trim().toLowerCase() : '';
   if (!/^[\p{L}\p{N}_]{3,30}$/u.test(normalized) || typeof password !== 'string') {
     return response({ error: 'Неверное имя аккаунта или пароль' }, 400);
+  }
+  const normalizedCaptchaToken = typeof captchaToken === 'string' ? captchaToken.trim() : '';
+  if (!normalizedCaptchaToken || normalizedCaptchaToken.length > 2048) {
+    return response({ error: 'Не удалось пройти проверку безопасности' }, 400);
   }
 
   const url = Deno.env.get('SUPABASE_URL') ?? '';
@@ -52,8 +56,14 @@ Deno.serve(async (req) => {
   const { data, error } = await publicClient.auth.signInWithPassword({
     email: userData.user.email,
     password,
+    options: { captchaToken: normalizedCaptchaToken },
   });
-  if (error || !data.session) return response({ error: 'Неверное имя аккаунта или пароль' }, 400);
+  if (error || !data.session) {
+    if (/captcha|turnstile|challenge/i.test(String(error?.message || ''))) {
+      return response({ error: 'Не удалось пройти проверку безопасности' }, 400);
+    }
+    return response({ error: 'Неверное имя аккаунта или пароль' }, 400);
+  }
 
   return response({
     access_token: data.session.access_token,

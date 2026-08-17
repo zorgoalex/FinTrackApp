@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AlertTriangle, ExternalLink, KeyRound, Layers, LogOut, MessageCircle, RefreshCw, Trash2, Unlink, User } from 'lucide-react';
 import { supabase, useAuth } from '../contexts/AuthContext';
 import PasswordInput from '../components/PasswordInput';
 import MfaSettings from '../components/MfaSettings';
+import TurnstileWidget, { isTurnstileEnabled, TURNSTILE_REQUIRED_MESSAGE } from '../components/TurnstileWidget';
 import { isStrongPassword, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolicy';
 
 async function invokeTelegram(action) {
@@ -39,6 +40,8 @@ export default function ProfilePage() {
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [deleteCaptchaToken, setDeleteCaptchaToken] = useState('');
+  const deleteTurnstileRef = useRef(null);
 
   const loadTelegram = useCallback(async ({ silent = false } = {}) => {
     const { data, error: invokeError } = await invokeTelegram('status');
@@ -151,14 +154,23 @@ export default function ProfilePage() {
       setDeleteError('Введите текущий пароль');
       return;
     }
+    if (isTurnstileEnabled && !deleteCaptchaToken) {
+      setDeleteError(TURNSTILE_REQUIRED_MESSAGE);
+      return;
+    }
     setDeleteBusy(true);
     const { error: reauthError } = await supabase.auth.signInWithPassword({
       email: user.email,
       password: deletePassword,
+      options: { captchaToken: deleteCaptchaToken },
     });
+    setDeleteCaptchaToken('');
+    deleteTurnstileRef.current?.reset();
     if (reauthError) {
       setDeleteBusy(false);
-      setDeleteError('Текущий пароль неверен');
+      setDeleteError(/captcha|turnstile|challenge/i.test(String(reauthError.message || ''))
+        ? 'Не удалось пройти проверку безопасности. Обновите проверку и попробуйте ещё раз.'
+        : 'Текущий пароль неверен');
       return;
     }
     const { error: deletionError } = await supabase.rpc('delete_my_account', {
@@ -281,9 +293,15 @@ export default function ProfilePage() {
             <p className="flex items-start gap-2 text-xs leading-5 text-red-800 dark:text-red-200"><AlertTriangle size={16} className="mt-0.5 shrink-0" />Сначала сохраните JSON-backup нужных пространств. Для подтверждения введите email <strong>{user?.email}</strong>.</p>
             <input type="email" className="input-field" value={deleteEmail} onChange={(event) => setDeleteEmail(event.target.value)} placeholder="Email текущего аккаунта" aria-label="Email для подтверждения удаления аккаунта" autoComplete="email" />
             <PasswordInput autoComplete="current-password" value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} placeholder="Текущий пароль" aria-label="Текущий пароль для удаления аккаунта" />
+            <TurnstileWidget
+              ref={deleteTurnstileRef}
+              action="delete_account"
+              onTokenChange={setDeleteCaptchaToken}
+              onError={setDeleteError}
+            />
             {deleteError && <p role="alert" className="text-sm text-red-700 dark:text-red-300">{deleteError}</p>}
             <div className="grid gap-2 sm:grid-cols-2">
-              <button type="button" disabled={deleteBusy} onClick={() => { setShowDeleteAccount(false); setDeleteEmail(''); setDeletePassword(''); setDeleteError(''); }} className="btn-secondary min-h-11">Отмена</button>
+              <button type="button" disabled={deleteBusy} onClick={() => { setShowDeleteAccount(false); setDeleteEmail(''); setDeletePassword(''); setDeleteError(''); setDeleteCaptchaToken(''); deleteTurnstileRef.current?.reset(); }} className="btn-secondary min-h-11">Отмена</button>
               <button type="button" disabled={deleteBusy || !deletePassword || deleteEmail.trim().toLowerCase() !== user?.email?.toLowerCase()} onClick={deleteAccount} className="min-h-11 rounded-xl bg-red-600 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{deleteBusy ? 'Удаляем…' : 'Удалить навсегда'}</button>
             </div>
           </div>

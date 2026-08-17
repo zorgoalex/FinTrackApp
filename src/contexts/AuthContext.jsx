@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useState, useEffect, useRef } f
 import { createClient } from "@supabase/supabase-js";
 import MfaChallengeForm from '../components/MfaChallengeForm';
 import PasswordStepUpForm from '../components/PasswordStepUpForm';
+import { isTurnstileEnabled, TURNSTILE_REQUIRED_MESSAGE } from '../components/TurnstileWidget';
 import { isStrongPassword, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolicy';
 import { clearLocalFinancialData } from '../utils/offlineStore';
 import { INTERNET_REQUIRED_MESSAGE, isInternetAvailable } from '../utils/connectivity';
@@ -14,6 +15,14 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const workosConnectionId = import.meta.env.VITE_WORKOS_CONNECTION_ID?.trim();
 const workosEnabled = import.meta.env.VITE_WORKOS_AUTH_ENABLED === 'true' && Boolean(workosConnectionId);
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+function friendlyAuthError(error, fallback) {
+  const message = String(error?.message || '');
+  if (/captcha|turnstile|challenge/i.test(message)) {
+    return 'Не удалось пройти проверку безопасности. Обновите проверку и попробуйте ещё раз.';
+  }
+  return message || fallback;
+}
 
 function readStoredUserId() {
   if (typeof localStorage === 'undefined') return null;
@@ -98,15 +107,26 @@ export function AuthProvider({ children }) {
     });
   }, [finishPasswordRequest]);
 
-  const verifyPasswordRequest = useCallback(async (password) => {
+  const verifyPasswordRequest = useCallback(async (password, captchaToken) => {
     if (!user?.email) return;
+    if (isTurnstileEnabled && !captchaToken) {
+      setPasswordRequest((current) => ({ ...current, busy: false, error: TURNSTILE_REQUIRED_MESSAGE }));
+      return;
+    }
     setPasswordRequest((current) => ({ ...current, busy: true, error: '' }));
     const { error: verificationError } = await supabase.auth.signInWithPassword({
       email: user.email,
       password,
+      options: { captchaToken },
     });
     if (verificationError) {
-      setPasswordRequest((current) => ({ ...current, busy: false, error: 'Текущий пароль неверен.' }));
+      setPasswordRequest((current) => ({
+        ...current,
+        busy: false,
+        error: /captcha|turnstile|challenge/i.test(String(verificationError.message || ''))
+          ? friendlyAuthError(verificationError, 'Не удалось подтвердить пароль')
+          : 'Текущий пароль неверен.',
+      }));
       return;
     }
     finishPasswordRequest(true);
@@ -237,23 +257,31 @@ export function AuthProvider({ children }) {
     return false;
   };
 
-  const login = async (identifier, password) => {
+  const login = async (identifier, password, captchaToken) => {
     setError("");
     if (!requireInternet()) return false;
     if (!password || password.length < 8) {
       setError("Пароль должен быть не менее 8 символов");
       return false;
     }
+    if (isTurnstileEnabled && !captchaToken) {
+      setError(TURNSTILE_REQUIRED_MESSAGE);
+      return false;
+    }
     setLoading(true);
     try {
       let data;
       if (identifier.includes('@')) {
-        const result = await supabase.auth.signInWithPassword({ email: identifier.trim(), password });
+        const result = await supabase.auth.signInWithPassword({
+          email: identifier.trim(),
+          password,
+          options: { captchaToken },
+        });
         if (result.error) throw result.error;
         data = result.data;
       } else {
         const { data: loginData, error: invokeError } = await supabase.functions.invoke('login-user', {
-          body: { identifier: identifier.trim(), password }
+          body: { identifier: identifier.trim(), password, captchaToken }
         });
         if (invokeError || loginData?.error) throw new Error(loginData?.error || 'Ошибка входа');
         const sessionResult = await supabase.auth.setSession({
@@ -270,19 +298,23 @@ export function AuthProvider({ children }) {
       setUser(profile);
       return true;
     } catch (e) {
-      setError(e.message || "Ошибка входа");
+      setError(friendlyAuthError(e, "Ошибка входа"));
       return false;
     } finally {
       setLoading(false);
     }
   };
 
-  const signUp = async (username, email, password) => {
+  const signUp = async (username, email, password, captchaToken) => {
     setError("");
     if (!requireInternet()) return { success: false, requiresEmailConfirmation: false };
     if (!isStrongPassword(password)) {
       setError(PASSWORD_POLICY_MESSAGE);
       return false;
+    }
+    if (isTurnstileEnabled && !captchaToken) {
+      setError(TURNSTILE_REQUIRED_MESSAGE);
+      return { success: false, requiresEmailConfirmation: false };
     }
     setLoading(true);
     try {
@@ -291,7 +323,8 @@ export function AuthProvider({ children }) {
         password,
         options: {
           data: { name: username, username },
-          emailRedirectTo: window.location.origin
+          emailRedirectTo: window.location.origin,
+          captchaToken
         }
       });
       if (signErr) throw signErr;
@@ -300,7 +333,7 @@ export function AuthProvider({ children }) {
         requiresEmailConfirmation: !data.session
       };
     } catch (e) {
-      setError(e.message || "Ошибка регистрации");
+      setError(friendlyAuthError(e, "Ошибка регистрации"));
       return { success: false, requiresEmailConfirmation: false };
     } finally {
       setLoading(false);
@@ -332,18 +365,23 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const requestPasswordReset = async (email) => {
+  const requestPasswordReset = async (email, captchaToken) => {
     setError("");
     if (!requireInternet()) return false;
+    if (isTurnstileEnabled && !captchaToken) {
+      setError(TURNSTILE_REQUIRED_MESSAGE);
+      return false;
+    }
     setLoading(true);
     try {
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`
+        redirectTo: `${window.location.origin}/reset-password`,
+        captchaToken
       });
       if (resetError) throw resetError;
       return true;
     } catch (e) {
-      setError(e.message || "Не удалось отправить письмо для восстановления пароля");
+      setError(friendlyAuthError(e, "Не удалось отправить письмо для восстановления пароля"));
       return false;
     } finally {
       setLoading(false);

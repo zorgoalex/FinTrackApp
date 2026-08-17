@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import AuthShell from '../components/AuthShell';
 import PasswordInput from '../components/PasswordInput';
 import SocialAuthButtons from '../components/SocialAuthButtons';
+import TurnstileWidget, { isTurnstileEnabled, TURNSTILE_REQUIRED_MESSAGE } from '../components/TurnstileWidget';
 import { isStrongPassword, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolicy';
 
 export default function SignupPage() {
@@ -16,6 +17,8 @@ export default function SignupPage() {
   const [localError, setLocalError] = useState("");
   const [confirmationSent, setConfirmationSent] = useState(false);
   const [legalAccepted, setLegalAccepted] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState('');
+  const turnstileRef = useRef(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -32,7 +35,13 @@ export default function SignupPage() {
       setLocalError("Логин: 3–21 символ, только буквы, цифры и _");
       return;
     }
-    const result = await signUp(username, email, password);
+    if (isTurnstileEnabled && !captchaToken) {
+      setLocalError(TURNSTILE_REQUIRED_MESSAGE);
+      return;
+    }
+    const result = await signUp(username, email, password, captchaToken);
+    setCaptchaToken('');
+    turnstileRef.current?.reset();
     if (result.success && result.requiresEmailConfirmation) {
       setConfirmationSent(true);
       return;
@@ -62,6 +71,12 @@ export default function SignupPage() {
             <input type="checkbox" checked={legalAccepted} onChange={(event) => setLegalAccepted(event.target.checked)} className="mt-1 h-4 w-4 shrink-0" required />
             <span>Я принимаю <Link to="/legal" target="_blank" className="font-medium text-primary-600 underline">условия закрытого beta-теста и политику обработки данных</Link>.</span>
           </label>
+          <TurnstileWidget
+            ref={turnstileRef}
+            action="signup"
+            onTokenChange={setCaptchaToken}
+            onError={setLocalError}
+          />
           <button className="btn-primary min-h-11 w-full" disabled={loading || !legalAccepted}>
             {loading ? "Создаём..." : "Зарегистрироваться"}
           </button>

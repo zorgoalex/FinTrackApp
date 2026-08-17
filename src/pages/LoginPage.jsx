@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useAuth } from "../contexts/AuthContext";
 import AuthShell from '../components/AuthShell';
 import PasswordInput from '../components/PasswordInput';
 import SocialAuthButtons from '../components/SocialAuthButtons';
+import TurnstileWidget, { isTurnstileEnabled, TURNSTILE_REQUIRED_MESSAGE } from '../components/TurnstileWidget';
 import { INTERNET_REQUIRED_MESSAGE } from '../utils/connectivity';
 
 export default function LoginPage() {
@@ -13,6 +14,8 @@ export default function LoginPage() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [localError, setLocalError] = useState("");
+  const [captchaToken, setCaptchaToken] = useState('');
+  const turnstileRef = useRef(null);
   const from = location.state?.from;
   const destination = from ? from.pathname + (from.search || '') : '/workspaces';
 
@@ -31,9 +34,20 @@ export default function LoginPage() {
       setLocalError("Пароль должен быть не менее 8 символов");
       return;
     }
-    const ok = await login(identifier, password);
-    if (ok) {
-      navigate(destination, { replace: true });
+    if (isTurnstileEnabled && !captchaToken) {
+      setLocalError(TURNSTILE_REQUIRED_MESSAGE);
+      return;
+    }
+    try {
+      const ok = await login(identifier, password, captchaToken);
+      setCaptchaToken('');
+      turnstileRef.current?.reset();
+      if (ok) {
+        navigate(destination, { replace: true });
+      }
+    } catch {
+      setCaptchaToken('');
+      turnstileRef.current?.reset();
     }
   };
 
@@ -51,6 +65,12 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="space-y-3">
           <input type="text" className="input-field" placeholder="Email или логин" value={identifier} onChange={(e)=>setIdentifier(e.target.value)} autoComplete="username" required />
           <PasswordInput placeholder="Пароль" value={password} onChange={(e)=>setPassword(e.target.value)} autoComplete="current-password" required />
+          <TurnstileWidget
+            ref={turnstileRef}
+            action="login"
+            onTokenChange={setCaptchaToken}
+            onError={setLocalError}
+          />
           <button className="btn-primary min-h-11 w-full" disabled={loading || !online}>
             {!online ? "Нет соединения" : loading ? "Входим..." : "Войти"}
           </button>

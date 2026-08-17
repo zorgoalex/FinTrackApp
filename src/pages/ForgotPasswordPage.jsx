@@ -1,16 +1,27 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import AuthShell from '../components/AuthShell';
+import TurnstileWidget, { isTurnstileEnabled, TURNSTILE_REQUIRED_MESSAGE } from '../components/TurnstileWidget';
 
 export default function ForgotPasswordPage() {
   const { requestPasswordReset, loading, error } = useAuth();
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState('');
+  const [localError, setLocalError] = useState('');
+  const turnstileRef = useRef(null);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    const ok = await requestPasswordReset(email.trim());
+    setLocalError('');
+    if (isTurnstileEnabled && !captchaToken) {
+      setLocalError(TURNSTILE_REQUIRED_MESSAGE);
+      return;
+    }
+    const ok = await requestPasswordReset(email.trim(), captchaToken);
+    setCaptchaToken('');
+    turnstileRef.current?.reset();
     if (ok) setSent(true);
   };
 
@@ -25,7 +36,7 @@ export default function ForgotPasswordPage() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-3">
-            {error && <div className="text-sm text-red-600 dark:text-red-400">{error}</div>}
+            {(error || localError) && <div className="text-sm text-red-600 dark:text-red-400">{error || localError}</div>}
             <input
               type="email"
               className="input-field"
@@ -34,6 +45,12 @@ export default function ForgotPasswordPage() {
               onChange={(event) => setEmail(event.target.value)}
               autoComplete="email"
               required
+            />
+            <TurnstileWidget
+              ref={turnstileRef}
+              action="password_reset"
+              onTokenChange={setCaptchaToken}
+              onError={setLocalError}
             />
             <button className="btn-primary min-h-11 w-full" disabled={loading}>
               {loading ? 'Отправляем...' : 'Отправить ссылку'}
