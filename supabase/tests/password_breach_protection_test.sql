@@ -3,7 +3,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
 
-SELECT plan(14);
+SELECT plan(15);
 
 SELECT has_table('public', 'password_policy_proofs', 'password proofs table exists');
 SELECT has_function('public', 'enforce_password_policy_proof', ARRAY[]::text[], 'password proof trigger function exists');
@@ -85,20 +85,48 @@ VALUES (
   clock_timestamp() + interval '1 minute'
 );
 
+UPDATE auth.users
+SET raw_app_meta_data = COALESCE(raw_app_meta_data, '{}'::jsonb)
+  || '{"_password_policy_proof":"fb100000-0000-0000-0000-000000000002"}'::jsonb
+WHERE id = 'fb000000-0000-0000-0000-000000000002';
+
 SELECT lives_ok(
   $$
     UPDATE auth.users
-    SET encrypted_password = 'protected-update-hash',
-        raw_user_meta_data = raw_user_meta_data || '{"_password_policy_proof":"fb100000-0000-0000-0000-000000000002"}'::jsonb
+    SET encrypted_password = 'protected-update-hash'
     WHERE id = 'fb000000-0000-0000-0000-000000000002'
   $$,
   'password update with a matching one-time proof succeeds'
 );
 
 SELECT is(
-  (SELECT raw_user_meta_data->>'_password_policy_proof' FROM auth.users WHERE id = 'fb000000-0000-0000-0000-000000000002'),
+  (SELECT raw_app_meta_data->>'_password_policy_proof' FROM auth.users WHERE id = 'fb000000-0000-0000-0000-000000000002'),
   NULL,
-  'update proof is stripped from user metadata'
+  'update proof is stripped from server-controlled app metadata'
+);
+
+INSERT INTO public.password_policy_proofs (token, purpose, user_id, expires_at)
+VALUES (
+  'fb100000-0000-0000-0000-000000000003',
+  'update',
+  'fb000000-0000-0000-0000-000000000002',
+  clock_timestamp() + interval '1 minute'
+);
+
+UPDATE auth.users
+SET raw_user_meta_data = COALESCE(raw_user_meta_data, '{}'::jsonb)
+  || '{"_password_policy_proof":"fb100000-0000-0000-0000-000000000003"}'::jsonb
+WHERE id = 'fb000000-0000-0000-0000-000000000002';
+
+SELECT throws_ok(
+  $$
+    UPDATE auth.users
+    SET encrypted_password = 'client-metadata-bypass-hash'
+    WHERE id = 'fb000000-0000-0000-0000-000000000002'
+  $$,
+  'P0001',
+  'Password rejected by security policy',
+  'client-controlled user metadata cannot authorize a password update'
 );
 
 SELECT is(

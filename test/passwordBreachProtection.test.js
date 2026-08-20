@@ -47,6 +47,7 @@ test('signup and password update use the proof-gated Edge path', async () => {
   const edge = await readFile('supabase/functions/password-auth/index.ts', 'utf8');
   const migration = await readFile('supabase/migrations/20260821010000_password_breach_protection.sql', 'utf8');
   const enforcement = await readFile('supabase/migrations/20260821020000_enforce_password_breach_protection.sql', 'utf8');
+  const transport = await readFile('supabase/migrations/20260821030000_password_update_proof_transport.sql', 'utf8');
   const config = await readFile('supabase/config.toml', 'utf8');
 
   assert.match(auth, /functions\.invoke\('password-auth',[\s\S]*action: 'signup'/);
@@ -56,10 +57,15 @@ test('signup and password update use the proof-gated Edge path', async () => {
   assert.match(edge, /checkPwnedPassword\(password\)/);
   assert.match(edge, /password_policy_proofs/);
   assert.match(edge, /_password_policy_proof/);
-  assert.match(edge, /current_password: currentPassword/);
+  assert.match(auth, /signInWithPassword\([\s\S]*password: currentPassword,[\s\S]*options: \{ captchaToken \}/);
+  assert.match(edge, /entry\?\.method === 'password'[\s\S]*5 \* 60/);
   assert.match(edge, /\['otp', 'magiclink', 'recovery'\]/);
   assert.match(edge, /15 \* 60/);
+  assert.match(edge, /admin\.auth\.admin\.updateUserById\([\s\S]*app_metadata:[\s\S]*admin\.auth\.admin\.updateUserById\([\s\S]*\{ password \}/);
+  assert.doesNotMatch(edge, /current_password|body\.currentPassword/);
   assert.match(enforcement, /BEFORE INSERT OR UPDATE OF encrypted_password ON auth\.users/);
   assert.match(migration, /Password rejected by security policy/);
+  assert.match(transport, /v_purpose := 'update';[\s\S]*NEW\.raw_app_meta_data/);
+  assert.match(transport, /NEW\.raw_app_meta_data :=[\s\S]*- '_password_policy_proof'/);
   assert.match(config, /\[functions\.password-auth\]\s+verify_jwt = false/);
 });

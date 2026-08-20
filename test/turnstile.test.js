@@ -31,6 +31,8 @@ test('all password-based Auth flows propagate a fresh captchaToken', async () =>
   assert.match(signup, /action="signup"/);
   assert.match(forgot, /action="password_reset"/);
   assert.match(stepUp, /action="password_step_up"/);
+  assert.match(profile, /action="change_password"/);
+  assert.match(profile, /updatePassword\(password, currentPassword, passwordCaptchaToken\)/);
   assert.match(profile, /action="delete_account"/);
   assert.match(profile, /options: \{ captchaToken: deleteCaptchaToken \}/);
 });

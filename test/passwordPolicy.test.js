@@ -9,4 +9,5 @@ test('password policy requires length, upper, lower and digit', () => {
   assert.equal(isStrongPassword('ALLUPPERCASE123'), false);
   assert.equal(isStrongPassword('NoDigitsHere!'), false);
   assert.equal(isStrongPassword('StrongA1'), true);
+  assert.equal(isStrongPassword('Strong$Pass1'), true);
 });

@@ -29,6 +29,8 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [passwordCaptchaToken, setPasswordCaptchaToken] = useState('');
+  const passwordTurnstileRef = useRef(null);
   const [telegram, setTelegram] = useState({ loading: true, linked: false });
   const [telegramLink, setTelegramLink] = useState(null);
   const [telegramBusy, setTelegramBusy] = useState(false);
@@ -129,8 +131,11 @@ export default function ProfilePage() {
     if (!isStrongPassword(password)) { setError(PASSWORD_POLICY_MESSAGE); return; }
     if (password !== confirmation) { setError('Пароли не совпадают'); return; }
     if (!currentPassword) { setError('Введите текущий пароль'); return; }
+    if (isTurnstileEnabled && !passwordCaptchaToken) { setError(TURNSTILE_REQUIRED_MESSAGE); return; }
     setSaving(true);
-    const result = await updatePassword(password, currentPassword);
+    const result = await updatePassword(password, currentPassword, passwordCaptchaToken);
+    setPasswordCaptchaToken('');
+    passwordTurnstileRef.current?.reset();
     setSaving(false);
     if (!result.success) { setError(result.error || 'Не удалось изменить пароль'); return; }
     setPassword('');
@@ -270,6 +275,12 @@ export default function ProfilePage() {
           <PasswordInput autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} placeholder="Текущий пароль" aria-label="Текущий пароль" />
           <PasswordInput autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Новый пароль — не менее 8 символов" aria-label="Новый пароль" minLength={8} />
           <PasswordInput autoComplete="new-password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} placeholder="Повторите пароль" aria-label="Повторите пароль" />
+          <TurnstileWidget
+            ref={passwordTurnstileRef}
+            action="change_password"
+            onTokenChange={setPasswordCaptchaToken}
+            onError={setError}
+          />
           {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
           {message && <p role="status" className="text-sm text-green-600">{message}</p>}
           <button type="submit" disabled={saving || !password || !confirmation} className="btn-primary min-h-11 w-full disabled:opacity-50">{saving ? 'Сохраняем…' : 'Обновить пароль'}</button>

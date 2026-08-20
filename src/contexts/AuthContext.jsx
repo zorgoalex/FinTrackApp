@@ -409,7 +409,7 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const updatePassword = async (password, currentPassword) => {
+  const updatePassword = async (password, currentPassword, captchaToken = '') => {
     setError("");
     if (!requireInternet()) return { success: false, error: INTERNET_REQUIRED_MESSAGE };
     if (!isStrongPassword(password)) {
@@ -418,11 +418,27 @@ export function AuthProvider({ children }) {
     }
     setLoading(true);
     try {
+      if (currentPassword) {
+        if (!user?.email) throw new Error('Сессия недействительна. Войдите снова.');
+        if (isTurnstileEnabled && !captchaToken) throw new Error(TURNSTILE_REQUIRED_MESSAGE);
+
+        const { error: verificationError } = await supabase.auth.signInWithPassword({
+          email: user.email,
+          password: currentPassword,
+          options: { captchaToken },
+        });
+        if (verificationError) {
+          const message = /captcha|turnstile|challenge/i.test(String(verificationError.message || ''))
+            ? friendlyAuthError(verificationError, 'Не удалось подтвердить пароль')
+            : 'Текущий пароль неверен.';
+          throw new Error(message);
+        }
+      }
+
       const { data, error: updateError } = await supabase.functions.invoke('password-auth', {
         body: {
           action: 'update',
           password,
-          ...(currentPassword ? { currentPassword } : {}),
         },
       });
       if (updateError || data?.error) {

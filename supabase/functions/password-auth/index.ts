@@ -21,9 +21,15 @@ type AdminClient = {
   rpc: (name: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: unknown }>;
   auth: {
     getUser: (token: string) => PromiseLike<{
-      data: { user?: { id?: string; email?: string | null } };
+      data: { user?: { id?: string; email?: string | null; app_metadata?: Record<string, unknown> } };
       error: unknown;
     }>;
+    admin: {
+      updateUserById: (
+        id: string,
+        attributes: { password?: string; app_metadata?: Record<string, unknown> },
+      ) => PromiseLike<{ data: { user?: unknown }; error: unknown }>;
+    };
   };
 };
 const ALLOWED_REDIRECT_ORIGINS = new Set([
@@ -85,7 +91,23 @@ async function issueProof(
 }
 
 async function revokeProof(admin: AdminClient, token: string) {
-  await admin.from('password_policy_proofs').delete().eq('token', token);
+  try {
+    await admin.from('password_policy_proofs').delete().eq('token', token);
+  } catch {
+    // Proofs expire after one minute and are also purged before the next issue.
+  }
+}
+
+async function restoreAppMetadata(
+  admin: AdminClient,
+  userId: string,
+  appMetadata: Record<string, unknown>,
+) {
+  try {
+    await admin.auth.admin.updateUserById(userId, { app_metadata: appMetadata });
+  } catch {
+    // The proof is revoked separately, so a stale marker cannot authorize a write.
+  }
 }
 
 async function enforcePwnedPassword(password: string) {
@@ -103,16 +125,21 @@ function authToken(req: Request) {
   return match?.[1]?.trim() || '';
 }
 
-function jwtHasFreshRecoveryMethod(token: string) {
+function jwtHasFreshPasswordAuthorization(token: string) {
   try {
     const encoded = token.split('.')[1] || '';
     const normalized = encoded.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(encoded.length / 4) * 4, '=');
     const claims = JSON.parse(atob(normalized));
-    const cutoff = Math.floor(Date.now() / 1000) - 15 * 60;
+    const now = Math.floor(Date.now() / 1000);
     return Array.isArray(claims?.amr) && claims.amr.some((entry: { method?: string; timestamp?: number }) => (
-      ['otp', 'magiclink', 'recovery'].includes(entry?.method || '')
-      && Number.isFinite(entry?.timestamp)
-      && Number(entry.timestamp) >= cutoff
+      Number.isFinite(entry?.timestamp)
+      && (
+        (entry?.method === 'password' && Number(entry.timestamp) >= now - 5 * 60)
+        || (
+          ['otp', 'magiclink', 'recovery'].includes(entry?.method || '')
+          && Number(entry.timestamp) >= now - 15 * 60
+        )
+      )
     ));
   } catch {
     return false;
@@ -201,11 +228,8 @@ async function handleUpdate(
   req: Request,
   body: Record<string, unknown>,
   admin: AdminClient,
-  url: string,
-  anonKey: string,
 ) {
   const password = body.password;
-  const currentPassword = typeof body.currentPassword === 'string' ? body.currentPassword : '';
   if (!passwordIsStrong(password)) return response(req, { error: passwordPolicyMessage }, 400);
 
   const accessToken = authToken(req);
@@ -214,9 +238,8 @@ async function handleUpdate(
   if (userError || !userData.user?.id || !userData.user.email) {
     return response(req, { error: 'Сессия недействительна. Войдите снова.' }, 401);
   }
-  const recoverySession = jwtHasFreshRecoveryMethod(accessToken);
-  if (!recoverySession && !currentPassword) {
-    return response(req, { error: 'Введите текущий пароль' }, 400);
+  if (!jwtHasFreshPasswordAuthorization(accessToken)) {
+    return response(req, { error: 'Подтвердите текущий пароль ещё раз.' }, 401);
   }
 
   try {
@@ -235,33 +258,32 @@ async function handleUpdate(
   }
 
   let proof = '';
+  let proofAttached = false;
+  const originalAppMetadata = { ...(userData.user.app_metadata || {}) };
+  delete originalAppMetadata[PROOF_FIELD];
   try {
     proof = await issueProof(admin, 'update', { userId: userData.user.id });
-    const updateResponse = await fetch(`${url}/auth/v1/user`, {
-      method: 'PUT',
-      headers: {
-        apikey: anonKey,
-        authorization: `Bearer ${accessToken}`,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        password,
-        ...(currentPassword ? { current_password: currentPassword } : {}),
-        data: { [PROOF_FIELD]: proof },
-      }),
+    const { error: attachError } = await admin.auth.admin.updateUserById(userData.user.id, {
+      app_metadata: { ...originalAppMetadata, [PROOF_FIELD]: proof },
     });
-    const payload = await updateResponse.json().catch(() => ({}));
-    if (!updateResponse.ok) {
+    if (attachError) {
       await revokeProof(admin, proof);
-      const rawMessage = String(payload?.msg || payload?.message || '');
-      const message = /current password/i.test(rawMessage)
-        ? 'Текущий пароль неверен.'
-        : rawMessage || 'Не удалось изменить пароль';
-      return response(req, { error: message }, updateResponse.status >= 400 && updateResponse.status < 500 ? updateResponse.status : 503);
+      return response(req, { error: 'Не удалось подготовить безопасную смену пароля. Повторите попытку.' }, 503);
+    }
+    proofAttached = true;
+
+    const { error: updateError } = await admin.auth.admin.updateUserById(userData.user.id, { password });
+    if (updateError) {
+      await revokeProof(admin, proof);
+      await restoreAppMetadata(admin, userData.user.id, originalAppMetadata);
+      return response(req, { error: 'Не удалось изменить пароль. Повторите попытку.' }, 400);
     }
     return response(req, { success: true });
   } catch {
     if (proof) await revokeProof(admin, proof);
+    if (proofAttached) {
+      await restoreAppMetadata(admin, userData.user.id, originalAppMetadata);
+    }
     return response(req, { error: 'Смена пароля временно недоступна' }, 503);
   }
 }
@@ -282,6 +304,6 @@ Deno.serve(async (req) => {
   }) as unknown as AdminClient;
 
   if (body.action === 'signup') return handleSignup(req, body, admin, url, anonKey);
-  if (body.action === 'update') return handleUpdate(req, body, admin, url, anonKey);
+  if (body.action === 'update') return handleUpdate(req, body, admin);
   return response(req, { error: 'Неизвестное действие' }, 400);
 });
