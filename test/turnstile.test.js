@@ -25,7 +25,7 @@ test('all password-based Auth flows propagate a fresh captchaToken', async () =>
 
   assert.match(auth, /options: \{ captchaToken \}/);
   assert.match(auth, /body: \{ identifier: identifier\.trim\(\), password, captchaToken \}/);
-  assert.match(auth, /emailRedirectTo: window\.location\.origin,[\s\S]*captchaToken/);
+  assert.match(auth, /functions\.invoke\('password-auth',[\s\S]*action: 'signup',[\s\S]*captchaToken,[\s\S]*redirectOrigin: window\.location\.origin/);
   assert.match(auth, /resetPasswordForEmail\(email,[\s\S]*captchaToken/);
   assert.match(login, /action="login"/);
   assert.match(signup, /action="signup"/);

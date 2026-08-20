@@ -24,6 +24,17 @@ function friendlyAuthError(error, fallback) {
   return message || fallback;
 }
 
+async function edgeFunctionError(error, data, fallback) {
+  if (data?.error) return String(data.error);
+  try {
+    const payload = await error?.context?.json();
+    if (payload?.error) return String(payload.error);
+  } catch {
+    // The Functions client may expose a response body only once.
+  }
+  return String(error?.message || fallback);
+}
+
 function readStoredUserId() {
   if (typeof localStorage === 'undefined') return null;
   try {
@@ -310,7 +321,7 @@ export function AuthProvider({ children }) {
     if (!requireInternet()) return { success: false, requiresEmailConfirmation: false };
     if (!isStrongPassword(password)) {
       setError(PASSWORD_POLICY_MESSAGE);
-      return false;
+      return { success: false, requiresEmailConfirmation: false };
     }
     if (isTurnstileEnabled && !captchaToken) {
       setError(TURNSTILE_REQUIRED_MESSAGE);
@@ -318,19 +329,29 @@ export function AuthProvider({ children }) {
     }
     setLoading(true);
     try {
-      const { data, error: signErr } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { name: username, username },
-          emailRedirectTo: window.location.origin,
-          captchaToken
-        }
+      const { data, error: signErr } = await supabase.functions.invoke('password-auth', {
+        body: {
+          action: 'signup',
+          username,
+          email: email.trim(),
+          password,
+          captchaToken,
+          redirectOrigin: window.location.origin,
+        },
       });
-      if (signErr) throw signErr;
+      if (signErr || data?.error) {
+        throw new Error(await edgeFunctionError(signErr, data, 'Ошибка регистрации'));
+      }
+      if (data?.access_token && data?.refresh_token) {
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+        });
+        if (sessionError) throw sessionError;
+      }
       return {
         success: true,
-        requiresEmailConfirmation: !data.session
+        requiresEmailConfirmation: Boolean(data?.requiresEmailConfirmation),
       };
     } catch (e) {
       setError(friendlyAuthError(e, "Ошибка регистрации"));
@@ -390,23 +411,29 @@ export function AuthProvider({ children }) {
 
   const updatePassword = async (password, currentPassword) => {
     setError("");
-    if (!requireInternet()) return false;
+    if (!requireInternet()) return { success: false, error: INTERNET_REQUIRED_MESSAGE };
     if (!isStrongPassword(password)) {
       setError(PASSWORD_POLICY_MESSAGE);
-      return false;
+      return { success: false, error: PASSWORD_POLICY_MESSAGE };
     }
     setLoading(true);
     try {
-      const attributes = currentPassword
-        ? { password, current_password: currentPassword }
-        : { password };
-      const { error: updateError } = await supabase.auth.updateUser(attributes);
-      if (updateError) throw updateError;
+      const { data, error: updateError } = await supabase.functions.invoke('password-auth', {
+        body: {
+          action: 'update',
+          password,
+          ...(currentPassword ? { currentPassword } : {}),
+        },
+      });
+      if (updateError || data?.error) {
+        throw new Error(await edgeFunctionError(updateError, data, 'Не удалось изменить пароль'));
+      }
       if (currentPassword) await supabase.auth.signOut({ scope: 'others' });
-      return true;
+      return { success: true, error: '' };
     } catch (e) {
-      setError(e.message || "Не удалось изменить пароль");
-      return false;
+      const message = e.message || "Не удалось изменить пароль";
+      setError(message);
+      return { success: false, error: message };
     } finally {
       setLoading(false);
     }

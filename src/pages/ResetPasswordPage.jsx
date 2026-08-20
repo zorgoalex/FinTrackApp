@@ -23,8 +23,9 @@ export default function ResetPasswordPage() {
       setLocalError('Пароли не совпадают');
       return;
     }
-    const ok = await updatePassword(password);
-    if (ok) setUpdated(true);
+    const result = await updatePassword(password);
+    if (result.success) setUpdated(true);
+    else if (result.error) setLocalError(result.error);
   };
 
   return (

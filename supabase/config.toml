@@ -22,6 +22,9 @@ verify_jwt = false
 [functions.login-user]
 verify_jwt = false
 
+[functions.password-auth]
+verify_jwt = false
+
 [functions.dispatch-notifications]
 verify_jwt = false
 

@@ -25,9 +25,11 @@ test('beta blocks external AI and STT unless an explicit server flag is true', a
 
 test('password change and account deletion require the current password', async () => {
   const auth = await readFile('src/contexts/AuthContext.jsx', 'utf8');
+  const passwordAuth = await readFile('supabase/functions/password-auth/index.ts', 'utf8');
   const profile = await readFile('src/pages/ProfilePage.jsx', 'utf8');
   const migration = await readFile('supabase/migrations/20260804010000_security_stage0.sql', 'utf8');
-  assert.match(auth, /current_password/);
+  assert.match(auth, /currentPassword/);
+  assert.match(passwordAuth, /current_password: currentPassword/);
   assert.match(profile, /signInWithPassword/);
   assert.match(profile, /deletePassword/);
   assert.match(migration, /interval '5 minutes'/);

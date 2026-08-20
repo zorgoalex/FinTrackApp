@@ -130,9 +130,9 @@ export default function ProfilePage() {
     if (password !== confirmation) { setError('Пароли не совпадают'); return; }
     if (!currentPassword) { setError('Введите текущий пароль'); return; }
     setSaving(true);
-    const success = await updatePassword(password, currentPassword);
+    const result = await updatePassword(password, currentPassword);
     setSaving(false);
-    if (!success) { setError('Не удалось изменить пароль'); return; }
+    if (!result.success) { setError(result.error || 'Не удалось изменить пароль'); return; }
     setPassword('');
     setConfirmation('');
     setCurrentPassword('');
