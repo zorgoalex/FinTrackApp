@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders } from '../_shared/cors.ts';
+import { corsHeaders, withCors } from '../_shared/cors.ts';
 import { consumeRateLimit } from '../_shared/rateLimit.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
@@ -58,7 +58,7 @@ async function fetchOpenERRates(baseCurrency: string): Promise<Record<string, nu
   return data.rates || {};
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withCors(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -185,4 +185,4 @@ Deno.serve(async (req) => {
     console.error('fetch-rates error:', err);
     return errorResponse(err instanceof Error ? err.message : 'Internal error', 500);
   }
-});
+}));

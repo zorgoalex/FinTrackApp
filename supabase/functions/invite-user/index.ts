@@ -1,10 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { corsHeaders, withCors } from '../_shared/cors.ts';
 import { consumeRateLimit, opaqueValue } from '../_shared/rateLimit.ts';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
 
 const FROM_EMAIL = Deno.env.get('INVITATION_FROM_EMAIL')?.trim() ?? '';
 const FROM_NAME = Deno.env.get('EMAIL_FROM_NAME')?.trim() || 'FinTrackApp';
@@ -37,7 +33,7 @@ function invitationEmailHtml({ inviterEmail, workspaceName, role, acceptUrl, exp
   </body></html>`;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withCors(async (req) => {
   // Handle CORS preflight request
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -224,4 +220,4 @@ Deno.serve(async (req) => {
       status: 500,
     });
   }
-});
+}));

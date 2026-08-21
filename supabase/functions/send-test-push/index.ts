@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import webpush from 'npm:web-push@3.6.7';
-import { corsHeaders } from '../_shared/cors.ts';
+import { corsHeaders, withCors } from '../_shared/cors.ts';
 import { isAllowedWebPushEndpoint } from '../_shared/pushEndpoint.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
@@ -23,7 +23,7 @@ function json(body: unknown, status = 200) {
   });
 }
 
-Deno.serve(async (request) => {
+Deno.serve(withCors(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY || !VAPID_SUBJECT) {
@@ -99,4 +99,4 @@ Deno.serve(async (request) => {
 
   if (!delivered) return json({ error: 'Web Push delivery failed' }, 502);
   return json({ ok: true, delivered });
-});
+}));

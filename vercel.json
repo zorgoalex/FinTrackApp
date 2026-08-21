@@ -3,7 +3,7 @@
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "Content-Security-Policy", "value": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:; frame-src https://challenges.cloudflare.com; connect-src 'self' https: wss:; manifest-src 'self'; upgrade-insecure-requests" },
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:; frame-src https://challenges.cloudflare.com; connect-src 'self' https://trpfmcggvixnfmcgvxsq.supabase.co wss://trpfmcggvixnfmcgvxsq.supabase.co https://challenges.cloudflare.com; manifest-src 'self'; upgrade-insecure-requests" },
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "X-Frame-Options", "value": "DENY" },
@@ -13,6 +13,15 @@
     }
   ],
   "rewrites": [
+    { "source": "/.well-known/security.txt", "destination": "/api/security" },
+    { "source": "/robots.txt", "destination": "/api/robots" },
+    { "source": "/.env", "destination": "/api/not-found" },
+    { "source": "/.env.(.*)", "destination": "/api/not-found" },
+    { "source": "/.git/(.*)", "destination": "/api/not-found" },
+    { "source": "/package.json", "destination": "/api/not-found" },
+    { "source": "/package-lock.json", "destination": "/api/not-found" },
+    { "source": "/src/(.*)", "destination": "/api/not-found" },
+    { "source": "/(.*).map", "destination": "/api/not-found" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
