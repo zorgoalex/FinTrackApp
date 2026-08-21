@@ -145,7 +145,7 @@ site_url = "http://127.0.0.1:5173"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
 additional_redirect_urls = ["http://localhost:5173/**", "http://127.0.0.1:5173/**", "https://fintrackapp-wheat.vercel.app/**", "https://3e3d04b5-d352-4b94-87d3-6289a6f69340.lovableproject.com/**", "https://id-preview--3e3d04b5-d352-4b94-87d3-6289a6f69340.lovable.app/**", "https://preview--project-finance-master.lovable.app/**", "https://project-finance-master.lovable.app/**"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
-jwt_expiry = 3600
+jwt_expiry = 1800
 # Path to JWT signing key. DO NOT commit your signing keys file to git.
 # signing_keys_path = "./signing_keys.json"
 # If disabled, the refresh token will never expire.

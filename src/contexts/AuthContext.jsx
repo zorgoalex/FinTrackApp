@@ -2,11 +2,13 @@ import { createContext, useCallback, useContext, useState, useEffect, useRef } f
 import { createClient } from "@supabase/supabase-js";
 import MfaChallengeForm from '../components/MfaChallengeForm';
 import PasswordStepUpForm from '../components/PasswordStepUpForm';
+import IdleSessionGuard from '../components/IdleSessionGuard';
 import { isTurnstileEnabled, TURNSTILE_REQUIRED_MESSAGE } from '../components/TurnstileWidget';
 import { isStrongPassword, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolicy';
 import { clearLocalFinancialData } from '../utils/offlineStore';
 import { INTERNET_REQUIRED_MESSAGE, isInternetAvailable } from '../utils/connectivity';
 import { getVerifiedTotpFactors, hasFreshPassword, hasFreshTotpAal2 } from '../utils/mfa';
+import { IDLE_ACTIVITY_STORAGE_KEY, IDLE_EXPIRED_STORAGE_KEY } from '../utils/idleSession';
 
 const AuthContext = createContext({});
 
@@ -166,6 +168,7 @@ export function AuthProvider({ children }) {
 
       if (session?.user) {
         const profile = { id: session.user.id, email: session.user.email };
+        localStorage.removeItem(IDLE_EXPIRED_STORAGE_KEY);
         localStorage.setItem('user', JSON.stringify(profile));
         setUser(profile);
       } else {
@@ -187,6 +190,16 @@ export function AuthProvider({ children }) {
       }
 
       try {
+        if (localStorage.getItem(IDLE_EXPIRED_STORAGE_KEY)) {
+          const { error: expiredSignOutError } = await supabase.auth.signOut({ scope: 'local' });
+          if (expiredSignOutError) throw expiredSignOutError;
+          localStorage.removeItem(IDLE_EXPIRED_STORAGE_KEY);
+          localStorage.removeItem(IDLE_ACTIVITY_STORAGE_KEY);
+          await clearLocalFinancialData().catch(() => undefined);
+          await applySession(null);
+          return;
+        }
+
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
           await applySession(null);
@@ -489,6 +502,31 @@ export function AuthProvider({ children }) {
     if (signOutError) throw signOutError;
   };
 
+  const logoutCurrentSessionForIdle = useCallback(async () => {
+    if (pendingAal2Ref.current) finishAal2Request(false);
+    if (pendingPasswordRef.current) finishPasswordRequest(false);
+    const userId = activeUserIdRef.current || user?.id || readStoredUserId();
+    let signOutError = null;
+    localStorage.setItem(IDLE_EXPIRED_STORAGE_KEY, new Date().toISOString());
+    localStorage.removeItem(IDLE_ACTIVITY_STORAGE_KEY);
+    try {
+      const result = await supabase.auth.signOut({ scope: 'local' });
+      signOutError = result.error;
+      if (!signOutError) localStorage.removeItem(IDLE_EXPIRED_STORAGE_KEY);
+    } catch (idleSignOutError) {
+      signOutError = idleSignOutError;
+    } finally {
+      await clearLocalFinancialData(userId).catch((cleanupError) => {
+        console.error('AuthContext: idle-session cleanup failed', cleanupError);
+      });
+      localStorage.removeItem('user');
+      activeUserIdRef.current = null;
+      setUser(null);
+      window.location.replace('/login?reason=idle');
+    }
+    if (signOutError) console.error('AuthContext: idle-session sign-out failed', signOutError);
+  }, [finishAal2Request, finishPasswordRequest, user?.id]);
+
   const value = {
     user,
     login,
@@ -510,6 +548,7 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider value={value}>
       {children}
+      <IdleSessionGuard active={Boolean(user) && !loading} onTimeout={logoutCurrentSessionForIdle} />
       {aal2Request && (
         <div className="fixed inset-0 z-[100] grid place-items-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-label="Подтверждение двухфакторной аутентификации">
           <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl dark:bg-gray-800">

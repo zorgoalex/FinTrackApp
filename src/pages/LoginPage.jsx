@@ -18,6 +18,7 @@ export default function LoginPage() {
   const turnstileRef = useRef(null);
   const from = location.state?.from;
   const destination = from ? from.pathname + (from.search || '') : '/workspaces';
+  const idleSessionExpired = new globalThis.URLSearchParams(location.search).get('reason') === 'idle';
 
   useEffect(() => {
     if (online && user) navigate(destination, { replace: true });
@@ -56,6 +57,11 @@ export default function LoginPage() {
         {!online && (
           <div role="alert" className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
             {INTERNET_REQUIRED_MESSAGE}. Вход станет доступен после восстановления соединения.
+          </div>
+        )}
+        {idleSessionExpired && online && (
+          <div role="status" className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+            Сессия завершена после 30 минут бездействия. Войдите снова, чтобы продолжить работу.
           </div>
         )}
         {(error || localError) && online && (
