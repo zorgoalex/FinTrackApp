@@ -1,6 +1,7 @@
 // deno-lint-ignore-file no-import-prefix
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { consumeRateLimit, opaqueClientSubject, opaqueValue } from '../_shared/rateLimit.ts';
+import { corsHeaders, withCors } from '../_shared/cors.ts';
 import {
   checkPwnedPassword,
   PASSWORD_CHECK_UNAVAILABLE_MESSAGE,
@@ -32,13 +33,6 @@ type AdminClient = {
     };
   };
 };
-const ALLOWED_REDIRECT_ORIGINS = new Set([
-  'https://fintrackapp.vip',
-  'https://fintrackapp-wheat.vercel.app',
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-]);
-
 const passwordIsStrong = (password: unknown): password is string => typeof password === 'string'
   && password.length >= 8
   && password.length <= 128
@@ -48,17 +42,12 @@ const passwordIsStrong = (password: unknown): password is string => typeof passw
 
 const passwordPolicyMessage = 'Пароль должен содержать от 8 до 128 символов, строчную и заглавную латинские буквы и цифру';
 
-function response(req: Request, body: Record<string, unknown>, status = 200) {
-  const requestOrigin = req.headers.get('origin') || '';
-  const allowOrigin = ALLOWED_REDIRECT_ORIGINS.has(requestOrigin) ? requestOrigin : 'https://fintrackapp.vip';
+function response(_req: Request, body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
-      'Access-Control-Allow-Origin': allowOrigin,
-      'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      ...corsHeaders,
       'Content-Type': 'application/json',
-      Vary: 'Origin',
     },
   });
 }
@@ -288,7 +277,7 @@ async function handleUpdate(
   }
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withCors(async (req) => {
   if (req.method === 'OPTIONS') return response(req, {}, 200);
   if (req.method !== 'POST') return response(req, { error: 'Method not allowed' }, 405);
 
@@ -306,4 +295,4 @@ Deno.serve(async (req) => {
   if (body.action === 'signup') return handleSignup(req, body, admin, url, anonKey);
   if (body.action === 'update') return handleUpdate(req, body, admin);
   return response(req, { error: 'Неизвестное действие' }, 400);
-});
+}));

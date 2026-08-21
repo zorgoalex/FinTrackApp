@@ -1,10 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { consumeRateLimit } from '../_shared/rateLimit.ts';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { corsHeaders, withCors } from '../_shared/cors.ts';
 
 type FinancialContext = {
   period?: { from?: string; to?: string };
@@ -38,7 +34,7 @@ function fallbackAnswer(context: FinancialContext) {
   return lines.join(' ');
 }
 
-Deno.serve(async (request) => {
+Deno.serve(withCors(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
@@ -145,4 +141,4 @@ Deno.serve(async (request) => {
   } catch (error) {
     return json({ error: error instanceof Error ? error.message : 'Внутренняя ошибка' }, 500);
   }
-});
+}));

@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders } from '../_shared/cors.ts';
+import { corsHeaders, withCors } from '../_shared/cors.ts';
 import { SttError } from '../_shared/stt/errors.ts';
 import { createSttProvider } from '../_shared/stt/registry.ts';
 import type { TimestampGranularity } from '../_shared/stt/types.ts';
@@ -59,7 +59,7 @@ function parseTimestamps(value: FormDataEntryValue | null): TimestampGranularity
   }
 }
 
-Deno.serve(async (request) => {
+Deno.serve(withCors(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (request.method !== 'POST') return json({ error: { code: 'METHOD_NOT_ALLOWED', message: 'Method not allowed' } }, 405);
   if (!request.headers.get('Authorization')) {
@@ -125,4 +125,4 @@ Deno.serve(async (request) => {
       error: { code: 'INTERNAL_ERROR', message: 'Внутренняя ошибка распознавания', retryable: false },
     }, 500);
   }
-});
+}));
