@@ -1,13 +1,14 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { consumeRateLimit, opaqueClientSubject, opaqueValue } from '../_shared/rateLimit.ts';
 import { corsHeaders, withCors } from '../_shared/cors.ts';
+import { recordSecurityEventSafely } from '../_shared/securityEvents.ts';
 
 const response = (body: Record<string, unknown>, status = 200) => new Response(JSON.stringify(body), {
   status,
   headers: { ...corsHeaders, 'Content-Type': 'application/json' },
 });
 
-Deno.serve(withCors(async (req) => {
+Deno.serve(withCors(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
 
@@ -23,16 +24,25 @@ Deno.serve(withCors(async (req) => {
 
   const url = Deno.env.get('SUPABASE_URL') ?? '';
   const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+  let identifierSubject = '';
   try {
-    const [clientSubject, identifierSubject] = await Promise.all([
+    const subjects = await Promise.all([
       opaqueClientSubject(req),
       opaqueValue(normalized),
     ]);
+    const [clientSubject] = subjects;
+    identifierSubject = subjects[1];
     const [clientAllowed, identifierAllowed] = await Promise.all([
       consumeRateLimit(admin, 'login:ip', clientSubject, 20, 300),
       consumeRateLimit(admin, 'login:identifier', identifierSubject, 10, 300),
     ]);
     if (!clientAllowed || !identifierAllowed) {
+      await recordSecurityEventSafely(admin, {
+        eventType: 'auth.login_username',
+        outcome: 'blocked',
+        subjectHash: identifierSubject,
+        metadata: { reason: 'rate_limit' },
+      }, req);
       return response({ error: 'Слишком много попыток. Повторите через несколько минут' }, 429);
     }
   } catch {
@@ -43,10 +53,27 @@ Deno.serve(withCors(async (req) => {
     .select('user_id')
     .ilike('username', normalized)
     .maybeSingle();
-  if (!profile) return response({ error: 'Неверное имя аккаунта или пароль' }, 400);
+  if (!profile) {
+    await recordSecurityEventSafely(admin, {
+      eventType: 'auth.login_username',
+      outcome: 'failure',
+      subjectHash: identifierSubject,
+      metadata: { reason: 'invalid_credentials' },
+    }, req);
+    return response({ error: 'Неверное имя аккаунта или пароль' }, 400);
+  }
 
   const { data: userData, error: userError } = await admin.auth.admin.getUserById(profile.user_id);
-  if (userError || !userData.user?.email) return response({ error: 'Неверное имя аккаунта или пароль' }, 400);
+  if (userError || !userData.user?.email) {
+    await recordSecurityEventSafely(admin, {
+      eventType: 'auth.login_username',
+      outcome: 'failure',
+      actorUserId: profile.user_id,
+      subjectHash: identifierSubject,
+      metadata: { reason: 'invalid_credentials' },
+    }, req);
+    return response({ error: 'Неверное имя аккаунта или пароль' }, 400);
+  }
 
   const publicClient = createClient(url, Deno.env.get('SUPABASE_ANON_KEY') ?? '');
   const { data, error } = await publicClient.auth.signInWithPassword({
@@ -55,11 +82,25 @@ Deno.serve(withCors(async (req) => {
     options: { captchaToken: normalizedCaptchaToken },
   });
   if (error || !data.session) {
+    await recordSecurityEventSafely(admin, {
+      eventType: 'auth.login_username',
+      outcome: 'failure',
+      actorUserId: profile.user_id,
+      subjectHash: identifierSubject,
+      metadata: { reason: /captcha|turnstile|challenge/i.test(String(error?.message || '')) ? 'captcha' : 'invalid_credentials' },
+    }, req);
     if (/captcha|turnstile|challenge/i.test(String(error?.message || ''))) {
       return response({ error: 'Не удалось пройти проверку безопасности' }, 400);
     }
     return response({ error: 'Неверное имя аккаунта или пароль' }, 400);
   }
+
+  await recordSecurityEventSafely(admin, {
+    eventType: 'auth.login_username',
+    outcome: 'success',
+    actorUserId: profile.user_id,
+    subjectHash: identifierSubject,
+  }, req);
 
   return response({
     access_token: data.session.access_token,

@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders, withCors } from '../_shared/cors.ts';
 import { consumeRateLimit, opaqueValue } from '../_shared/rateLimit.ts';
+import { recordSecurityEventSafely } from '../_shared/securityEvents.ts';
 
 const FROM_EMAIL = Deno.env.get('INVITATION_FROM_EMAIL')?.trim() ?? '';
 const FROM_NAME = Deno.env.get('EMAIL_FROM_NAME')?.trim() || 'FinTrackApp';
@@ -33,7 +34,7 @@ function invitationEmailHtml({ inviterEmail, workspaceName, role, acceptUrl, exp
   </body></html>`;
 }
 
-Deno.serve(withCors(async (req) => {
+Deno.serve(withCors(async (req: Request) => {
   // Handle CORS preflight request
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -81,7 +82,7 @@ Deno.serve(withCors(async (req) => {
     const normalizedRole = rawRole.charAt(0).toUpperCase() + rawRole.slice(1).toLowerCase();
     const allowedRoles = ['Admin', 'Member', 'Viewer'];
 
-    if (!workspaceId || !normalizedEmail || !normalizedRole) {
+    if (!/^[0-9a-f-]{36}$/i.test(workspaceId || '') || !normalizedEmail || !normalizedRole) {
       return new Response(JSON.stringify({ error: 'Missing required fields: workspaceId, email, role' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,
@@ -101,18 +102,27 @@ Deno.serve(withCors(async (req) => {
     });
 
     if (roleError || !['Owner', 'Admin'].includes(userRole)) {
+        await recordSecurityEventSafely(supabaseAdmin, {
+          eventType: 'invitation.create', outcome: 'blocked', actorUserId: invitingUser.id,
+          workspaceId, metadata: { reason: 'permission' },
+        }, req);
         return new Response(JSON.stringify({ error: 'Permission denied: Only Owner or Admin can invite users.' }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 403,
         });
     }
 
+    const recipientSubject = await opaqueValue(normalizedEmail);
     const [userAllowed, workspaceAllowed, recipientAllowed] = await Promise.all([
       consumeRateLimit(supabaseAdmin, 'invite:user', invitingUser.id, 10, 86400),
       consumeRateLimit(supabaseAdmin, 'invite:workspace', workspaceId, 20, 86400),
-      opaqueValue(normalizedEmail).then((subject) => consumeRateLimit(supabaseAdmin, 'invite:recipient', subject, 3, 86400)),
+      consumeRateLimit(supabaseAdmin, 'invite:recipient', recipientSubject, 3, 86400),
     ]);
     if (!userAllowed || !workspaceAllowed || !recipientAllowed) {
+      await recordSecurityEventSafely(supabaseAdmin, {
+        eventType: 'invitation.create', outcome: 'blocked', actorUserId: invitingUser.id,
+        workspaceId, subjectHash: recipientSubject, metadata: { reason: 'rate_limit' },
+      }, req);
       return new Response(JSON.stringify({ error: 'Invitation limit exceeded. Try again later.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 429,
@@ -134,12 +144,20 @@ Deno.serve(withCors(async (req) => {
 
     if (inviteError) {
       if (inviteError.code === '23505') { // unique_violation
+        await recordSecurityEventSafely(supabaseAdmin, {
+          eventType: 'invitation.create', outcome: 'failure', actorUserId: invitingUser.id,
+          workspaceId, subjectHash: recipientSubject, metadata: { reason: 'duplicate' },
+        }, req);
         return new Response(JSON.stringify({ error: 'An invitation for this email address is already pending.' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           status: 409,
         });
       }
-      console.error('DB Insert Error:', inviteError);
+      console.error('Invitation insert failed', inviteError.code || 'unknown');
+      await recordSecurityEventSafely(supabaseAdmin, {
+        eventType: 'invitation.create', outcome: 'failure', actorUserId: invitingUser.id,
+        workspaceId, subjectHash: recipientSubject, metadata: { reason: 'database' },
+      }, req);
       return new Response(JSON.stringify({ error: 'Could not create invitation.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 500,
@@ -194,12 +212,18 @@ Deno.serve(withCors(async (req) => {
           })
           .eq('id', invitation.id);
       } else {
-        const errorBody = await resendResponse.text();
-        console.error('Resend API Error:', errorBody);
-        emailError = errorBody || 'Unknown Resend error';
+        await resendResponse.body?.cancel();
+        console.error('Invitation email delivery failed', resendResponse.status);
+        emailError = `Email provider rejected delivery (HTTP ${resendResponse.status})`;
         // Invitation saved — don't fail, return the link so sender can share manually
       }
     }
+
+    await recordSecurityEventSafely(supabaseAdmin, {
+      eventType: 'invitation.create', outcome: 'success', actorUserId: invitingUser.id,
+      workspaceId, subjectHash: recipientSubject,
+      metadata: { role: normalizedRole, delivery_sent: emailSent },
+    }, req);
 
     return new Response(JSON.stringify({
       success: true,
@@ -212,9 +236,8 @@ Deno.serve(withCors(async (req) => {
       status: 200,
     });
 
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    console.error('Unexpected Error:', message);
+  } catch {
+    console.error('Unexpected invitation error');
     return new Response(JSON.stringify({ error: 'An unexpected error occurred.' }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,

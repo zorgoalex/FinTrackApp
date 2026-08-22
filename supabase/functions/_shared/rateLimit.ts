@@ -24,13 +24,28 @@ export async function opaqueClientSubject(request: Request) {
     || request.headers.get('x-real-ip')
     || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
     || 'unknown';
-  const salt = Deno.env.get('RATE_LIMIT_SALT') || Deno.env.get('SUPABASE_URL') || 'fintrack';
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${salt}:${forwarded}`));
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('').slice(0, 32);
+  return opaqueSubject('client', forwarded);
 }
 
 export async function opaqueValue(value: string) {
-  const salt = Deno.env.get('RATE_LIMIT_SALT') || Deno.env.get('SUPABASE_URL') || 'fintrack';
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${salt}:${value}`));
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('').slice(0, 32);
+  return opaqueSubject('value', value);
+}
+
+async function opaqueSubject(namespace: string, value: string) {
+  const secret = Deno.env.get('RATE_LIMIT_SALT')
+    || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!secret) throw new Error('Opaque subject key is unavailable');
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const digest = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    new TextEncoder().encode(`${namespace}:${value}`),
+  );
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }

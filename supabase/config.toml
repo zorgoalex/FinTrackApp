@@ -25,6 +25,9 @@ verify_jwt = false
 [functions.password-auth]
 verify_jwt = false
 
+[functions.security-event]
+verify_jwt = true
+
 [functions.dispatch-notifications]
 verify_jwt = false
 

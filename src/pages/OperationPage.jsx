@@ -19,6 +19,7 @@ import { Pencil, Trash2, ChevronDown, X, Plus, Settings, Wallet, Download, Uploa
 import { formatSignedAmount, formatUnsignedAmount, formatGroupDate } from '../utils/formatters';
 import { getMonthRange } from '../utils/dateRange';
 import { buildOperationsCSV, downloadOperationsCSV } from '../utils/export';
+import { recordClientSecurityEvent } from '../utils/securityEvents';
 
 const ImportOperationsModal = lazy(() => import('../components/ImportOperationsModal'));
 
@@ -504,6 +505,7 @@ export function OperationPage() {
         baseCurrency: currentWorkspace?.base_currency || 'KZT'
       });
       downloadOperationsCSV(csv, dateFrom, dateTo);
+      await recordClientSecurityEvent(supabase, 'data.export.operations', workspaceId);
     } catch (exportException) {
       console.error('OperationPage: export error', exportException);
       setExportError(exportException.message || 'Не удалось экспортировать операции');

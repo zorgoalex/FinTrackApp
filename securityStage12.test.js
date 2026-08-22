@@ -6,6 +6,7 @@ import test from 'node:test';
 import {
   corsHeadersFor,
   isAllowedBrowserOrigin,
+  isAllowedRedirectOrigin,
   withCors,
 } from './supabase/functions/_shared/cors.js';
 
@@ -17,6 +18,7 @@ const browserFunctions = [
   'invite-user',
   'login-user',
   'password-auth',
+  'security-event',
   'send-test-push',
   'stt-transcribe',
   'telegram-link',
@@ -53,6 +55,18 @@ test('CORS permits localhost only when the Edge Function itself is local', async
   const localOrigin = { Origin: 'http://localhost:5173' };
   assert.equal(isAllowedBrowserOrigin(new Request('http://127.0.0.1:54321/functions/v1/api', { headers: localOrigin })), true);
   assert.equal(isAllowedBrowserOrigin(new Request('https://project.supabase.co/functions/v1/api', { headers: localOrigin })), false);
+  assert.equal(isAllowedRedirectOrigin(
+    new Request('http://127.0.0.1:54321/functions/v1/password-auth'),
+    'http://localhost:5173',
+  ), true);
+  assert.equal(isAllowedRedirectOrigin(
+    new Request('https://project.supabase.co/functions/v1/password-auth'),
+    'http://localhost:5173',
+  ), false);
+  assert.equal(isAllowedRedirectOrigin(
+    new Request('https://project.supabase.co/functions/v1/password-auth'),
+    'https://fintrackapp.vip',
+  ), true);
 
   const preflight = await withCors(() => new Response('unexpected'))(new Request(
     'https://project.supabase.co/functions/v1/api',

@@ -1,7 +1,8 @@
 // deno-lint-ignore-file no-import-prefix
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { consumeRateLimit, opaqueClientSubject, opaqueValue } from '../_shared/rateLimit.ts';
-import { corsHeaders, withCors } from '../_shared/cors.ts';
+import { corsHeaders, isAllowedRedirectOrigin, withCors } from '../_shared/cors.ts';
+import { recordSecurityEventSafely } from '../_shared/securityEvents.ts';
 import {
   checkPwnedPassword,
   PASSWORD_CHECK_UNAVAILABLE_MESSAGE,
@@ -155,17 +156,24 @@ async function handleSignup(
   if (!captchaToken || captchaToken.length > 2048) {
     return response(req, { error: 'Не удалось пройти проверку безопасности' }, 400);
   }
-  if (!ALLOWED_REDIRECT_ORIGINS.has(redirectOrigin)) {
+  if (!isAllowedRedirectOrigin(req, redirectOrigin)) {
     return response(req, { error: 'Недопустимый адрес возврата' }, 400);
   }
 
+  let emailSubject = '';
   try {
-    const [clientSubject, emailSubject] = await Promise.all([opaqueClientSubject(req), opaqueValue(email)]);
+    const subjects = await Promise.all([opaqueClientSubject(req), opaqueValue(email)]);
+    const [clientSubject] = subjects;
+    emailSubject = subjects[1];
     const [clientAllowed, emailAllowed] = await Promise.all([
       consumeRateLimit(admin, 'password-signup:ip', clientSubject, 10, 300),
       consumeRateLimit(admin, 'password-signup:email', emailSubject, 3, 600),
     ]);
     if (!clientAllowed || !emailAllowed) {
+      await recordSecurityEventSafely(admin, {
+        eventType: 'auth.signup', outcome: 'blocked', subjectHash: emailSubject,
+        metadata: { reason: 'rate_limit' },
+      }, req);
       return response(req, { error: 'Слишком много попыток. Повторите через несколько минут' }, 429);
     }
   } catch {
@@ -175,7 +183,13 @@ async function handleSignup(
   try {
     await enforcePwnedPassword(password);
   } catch (error) {
-    if ((error as { code?: string }).code === 'PWNED_PASSWORD') return response(req, { error: PWNED_PASSWORD_MESSAGE }, 422);
+    if ((error as { code?: string }).code === 'PWNED_PASSWORD') {
+      await recordSecurityEventSafely(admin, {
+        eventType: 'auth.signup', outcome: 'blocked', subjectHash: emailSubject,
+        metadata: { reason: 'breached_password' },
+      }, req);
+      return response(req, { error: PWNED_PASSWORD_MESSAGE }, 422);
+    }
     return response(req, { error: PASSWORD_CHECK_UNAVAILABLE_MESSAGE }, 503);
   }
 
@@ -199,8 +213,16 @@ async function handleSignup(
       const message = /captcha|turnstile|challenge/i.test(error.message)
         ? 'Не удалось пройти проверку безопасности'
         : error.message || 'Ошибка регистрации';
+      await recordSecurityEventSafely(admin, {
+        eventType: 'auth.signup', outcome: 'failure', subjectHash: emailSubject,
+        metadata: { reason: /captcha|turnstile|challenge/i.test(error.message) ? 'captcha' : 'provider_rejected' },
+      }, req);
       return response(req, { error: message }, 400);
     }
+    await recordSecurityEventSafely(admin, {
+      eventType: 'auth.signup', outcome: 'success', actorUserId: data.user?.id || null,
+      subjectHash: emailSubject,
+    }, req);
     return response(req, {
       success: true,
       requiresEmailConfirmation: !data.session,
@@ -209,6 +231,10 @@ async function handleSignup(
     });
   } catch {
     if (proof) await revokeProof(admin, proof);
+    await recordSecurityEventSafely(admin, {
+      eventType: 'auth.signup', outcome: 'failure', subjectHash: emailSubject,
+      metadata: { reason: 'service_error' },
+    }, req);
     return response(req, { error: 'Регистрация временно недоступна' }, 503);
   }
 }
@@ -231,10 +257,17 @@ async function handleUpdate(
     return response(req, { error: 'Подтвердите текущий пароль ещё раз.' }, 401);
   }
 
+  let userSubject = '';
   try {
-    const userSubject = await opaqueValue(userData.user.id);
+    userSubject = await opaqueValue(userData.user.id);
     const allowed = await consumeRateLimit(admin, 'password-update:user', userSubject, 5, 900);
-    if (!allowed) return response(req, { error: 'Слишком много попыток. Повторите позже' }, 429);
+    if (!allowed) {
+      await recordSecurityEventSafely(admin, {
+        eventType: 'auth.password_update', outcome: 'blocked', actorUserId: userData.user.id,
+        subjectHash: userSubject, metadata: { reason: 'rate_limit' },
+      }, req);
+      return response(req, { error: 'Слишком много попыток. Повторите позже' }, 429);
+    }
   } catch {
     return response(req, { error: 'Смена пароля временно недоступна' }, 503);
   }
@@ -242,7 +275,13 @@ async function handleUpdate(
   try {
     await enforcePwnedPassword(password);
   } catch (error) {
-    if ((error as { code?: string }).code === 'PWNED_PASSWORD') return response(req, { error: PWNED_PASSWORD_MESSAGE }, 422);
+    if ((error as { code?: string }).code === 'PWNED_PASSWORD') {
+      await recordSecurityEventSafely(admin, {
+        eventType: 'auth.password_update', outcome: 'blocked', actorUserId: userData.user.id,
+        subjectHash: userSubject, metadata: { reason: 'breached_password' },
+      }, req);
+      return response(req, { error: PWNED_PASSWORD_MESSAGE }, 422);
+    }
     return response(req, { error: PASSWORD_CHECK_UNAVAILABLE_MESSAGE }, 503);
   }
 
@@ -257,6 +296,10 @@ async function handleUpdate(
     });
     if (attachError) {
       await revokeProof(admin, proof);
+      await recordSecurityEventSafely(admin, {
+        eventType: 'auth.password_update', outcome: 'failure', actorUserId: userData.user.id,
+        subjectHash: userSubject, metadata: { reason: 'proof_attach' },
+      }, req);
       return response(req, { error: 'Не удалось подготовить безопасную смену пароля. Повторите попытку.' }, 503);
     }
     proofAttached = true;
@@ -265,19 +308,31 @@ async function handleUpdate(
     if (updateError) {
       await revokeProof(admin, proof);
       await restoreAppMetadata(admin, userData.user.id, originalAppMetadata);
+      await recordSecurityEventSafely(admin, {
+        eventType: 'auth.password_update', outcome: 'failure', actorUserId: userData.user.id,
+        subjectHash: userSubject, metadata: { reason: 'provider_rejected' },
+      }, req);
       return response(req, { error: 'Не удалось изменить пароль. Повторите попытку.' }, 400);
     }
+    await recordSecurityEventSafely(admin, {
+      eventType: 'auth.password_update', outcome: 'success', actorUserId: userData.user.id,
+      subjectHash: userSubject,
+    }, req);
     return response(req, { success: true });
   } catch {
     if (proof) await revokeProof(admin, proof);
     if (proofAttached) {
       await restoreAppMetadata(admin, userData.user.id, originalAppMetadata);
     }
+    await recordSecurityEventSafely(admin, {
+      eventType: 'auth.password_update', outcome: 'failure', actorUserId: userData.user.id,
+      subjectHash: userSubject || null, metadata: { reason: 'service_error' },
+    }, req);
     return response(req, { error: 'Смена пароля временно недоступна' }, 503);
   }
 }
 
-Deno.serve(withCors(async (req) => {
+Deno.serve(withCors(async (req: Request) => {
   if (req.method === 'OPTIONS') return response(req, {}, 200);
   if (req.method !== 'POST') return response(req, { error: 'Method not allowed' }, 405);
 

@@ -28,6 +28,12 @@ export function isAllowedBrowserOrigin(request) {
   return isLocalFunctionRequest(request) && LOCAL_BROWSER_ORIGIN.test(origin);
 }
 
+export function isAllowedRedirectOrigin(request, origin) {
+  if (typeof origin !== 'string' || !origin) return false;
+  if (PRODUCTION_BROWSER_ORIGINS.has(origin)) return true;
+  return isLocalFunctionRequest(request) && LOCAL_BROWSER_ORIGIN.test(origin);
+}
+
 export function corsHeadersFor(request) {
   const headers = new Headers(corsHeaders);
   const origin = request.headers.get('Origin');

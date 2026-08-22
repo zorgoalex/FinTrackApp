@@ -7,6 +7,8 @@ import { formatUnsignedAmount } from '../utils/formatters';
 import { getMonthRange } from '../utils/dateRange';
 import { startOfYear, endOfYear, addMonths, subMonths, addYears, subYears, format, parseISO, subDays, differenceInCalendarDays } from 'date-fns';
 import { exportToCSV, buildTextReport } from '../utils/export';
+import { recordClientSecurityEvent } from '../utils/securityEvents';
+import { supabase } from '../contexts/AuthContext';
 import { Download, Copy, ChevronDown, Check } from 'lucide-react';
 
 const PERIODS = [
@@ -226,8 +228,11 @@ export default function AnalyticsPage() {
   const maxCategoryAmount = Math.max(...visibleCategoryBreakdown.map(c => c.amount), 1);
   const maxTagAmount = Math.max(...tagBreakdown.map(t => t.amount), 1);
 
-  const handleExportCSV = () => {
+  const handleExportCSV = async () => {
     exportToCSV(analytics, dateFrom, dateTo);
+    await Promise.all(selectedWsIds.map((selectedWorkspaceId) => (
+      recordClientSecurityEvent(supabase, 'data.export.analytics', selectedWorkspaceId)
+    )));
   };
 
   const handleCopyReport = async () => {

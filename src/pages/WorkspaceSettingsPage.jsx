@@ -6,6 +6,7 @@ import { supabase, useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import ExchangeRateManager from '../components/ExchangeRateManager';
 import { createWorkspaceBackup, downloadWorkspaceBackup, restoreWorkspaceBackup, validateWorkspaceBackupDocument } from '../utils/workspaceBackup';
+import { recordClientSecurityEvent } from '../utils/securityEvents';
 
 const roleIcons = {
   owner: Crown,
@@ -174,6 +175,7 @@ export default function WorkspaceSettingsPage() {
     try {
       const backup = await createWorkspaceBackup(supabase, currentWorkspace.id);
       downloadWorkspaceBackup(backup);
+      await recordClientSecurityEvent(supabase, 'workspace.backup_download', currentWorkspace.id);
     } catch (backupException) {
       console.error('WorkspaceSettingsPage: backup error', backupException);
       setBackupError(backupException.message || 'Не удалось создать резервную копию');
