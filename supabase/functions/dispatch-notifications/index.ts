@@ -1,6 +1,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import webpush from 'npm:web-push@3.6.7';
 import { isAllowedWebPushEndpoint } from '../_shared/pushEndpoint.ts';
+import { fetchWithTimeout, readResponseTextWithLimit } from '../_shared/abuseProtection.js';
+import { consumeRateLimit } from '../_shared/rateLimit.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -12,6 +14,8 @@ const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY') ?? '';
 const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY') ?? '';
 const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? '';
 const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+const UPSTREAM_TIMEOUT_MS = 10_000;
+const MAX_EXTERNAL_DELIVERIES_PER_RUN = Math.min(Math.max(Number(Deno.env.get('MAX_NOTIFICATION_DELIVERIES_PER_RUN')) || 200, 1), 1_000);
 
 if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY && VAPID_SUBJECT) {
   webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
@@ -78,17 +82,17 @@ type Digest = {
 
 async function sendTelegram(chatId: number, title: string, body: string) {
   if (!TELEGRAM_BOT_TOKEN) throw new Error('Telegram delivery is not configured');
-  const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+  const response = await fetchWithTimeout(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: chatId, parse_mode: 'HTML', text: `<b>${escapeHtml(title)}</b>\n${escapeHtml(body)}` }),
-  });
-  if (!response.ok) throw new Error(`Telegram HTTP ${response.status}: ${await response.text()}`);
+  }, UPSTREAM_TIMEOUT_MS);
+  if (!response.ok) throw new Error(`Telegram HTTP ${response.status}: ${await readResponseTextWithLimit(response, 32 * 1024)}`);
 }
 
 async function sendEmail(email: string, subject: string, title: string, lines: string[]) {
   if (!RESEND_API_KEY || !NOTIFICATION_FROM_EMAIL) throw new Error('Email delivery is not configured');
-  const response = await fetch('https://api.resend.com/emails', {
+  const response = await fetchWithTimeout('https://api.resend.com/emails', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${RESEND_API_KEY}` },
     body: JSON.stringify({
@@ -97,11 +101,17 @@ async function sendEmail(email: string, subject: string, title: string, lines: s
       subject,
       html: `<!doctype html><html lang="ru"><body style="font-family:Arial,sans-serif;background:#f4f4f4;padding:20px"><main style="max-width:600px;margin:auto;background:white;border-radius:12px;padding:24px"><h1 style="font-size:20px">${escapeHtml(title)}</h1>${lines.map((line) => `<p style="line-height:1.5">${escapeHtml(line)}</p>`).join('')}<p style="font-size:12px;color:#777">Настройки каналов доступны в FinTrackApp.</p></main></body></html>`,
     }),
-  });
-  if (!response.ok) throw new Error(`Resend HTTP ${response.status}: ${await response.text()}`);
+  }, UPSTREAM_TIMEOUT_MS);
+  if (!response.ok) throw new Error(`Resend HTTP ${response.status}: ${await readResponseTextWithLimit(response, 32 * 1024)}`);
 }
 
-async function sendPush(subscriptions: PushSubscriptionRow[], title: string, body: string, tag: string) {
+async function sendPush(
+  subscriptions: PushSubscriptionRow[],
+  title: string,
+  body: string,
+  tag: string,
+  claimExternalDelivery: (channel: 'telegram' | 'push' | 'email') => Promise<void>,
+) {
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY || !VAPID_SUBJECT) throw new Error('Web Push delivery is not configured');
   if (!subscriptions.length) throw new Error('Web Push subscription not found');
   let delivered = 0;
@@ -112,11 +122,12 @@ async function sendPush(subscriptions: PushSubscriptionRow[], title: string, bod
       errors.push('Rejected unsupported Web Push endpoint');
       continue;
     }
+    await claimExternalDelivery('push');
     try {
       await webpush.sendNotification({
         endpoint: subscription.endpoint,
         keys: { p256dh: subscription.p256dh, auth: subscription.auth },
-      }, JSON.stringify({ title, body, tag, url: '/cashflow' }));
+      }, JSON.stringify({ title, body, tag, url: '/cashflow' }), { TTL: 60, timeout: UPSTREAM_TIMEOUT_MS });
       delivered += 1;
     } catch (error) {
       const statusCode = Number((error as { statusCode?: number }).statusCode || 0);
@@ -149,6 +160,9 @@ Deno.serve(async (request) => {
   if (request.method !== 'POST') return json({ ok: true });
   if (!NOTIFICATION_CRON_SECRET || request.headers.get('x-cron-secret') !== NOTIFICATION_CRON_SECRET) return json({ error: 'Unauthorized' }, 401);
 
+  if (!await consumeRateLimit(admin, 'notifications:dispatch', 'global', 1, 300)) {
+    return json({ error: 'Notification dispatch already ran recently' }, 429);
+  }
   const today = dateString(new Date());
   const { data: members, error: membersError } = await admin.from('workspace_members').select('workspace_id,user_id').eq('is_active', true);
   if (membersError) return json({ error: membersError.message }, 500);
@@ -181,7 +195,10 @@ Deno.serve(async (request) => {
   const pushByMember = new Map<string, PushSubscriptionRow[]>();
   for (const subscription of (pushResult.data as PushSubscriptionRow[] || [])) {
     const key = `${subscription.workspace_id}:${subscription.user_id}`;
-    pushByMember.set(key, [...(pushByMember.get(key) || []), subscription]);
+    const current = pushByMember.get(key) || [];
+    if (current.length < 5) {
+      pushByMember.set(key, [...current, subscription]);
+    }
   }
   const emailByUser = new Map<string, string | null>();
   const digests = new Map<string, Digest>();
@@ -189,6 +206,18 @@ Deno.serve(async (request) => {
   let telegramSent = 0;
   let pushSent = 0;
   let emailSent = 0;
+
+  let externalDeliveryAttempts = 0;
+  const dailyDeliveryLimits = { telegram: 500, push: 1_000, email: 50 } as const;
+  const claimExternalDelivery = async (channel: keyof typeof dailyDeliveryLimits) => {
+    if (externalDeliveryAttempts >= MAX_EXTERNAL_DELIVERIES_PER_RUN) throw new Error('External delivery budget exhausted for this run');
+    const bucket = channel === 'email' ? 'email:resend:global' : `notifications:${channel}:global`;
+    const withinDailyLimit = await consumeRateLimit(admin, bucket, 'beta', dailyDeliveryLimits[channel], 86400);
+    if (!withinDailyLimit) {
+      throw new Error(`${channel} daily delivery budget exhausted`);
+    }
+    externalDeliveryAttempts += 1;
+  };
 
   const addDigest = (channel: string, member: Member, row: NotificationRow) => {
     const key = `${channel}:${member.workspace_id}:${member.user_id}`;
@@ -228,6 +257,7 @@ Deno.serve(async (request) => {
           try {
             const chatId = telegramByUser.get(member.user_id);
             if (!chatId) throw new Error('Telegram account is not linked');
+            await claimExternalDelivery('telegram');
             await sendTelegram(chatId, title, body);
             await markDelivery([row.id], 'telegram', null);
             telegramSent += 1;
@@ -240,7 +270,7 @@ Deno.serve(async (request) => {
         if (preference.delivery_mode === 'digest') addDigest('push', member, row);
         else {
           try {
-            await sendPush(pushByMember.get(`${member.workspace_id}:${member.user_id}`) || [], title, body, row.id);
+            await sendPush(pushByMember.get(`${member.workspace_id}:${member.user_id}`) || [], title, body, row.id, claimExternalDelivery);
             await markDelivery([row.id], 'push', null);
             pushSent += 1;
           } catch (error) {
@@ -259,6 +289,7 @@ Deno.serve(async (request) => {
             const email = emailByUser.get(member.user_id);
             if (!email) throw new Error('User email not found');
             await sendEmail(email, title, title, [body]);
+            await claimExternalDelivery('email');
             await markDelivery([row.id], 'email', null);
             emailSent += 1;
           } catch (error) {
@@ -276,9 +307,10 @@ Deno.serve(async (request) => {
         const chatId = telegramByUser.get(digest.userId);
         if (!chatId) throw new Error('Telegram account is not linked');
         await sendTelegram(chatId, 'Платежи и поступления', digest.lines.map((line) => `• ${line}`).join('\n'));
+        await claimExternalDelivery('telegram');
         telegramSent += digest.notificationIds.length;
       } else if (channel === 'push') {
-        await sendPush(pushByMember.get(`${digest.workspaceId}:${digest.userId}`) || [], 'Платежи и поступления', digest.lines.join('\n'), `digest-${today}`);
+        await sendPush(pushByMember.get(`${digest.workspaceId}:${digest.userId}`) || [], 'Платежи и поступления', digest.lines.join('\n'), `digest-${today}`, claimExternalDelivery);
         pushSent += digest.notificationIds.length;
       } else {
         if (!emailByUser.has(digest.userId)) {
@@ -288,6 +320,7 @@ Deno.serve(async (request) => {
         const email = emailByUser.get(digest.userId);
         if (!email) throw new Error('User email not found');
         await sendEmail(email, 'Платежи и поступления — FinTrackApp', 'Платежи и поступления', digest.lines);
+        await claimExternalDelivery('email');
         emailSent += digest.notificationIds.length;
       }
       await markDelivery(digest.notificationIds, channel, null);
@@ -296,5 +329,5 @@ Deno.serve(async (request) => {
     }
   }
 
-  return json({ ok: true, date: today, candidates: candidates.length, notificationsProcessed, telegramSent, pushSent, emailSent });
+  return json({ ok: true, date: today, candidates: candidates.length, notificationsProcessed, telegramSent, pushSent, emailSent, externalDeliveryAttempts });
 });

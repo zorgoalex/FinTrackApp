@@ -2,17 +2,28 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { consumeRateLimit, opaqueClientSubject, opaqueValue } from '../_shared/rateLimit.ts';
 import { corsHeaders, withCors } from '../_shared/cors.ts';
 import { recordSecurityEventSafely } from '../_shared/securityEvents.ts';
+import { PayloadTooLargeError, readJsonWithLimit } from '../_shared/abuseProtection.js';
+const MAX_REQUEST_BYTES = 8 * 1024;
 
-const response = (body: Record<string, unknown>, status = 200) => new Response(JSON.stringify(body), {
+const response = (body: Record<string, unknown>, status = 200, headers: Record<string, string> = {}) => new Response(JSON.stringify(body), {
   status,
-  headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  headers: { ...corsHeaders, ...headers, 'Content-Type': 'application/json' },
 });
 
 Deno.serve(withCors(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
 
-  const { identifier, password, captchaToken } = await req.json();
+  let body: Record<string, unknown>;
+  try {
+    const parsed = await readJsonWithLimit(req, MAX_REQUEST_BYTES);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new SyntaxError('Invalid JSON body');
+    body = parsed as Record<string, unknown>;
+  } catch (error) {
+    if (error instanceof PayloadTooLargeError) return response({ error: 'Запрос слишком большой' }, 413);
+    return response({ error: 'Некорректный запрос' }, 400);
+  }
+  const { identifier, password, captchaToken } = body;
   const normalized = typeof identifier === 'string' ? identifier.trim().toLowerCase() : '';
   if (!/^[\p{L}\p{N}_]{3,30}$/u.test(normalized) || typeof password !== 'string') {
     return response({ error: 'Неверное имя аккаунта или пароль' }, 400);
@@ -43,7 +54,7 @@ Deno.serve(withCors(async (req: Request) => {
         subjectHash: identifierSubject,
         metadata: { reason: 'rate_limit' },
       }, req);
-      return response({ error: 'Слишком много попыток. Повторите через несколько минут' }, 429);
+      return response({ error: 'Слишком много попыток. Повторите через несколько минут' }, 429, { 'Retry-After': '300' });
     }
   } catch {
     return response({ error: 'Вход временно недоступен' }, 503);

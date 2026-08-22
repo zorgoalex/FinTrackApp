@@ -40,7 +40,8 @@ test('all password-based Auth flows propagate a fresh captchaToken', async () =>
 test('username login forwards the token to Supabase Auth for one server-side validation', async () => {
   const edge = await read('supabase/functions/login-user/index.ts');
 
-  assert.match(edge, /const \{ identifier, password, captchaToken \} = await req\.json\(\)/);
+  assert.match(edge, /readJsonWithLimit\(req, MAX_REQUEST_BYTES\)/);
+  assert.match(edge, /const \{ identifier, password, captchaToken \} = body/);
   assert.match(edge, /!normalizedCaptchaToken \|\| normalizedCaptchaToken\.length > 2048/);
   assert.match(edge, /options: \{ captchaToken: normalizedCaptchaToken \}/);
   assert.doesNotMatch(edge, /siteverify/);

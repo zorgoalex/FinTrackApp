@@ -1,8 +1,11 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { fetchWithTimeout, readResponseJsonWithLimit, readResponseTextWithLimit } from '../_shared/abuseProtection.js';
+import { consumeRateLimit } from '../_shared/rateLimit.ts';
 
 type AlertLevel = 'healthy' | 'warning' | 'critical' | 'severe' | 'error';
 
 const jsonHeaders = { 'Content-Type': 'application/json' };
+const UPSTREAM_TIMEOUT_MS = 10_000;
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: jsonHeaders });
@@ -43,7 +46,7 @@ async function sendAlert(apiKey: string, recipients: string[], level: AlertLevel
     ? `Проверка завершилась ошибкой: ${error}`
     : `Доступный баланс: $${remaining?.toFixed(2) ?? 'неизвестно'}.`;
 
-  const response = await fetch('https://api.resend.com/emails', {
+  const response = await fetchWithTimeout('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -52,9 +55,9 @@ async function sendAlert(apiKey: string, recipients: string[], level: AlertLevel
       subject,
       text: `${detail}\n\nПровайдер: OpenRouter\nУровень: ${level}\nВремя: ${new Date().toISOString()}`,
     }),
-  });
+  }, UPSTREAM_TIMEOUT_MS);
 
-  if (!response.ok) throw new Error(`Resend returned ${response.status}: ${await response.text()}`);
+  if (!response.ok) throw new Error(`Resend returned ${response.status}: ${await readResponseTextWithLimit(response, 32 * 1024)}`);
 }
 
 Deno.serve(async (request) => {
@@ -70,6 +73,9 @@ Deno.serve(async (request) => {
       requiredEnv('SUPABASE_URL'),
       requiredEnv('SUPABASE_SERVICE_ROLE_KEY'),
     );
+    if (!await consumeRateLimit(admin, 'monitor:openrouter', 'global', 1, 300)) {
+      return json({ error: 'Monitor already ran recently' }, 429);
+    }
     const { data: previous, error: previousError } = await admin
       .from('ai_provider_status')
       .select('alert_level, alert_sent_at')
@@ -84,11 +90,11 @@ Deno.serve(async (request) => {
     let providerError: string | null = null;
 
     try {
-      const response = await fetch('https://openrouter.ai/api/v1/credits', {
+      const response = await fetchWithTimeout('https://openrouter.ai/api/v1/credits', {
         headers: { Authorization: `Bearer ${requiredEnv('OPENROUTER_MANAGEMENT_KEY')}` },
-      });
-      if (!response.ok) throw new Error(`OpenRouter returned ${response.status}: ${await response.text()}`);
-      const payload = await response.json();
+      }, UPSTREAM_TIMEOUT_MS);
+      if (!response.ok) throw new Error(`OpenRouter returned ${response.status}: ${await readResponseTextWithLimit(response, 32 * 1024)}`);
+      const payload = await readResponseJsonWithLimit(response, 64 * 1024);
       totalCredits = Number(payload?.data?.total_credits);
       totalUsage = Number(payload?.data?.total_usage);
       if (!Number.isFinite(totalCredits) || !Number.isFinite(totalUsage)) {

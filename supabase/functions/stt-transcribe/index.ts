@@ -4,6 +4,7 @@ import { SttError } from '../_shared/stt/errors.ts';
 import { createSttProvider } from '../_shared/stt/registry.ts';
 import type { TimestampGranularity } from '../_shared/stt/types.ts';
 import { consumeRateLimit } from '../_shared/rateLimit.ts';
+import { PayloadTooLargeError, readFormDataWithLimit } from '../_shared/abuseProtection.js';
 
 const DEFAULT_MAX_BYTES = 18 * 1024 * 1024;
 const GROQ_FREE_TIER_MAX_BYTES = 25 * 1024 * 1024;
@@ -59,7 +60,7 @@ function parseTimestamps(value: FormDataEntryValue | null): TimestampGranularity
   }
 }
 
-Deno.serve(withCors(async (request) => {
+Deno.serve(withCors(async (request: Request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (request.method !== 'POST') return json({ error: { code: 'METHOD_NOT_ALLOWED', message: 'Method not allowed' } }, 405);
   if (!request.headers.get('Authorization')) {
@@ -87,7 +88,11 @@ Deno.serve(withCors(async (request) => {
       Deno.env.get('SUPABASE_URL') || '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
     );
-    if (!await consumeRateLimit(admin, 'stt:user', authData.user.id, 10, 3600)) {
+    const [userAllowed, globalAllowed] = await Promise.all([
+      consumeRateLimit(admin, 'stt:user', authData.user.id, 10, 3600),
+      consumeRateLimit(admin, 'stt:global', 'beta', 100, 3600),
+    ]);
+    if (!userAllowed || !globalAllowed) {
       return json({
         error: { code: 'RATE_LIMITED', message: 'Лимит голосовых запросов исчерпан', retryable: true, retry_after_seconds: 3600 },
       }, 429, { 'Retry-After': '3600' });
@@ -97,7 +102,7 @@ Deno.serve(withCors(async (request) => {
     if (!contentType.toLowerCase().includes('multipart/form-data')) {
       throw new SttError('INVALID_REQUEST', 'Ожидается multipart/form-data', 400);
     }
-    const form = await request.formData();
+    const form = await readFormDataWithLimit(request, configuredMaxBytes() + 1024 * 1024);
     const audio = form.get('audio');
     if (!(audio instanceof File)) throw new SttError('INVALID_REQUEST', 'Поле audio обязательно', 400);
     validateAudio(audio);
@@ -109,6 +114,9 @@ Deno.serve(withCors(async (request) => {
     const result = await provider.transcribe({ audio, language, prompt, timestampGranularities });
     return json(result);
   } catch (error) {
+    if (error instanceof PayloadTooLargeError) {
+      return json({ error: { code: 'FILE_TOO_LARGE', message: 'Аудиофайл превышает допустимый размер', retryable: false } }, 413);
+    }
     if (error instanceof SttError) {
       const headers: Record<string, string> = {};
       if (error.retryAfterSeconds !== null) headers['Retry-After'] = String(error.retryAfterSeconds);

@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { consumeRateLimit, opaqueClientSubject, opaqueValue } from '../_shared/rateLimit.ts';
 import { corsHeaders, isAllowedRedirectOrigin, withCors } from '../_shared/cors.ts';
 import { recordSecurityEventSafely } from '../_shared/securityEvents.ts';
+import { PayloadTooLargeError, readJsonWithLimit } from '../_shared/abuseProtection.js';
 import {
   checkPwnedPassword,
   PASSWORD_CHECK_UNAVAILABLE_MESSAGE,
@@ -10,6 +11,7 @@ import {
 } from '../_shared/passwordSecurity.js';
 
 const PROOF_FIELD = '_password_policy_proof';
+const MAX_REQUEST_BYTES = 16 * 1024;
 
 type QueryResult = PromiseLike<{ data?: unknown; error: unknown }>;
 type ProofQuery = {
@@ -55,8 +57,9 @@ function response(_req: Request, body: Record<string, unknown>, status = 200) {
 
 async function readJson(req: Request) {
   try {
-    return await req.json();
-  } catch {
+    return await readJsonWithLimit(req, MAX_REQUEST_BYTES);
+  } catch (error) {
+    if (error instanceof PayloadTooLargeError) throw error;
     return null;
   }
 }
@@ -336,7 +339,13 @@ Deno.serve(withCors(async (req: Request) => {
   if (req.method === 'OPTIONS') return response(req, {}, 200);
   if (req.method !== 'POST') return response(req, { error: 'Method not allowed' }, 405);
 
-  const body = await readJson(req);
+  let body;
+  try {
+    body = await readJson(req);
+  } catch (error) {
+    if (error instanceof PayloadTooLargeError) return response(req, { error: 'Запрос слишком большой' }, 413);
+    throw error;
+  }
   if (!body || typeof body !== 'object') return response(req, { error: 'Некорректный запрос' }, 400);
 
   const url = Deno.env.get('SUPABASE_URL') || '';

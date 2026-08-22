@@ -2,8 +2,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders, withCors } from '../_shared/cors.ts';
 import { consumeRateLimit, opaqueValue } from '../_shared/rateLimit.ts';
 import { recordSecurityEventSafely } from '../_shared/securityEvents.ts';
+import { PayloadTooLargeError, fetchWithTimeout, readJsonWithLimit } from '../_shared/abuseProtection.js';
 
 const FROM_EMAIL = Deno.env.get('INVITATION_FROM_EMAIL')?.trim() ?? '';
+const MAX_REQUEST_BYTES = 8 * 1024;
+const EMAIL_TIMEOUT_MS = 10_000;
 const FROM_NAME = Deno.env.get('EMAIL_FROM_NAME')?.trim() || 'FinTrackApp';
 
 function escapeHtml(value: unknown) {
@@ -75,7 +78,15 @@ Deno.serve(withCors(async (req: Request) => {
     const invitingUser = userResponse.data.user;
 
     // Validate request body
-    const { workspaceId, email, role } = await req.json();
+    const parsedBody = await readJsonWithLimit(req, MAX_REQUEST_BYTES);
+    if (!parsedBody || typeof parsedBody !== 'object' || Array.isArray(parsedBody)) {
+      return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400,
+      });
+    }
+    const requestBody = parsedBody as Record<string, unknown>;
+    const workspaceId = typeof requestBody.workspaceId === 'string' ? requestBody.workspaceId.trim() : '';
+    const { email, role } = requestBody;
     const normalizedEmail = typeof email === 'string' ? email.toLowerCase().trim() : '';
     // Capitalize first letter: 'member' → 'Member', 'admin' → 'Admin'
     const rawRole = typeof role === 'string' ? role.trim() : '';
@@ -113,18 +124,20 @@ Deno.serve(withCors(async (req: Request) => {
     }
 
     const recipientSubject = await opaqueValue(normalizedEmail);
-    const [userAllowed, workspaceAllowed, recipientAllowed] = await Promise.all([
+    const [userAllowed, workspaceAllowed, recipientAllowed, globalAllowed, emailAllowed] = await Promise.all([
       consumeRateLimit(supabaseAdmin, 'invite:user', invitingUser.id, 10, 86400),
       consumeRateLimit(supabaseAdmin, 'invite:workspace', workspaceId, 20, 86400),
       consumeRateLimit(supabaseAdmin, 'invite:recipient', recipientSubject, 3, 86400),
+      consumeRateLimit(supabaseAdmin, 'invite:global', 'beta', 80, 86400),
+      consumeRateLimit(supabaseAdmin, 'email:resend:global', 'beta', 50, 86400),
     ]);
-    if (!userAllowed || !workspaceAllowed || !recipientAllowed) {
+    if (!userAllowed || !workspaceAllowed || !recipientAllowed || !globalAllowed || !emailAllowed) {
       await recordSecurityEventSafely(supabaseAdmin, {
         eventType: 'invitation.create', outcome: 'blocked', actorUserId: invitingUser.id,
         workspaceId, subjectHash: recipientSubject, metadata: { reason: 'rate_limit' },
       }, req);
       return new Response(JSON.stringify({ error: 'Invitation limit exceeded. Try again later.' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '86400' },
         status: 429,
       });
     }
@@ -188,7 +201,7 @@ Deno.serve(withCors(async (req: Request) => {
     if (!resendApiKey || !FROM_EMAIL) {
       emailError = 'Email delivery is not configured yet';
     } else {
-      const resendResponse = await fetch('https://api.resend.com/emails', {
+      const resendResponse = await fetchWithTimeout('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -200,7 +213,7 @@ Deno.serve(withCors(async (req: Request) => {
           subject: `Invitation to join workspace: ${workspace?.name}`,
           html: emailHtml,
         }),
-      });
+      }, EMAIL_TIMEOUT_MS);
 
       if (resendResponse.ok) {
         emailSent = true;
@@ -236,7 +249,17 @@ Deno.serve(withCors(async (req: Request) => {
       status: 200,
     });
 
-  } catch {
+  } catch (error) {
+    if (error instanceof PayloadTooLargeError) {
+      return new Response(JSON.stringify({ error: 'Payload too large' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 413,
+      });
+    }
+    if (error instanceof SyntaxError) {
+      return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400,
+      });
+    }
     console.error('Unexpected invitation error');
     return new Response(JSON.stringify({ error: 'An unexpected error occurred.' }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

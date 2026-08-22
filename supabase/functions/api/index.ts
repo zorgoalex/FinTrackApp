@@ -1,19 +1,24 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders, withCors } from '../_shared/cors.ts';
+import { PayloadTooLargeError, readJsonWithLimit } from '../_shared/abuseProtection.js';
+import { consumeRateLimit } from '../_shared/rateLimit.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const OPERATION_TYPES = new Set(['income', 'expense', 'personal_salary', 'employee_salary']);
+const MAX_API_BODY_BYTES = 64 * 1024;
+const MAX_EXPORT_ROWS = 5_000;
 
-function jsonResponse(data: unknown, status = 200) {
+function jsonResponse(data: unknown, status = 200, headers: Record<string, string> = {}) {
   return new Response(JSON.stringify(data), {
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders, ...headers, 'Content-Type': 'application/json' },
     status,
   });
 }
 
-function errorResponse(error: string, status: number) {
-  return jsonResponse({ error }, status);
+function errorResponse(error: string, status: number, headers: Record<string, string> = {}) {
+  return jsonResponse({ error }, status, headers);
 }
 
 async function getAuthenticatedClient(req: Request) {
@@ -194,8 +199,12 @@ async function exportOperations(
   const categoryId = url.searchParams.get('category_id');
   const sortBy = url.searchParams.get('sortBy') || 'operation_date'; // operation_date, amount, created_at
   const sortOrder = url.searchParams.get('sortOrder') || 'desc'; // asc, desc
-  const limit = parseInt(url.searchParams.get('limit') || '0', 10); // 0 = no limit
-  const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+  const requestedLimit = Number.parseInt(url.searchParams.get('limit') || String(MAX_EXPORT_ROWS), 10);
+  const requestedOffset = Number.parseInt(url.searchParams.get('offset') || '0', 10);
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(requestedLimit, 1), MAX_EXPORT_ROWS)
+    : MAX_EXPORT_ROWS;
+  const offset = Number.isFinite(requestedOffset) ? Math.min(Math.max(requestedOffset, 0), 1_000_000) : 0;
 
   const allowedSort = ['operation_date', 'amount', 'created_at', 'description'];
   const sortField = allowedSort.includes(sortBy) ? sortBy : 'operation_date';
@@ -213,13 +222,16 @@ async function exportOperations(
   if (dateTo) query = query.lte('operation_date', dateTo);
   if (type) query = query.eq('type', type);
   if (categoryId) query = query.eq('category_id', categoryId);
-  if (limit > 0) query = query.range(offset, offset + limit - 1);
+  query = query.range(offset, offset + limit - 1);
 
   const { data, error } = await query;
   if (error) return errorResponse(error.message, 500);
 
   return jsonResponse({
     count: data?.length || 0,
+    limit,
+    offset,
+    truncated: (data?.length || 0) === limit,
     filters: { dateFrom, dateTo, type, categoryId, sortBy: sortField, sortOrder: ascending ? 'asc' : 'desc' },
     operations: data,
   });
@@ -651,10 +663,32 @@ Deno.serve(withCors(async (req) => {
     const segments = path.split('/').filter(Boolean);
     const method = req.method;
 
+    if (!SUPABASE_SERVICE_ROLE_KEY) return errorResponse('Service unavailable', 503);
+    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+    const isExport = method === 'GET' && segments[0] === 'workspaces'
+      && segments[2] === 'operations' && segments[3] === 'export';
+    const isWrite = ['POST', 'PATCH', 'DELETE'].includes(method);
+    const bucket = isExport ? 'api:export' : isWrite ? 'api:write' : 'api:read';
+    const limit = isExport ? 10 : isWrite ? 60 : 240;
+    const windowSeconds = isExport ? 3600 : 60;
+    try {
+      if (!await consumeRateLimit(admin, bucket, user.id, limit, windowSeconds)) {
+        return errorResponse('Too many requests', 429, { 'Retry-After': String(windowSeconds) });
+      }
+    } catch {
+      return errorResponse('Service unavailable', 503);
+    }
+
     // Parse body for POST/PATCH
     let body: Record<string, unknown> = {};
     if (method === 'POST' || method === 'PATCH') {
-      body = await req.json();
+      const parsed = await readJsonWithLimit(req, MAX_API_BODY_BYTES);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return errorResponse('Invalid JSON body', 400);
+      }
+      body = parsed as Record<string, unknown>;
     }
 
     // GET /workspaces
@@ -739,7 +773,9 @@ Deno.serve(withCors(async (req) => {
 
     return errorResponse('Not found', 404);
   } catch (err) {
-    console.error('API Error:', err.message);
+    if (err instanceof PayloadTooLargeError) return errorResponse('Payload too large', 413);
+    if (err instanceof SyntaxError) return errorResponse('Invalid JSON body', 400);
+    console.error('API Error:', err instanceof Error ? err.message : 'unknown');
     return errorResponse('Internal server error', 500);
   }
 }));

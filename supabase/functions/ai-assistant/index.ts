@@ -1,6 +1,16 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { consumeRateLimit } from '../_shared/rateLimit.ts';
 import { corsHeaders, withCors } from '../_shared/cors.ts';
+import {
+  PayloadTooLargeError,
+  fetchWithTimeout,
+  readJsonWithLimit,
+  readResponseJsonWithLimit,
+} from '../_shared/abuseProtection.js';
+
+const MAX_REQUEST_BYTES = 16 * 1024;
+const MAX_PROVIDER_RESPONSE_BYTES = 256 * 1024;
+const PROVIDER_TIMEOUT_MS = 15_000;
 
 type FinancialContext = {
   period?: { from?: string; to?: string };
@@ -10,10 +20,10 @@ type FinancialContext = {
   accounts?: Array<{ name?: string; currency?: string; balance?: number }>;
 };
 
-function json(data: unknown, status = 200) {
+function json(data: unknown, status = 200, headers: Record<string, string> = {}) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders, ...headers, 'Content-Type': 'application/json' },
   });
 }
 
@@ -34,7 +44,7 @@ function fallbackAnswer(context: FinancialContext) {
   return lines.join(' ');
 }
 
-Deno.serve(withCors(async (request) => {
+Deno.serve(withCors(async (request: Request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
@@ -50,7 +60,7 @@ Deno.serve(withCors(async (request) => {
   let workspaceId = '';
   let question = '';
   try {
-    const body = await request.json();
+    const body = await readJsonWithLimit(request, MAX_REQUEST_BYTES);
     workspaceId = String(body?.workspaceId || '');
     question = String(body?.question || '').trim().slice(0, 1000);
     const dateFrom = String(body?.dateFrom || '');
@@ -66,8 +76,12 @@ Deno.serve(withCors(async (request) => {
       Deno.env.get('SUPABASE_URL') || '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
     );
-    if (!await consumeRateLimit(admin, 'assistant:user', userResult.user.id, 30, 3600)) {
-      return json({ error: 'Лимит запросов к помощнику исчерпан' }, 429);
+    const [userAllowed, globalAllowed] = await Promise.all([
+      consumeRateLimit(admin, 'assistant:user', userResult.user.id, 30, 3600),
+      consumeRateLimit(admin, 'assistant:global', 'beta', 300, 3600),
+    ]);
+    if (!userAllowed || !globalAllowed) {
+      return json({ error: 'Лимит запросов к помощнику временно исчерпан' }, 429, { 'Retry-After': '3600' });
     }
 
     const { data: context, error: contextError } = await supabase.rpc('get_ai_financial_context', {
@@ -89,7 +103,7 @@ Deno.serve(withCors(async (request) => {
     }
 
     try {
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      const response = await fetchWithTimeout('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -110,9 +124,9 @@ Deno.serve(withCors(async (request) => {
             { role: 'user', content: question },
           ],
         }),
-      });
+      }, PROVIDER_TIMEOUT_MS);
       if (!response.ok) throw new Error(`OpenRouter ${response.status}`);
-      const payload = await response.json();
+      const payload = await readResponseJsonWithLimit(response, MAX_PROVIDER_RESPONSE_BYTES);
       const answer = String(payload?.choices?.[0]?.message?.content || '').trim();
       if (!answer) throw new Error('Провайдер вернул пустой ответ');
       const usage = payload?.usage || {};
@@ -139,6 +153,8 @@ Deno.serve(withCors(async (request) => {
       return json({ answer, model: 'local-summary', mode: 'fallback', warning: 'AI-провайдер временно недоступен' });
     }
   } catch (error) {
-    return json({ error: error instanceof Error ? error.message : 'Внутренняя ошибка' }, 500);
+    if (error instanceof PayloadTooLargeError) return json({ error: 'Запрос слишком большой' }, 413);
+    if (error instanceof SyntaxError) return json({ error: 'Некорректный JSON' }, 400);
+    return json({ error: 'Внутренняя ошибка' }, 500);
   }
 }));

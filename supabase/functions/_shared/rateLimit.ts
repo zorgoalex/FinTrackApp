@@ -20,11 +20,17 @@ export async function consumeRateLimit(
 }
 
 export async function opaqueClientSubject(request: Request) {
-  const forwarded = request.headers.get('cf-connecting-ip')
-    || request.headers.get('x-real-ip')
-    || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-    || 'unknown';
-  return opaqueSubject('client', forwarded);
+  const trustedDirect = normalizeAddress(request.headers.get('cf-connecting-ip'))
+    || normalizeAddress(request.headers.get('x-real-ip'));
+  // The right-most valid X-Forwarded-For entry is the proxy-nearest address.
+  // Taking the first entry lets a client prepend arbitrary values and bypass an
+  // IP bucket while filling the rate-limit table with attacker-chosen subjects.
+  const forwarded = (request.headers.get('x-forwarded-for') || '')
+    .split(',')
+    .map(normalizeAddress)
+    .filter(Boolean)
+    .at(-1);
+  return opaqueSubject('client', trustedDirect || forwarded || 'unknown');
 }
 
 export async function opaqueValue(value: string) {
@@ -48,4 +54,15 @@ async function opaqueSubject(namespace: string, value: string) {
     new TextEncoder().encode(`${namespace}:${value}`),
   );
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function normalizeAddress(value: string | null) {
+  const candidate = (value || '').trim().toLowerCase();
+  if (!candidate || candidate.length > 64) return '';
+  if (/^(?:\d{1,3}\.){3}\d{1,3}$/.test(candidate)) {
+    return candidate.split('.').every((part) => Number(part) <= 255) ? candidate : '';
+  }
+  // Edge proxies provide IPv6 without a port. This deliberately accepts only
+  // hexadecimal IPv6 notation and rejects arbitrary high-cardinality strings.
+  return candidate.includes(':') && /^[0-9a-f:]+$/.test(candidate) ? candidate : '';
 }

@@ -1,19 +1,29 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders, withCors } from '../_shared/cors.ts';
 import { consumeRateLimit } from '../_shared/rateLimit.ts';
+import {
+  PayloadTooLargeError,
+  fetchWithTimeout,
+  readJsonWithLimit,
+  readResponseJsonWithLimit,
+  readResponseTextWithLimit,
+} from '../_shared/abuseProtection.js';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+const MAX_REQUEST_BYTES = 2 * 1024;
+const MAX_RATE_RESPONSE_BYTES = 512 * 1024;
+const PROVIDER_TIMEOUT_MS = 10_000;
 
-function jsonResponse(data: unknown, status = 200) {
+function jsonResponse(data: unknown, status = 200, headers: Record<string, string> = {}) {
   return new Response(JSON.stringify(data), {
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders, ...headers, 'Content-Type': 'application/json' },
     status,
   });
 }
 
-function errorResponse(error: string, status: number) {
-  return jsonResponse({ error }, status);
+function errorResponse(error: string, status: number, headers: Record<string, string> = {}) {
+  return jsonResponse({ error }, status, headers);
 }
 
 /**
@@ -21,10 +31,10 @@ function errorResponse(error: string, status: number) {
  * Returns rates relative to RUB: { USD: 92.5, EUR: 100.3, ... }
  */
 async function fetchCBRRates(): Promise<Record<string, number>> {
-  const res = await fetch('https://www.cbr.ru/scripts/XML_daily.asp');
+  const res = await fetchWithTimeout('https://www.cbr.ru/scripts/XML_daily.asp', {}, PROVIDER_TIMEOUT_MS);
   if (!res.ok) throw new Error(`CBR API error: ${res.status}`);
 
-  const xml = await res.text();
+  const xml = await readResponseTextWithLimit(res, MAX_RATE_RESPONSE_BYTES);
   const rates: Record<string, number> = {};
 
   // Parse XML manually (no DOM parser in Deno edge functions)
@@ -49,16 +59,16 @@ async function fetchCBRRates(): Promise<Record<string, number>> {
  * Returns rates relative to baseCurrency: { USD: 1, EUR: 0.92, ... }
  */
 async function fetchOpenERRates(baseCurrency: string): Promise<Record<string, number>> {
-  const res = await fetch(`https://open.er-api.com/v6/latest/${baseCurrency}`);
+  const res = await fetchWithTimeout(`https://open.er-api.com/v6/latest/${baseCurrency}`, {}, PROVIDER_TIMEOUT_MS);
   if (!res.ok) throw new Error(`Open ER API error: ${res.status}`);
 
-  const data = await res.json();
+  const data = await readResponseJsonWithLimit(res, MAX_RATE_RESPONSE_BYTES);
   if (data.result !== 'success') throw new Error(`Open ER API: ${data['error-type'] || 'unknown error'}`);
 
   return data.rates || {};
 }
 
-Deno.serve(withCors(async (req) => {
+Deno.serve(withCors(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -77,9 +87,12 @@ Deno.serve(withCors(async (req) => {
     const { data: { user }, error: authErr } = await userClient.auth.getUser(token);
     if (authErr || !user) return errorResponse('Unauthorized', 401);
 
-    const body = await req.json();
-    const { workspace_id } = body;
-    if (!workspace_id) return errorResponse('workspace_id required', 400);
+    const parsedBody = await readJsonWithLimit(req, MAX_REQUEST_BYTES);
+    if (!parsedBody || typeof parsedBody !== 'object' || Array.isArray(parsedBody)) {
+      return errorResponse('Invalid JSON body', 400);
+    }
+    const { workspace_id } = parsedBody as Record<string, unknown>;
+    if (!/^[0-9a-f-]{36}$/i.test(String(workspace_id || ''))) return errorResponse('workspace_id required', 400);
 
     // Check user is owner/admin
     const { data: member } = await userClient
@@ -94,8 +107,9 @@ Deno.serve(withCors(async (req) => {
       return errorResponse('Only owners/admins can fetch rates', 403);
     }
 
-    const rateAllowed = await consumeRateLimit(userClient, 'rates:workspace', `${workspace_id}:${user.id}`, 12, 3600);
-    if (!rateAllowed) return errorResponse('Rate refresh limit exceeded', 429);
+    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const rateAllowed = await consumeRateLimit(admin, 'rates:workspace', `${workspace_id}:${user.id}`, 12, 3600);
+    if (!rateAllowed) return errorResponse('Rate refresh limit exceeded', 429, { 'Retry-After': '3600' });
 
     // Get workspace base currency
     const { data: ws } = await userClient
@@ -182,7 +196,9 @@ Deno.serve(withCors(async (req) => {
       })),
     });
   } catch (err) {
-    console.error('fetch-rates error:', err);
-    return errorResponse(err instanceof Error ? err.message : 'Internal error', 500);
+    if (err instanceof PayloadTooLargeError) return errorResponse('Payload too large', 413);
+    if (err instanceof SyntaxError) return errorResponse('Invalid JSON body', 400);
+    console.error('fetch-rates error:', err instanceof Error ? err.message : 'unknown');
+    return errorResponse('Rate provider is temporarily unavailable', 502);
   }
 }));

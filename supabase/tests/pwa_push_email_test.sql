@@ -1,7 +1,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
-SELECT plan(14);
+SELECT plan(17);
 
 INSERT INTO auth.users(id, email) VALUES
   ('17000000-0000-0000-0000-000000000001', 'offline-owner@example.test'),
@@ -66,6 +66,22 @@ SELECT is((SELECT count(*)::integer FROM public.push_subscriptions), 1, 'member 
 SELECT throws_ok($$INSERT INTO public.push_subscriptions(workspace_id,user_id,endpoint,p256dh,auth)
   VALUES ('27000000-0000-0000-0000-000000000001','17000000-0000-0000-0000-000000000002','https://push.example.test/direct-write-blocked','BCabcdefghijklmnopqrstuvwxyz0123456789','auth-token-0002')$$,
   '42501', NULL, 'direct push subscription writes are denied');
+SELECT lives_ok($test$
+  SELECT public.upsert_push_subscription(
+    '27000000-0000-0000-0000-000000000001',
+    'https://fcm.googleapis.com/fcm/send/member-000' || device::text,
+    'BCabcdefghijklmnopqrstuvwxyz0123456789',
+    'auth-token-0001', 'pgTAP browser'
+  ) FROM generate_series(2, 5) AS device
+$test$, 'member registers up to five Web Push devices');
+SELECT is((SELECT count(*)::integer FROM public.push_subscriptions), 5, 'push subscription fan-out is capped at five devices');
+SELECT throws_ok($$SELECT public.upsert_push_subscription(
+  '27000000-0000-0000-0000-000000000001',
+  'https://fcm.googleapis.com/fcm/send/member-0006',
+  'BCabcdefghijklmnopqrstuvwxyz0123456789',
+  'auth-token-0001', 'pgTAP browser'
+)$$, 'P0001', 'Достигнут лимит Web Push устройств (5)', 'sixth Web Push device is rejected');
+
 
 SELECT set_config('request.jwt.claim.sub', '17000000-0000-0000-0000-000000000003', true);
 SELECT is((SELECT count(*)::integer FROM public.push_subscriptions), 0, 'outsider cannot read push subscriptions');
