@@ -17,6 +17,8 @@
     "verify:release": "npm run verify && npm run test:sql",
     "hooks:install": "git config core.hooksPath .githooks",
     "benchmark:receipts": "node scripts/receipt-ocr-benchmark.mjs",
+    "security:test:stage-2-1": "node scripts/run-security-stage-2-1.mjs",
+    "security:test:stage-2-1:http": "node scripts/security-stage-2-1-http.mjs",
     "supabase:init": "npx supabase init",
     "supabase:start": "npx supabase start",
     "supabase:stop": "npx supabase stop",

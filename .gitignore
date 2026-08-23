@@ -258,6 +258,7 @@ specdata/
 
 # Vercel
 .vercel/
+artifacts/security-stage-2-1/
 
 # AI helpers
 for_GJ_AI/
