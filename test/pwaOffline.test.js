@@ -4,6 +4,7 @@ import test from 'node:test';
 import { URL } from 'node:url';
 import {
   clearLocalFinancialData,
+  clearLocalPrivacyData,
   clearFinTrackCaches,
   enqueueOfflineExpense,
   isOfflineStorageEnabled,
@@ -98,6 +99,41 @@ test('logout cache cleanup removes FinTrack caches only', async () => {
   } finally {
     if (originalCaches === undefined) delete globalThis.caches;
     else globalThis.caches = originalCaches;
+  }
+});
+
+test('logout removes account and workspace identifiers but preserves generic preferences', () => {
+  const originalLocalStorage = globalThis.localStorage;
+  const values = new Map([
+    ['user', '{"id":"user-a","email":"private@example.test"}'],
+    ['lastWorkspaceId', 'workspace-a'],
+    ['dashboardBlocks_workspace-a', '{"accounts":true}'],
+    ['visibleAccounts_workspace-a', '["account-a"]'],
+    ['accountsSummaryOnly_workspace-a', 'true'],
+    ['theme', 'dark'],
+    ['operationsViewMode', 'table'],
+  ]);
+  globalThis.localStorage = {
+    get length() { return values.size; },
+    key: (index) => [...values.keys()][index] ?? null,
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: (key) => values.delete(key),
+  };
+  try {
+    clearLocalPrivacyData();
+    for (const key of [
+      'user',
+      'lastWorkspaceId',
+      'dashboardBlocks_workspace-a',
+      'visibleAccounts_workspace-a',
+      'accountsSummaryOnly_workspace-a',
+    ]) assert.equal(values.has(key), false, `${key} should be removed`);
+    assert.equal(values.get('theme'), 'dark');
+    assert.equal(values.get('operationsViewMode'), 'table');
+  } finally {
+    if (originalLocalStorage === undefined) delete globalThis.localStorage;
+    else globalThis.localStorage = originalLocalStorage;
   }
 });
 

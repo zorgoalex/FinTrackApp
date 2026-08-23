@@ -114,7 +114,7 @@ Deno.serve(withCors(async (request: Request) => {
     const model = /^[A-Za-z0-9_.:/-]{1,120}$/.test(configuredModel) ? configuredModel : 'openrouter/free';
     if (!apiKey) {
       const answer = fallbackAnswer(safeContext as FinancialContext);
-      await supabase.from('ai_assistant_logs').insert({
+      await admin.from('ai_assistant_logs').insert({
         workspace_id: workspaceId, user_id: userResult.user.id, question: questionFingerprint, model: 'local-summary', status: 'mock',
       });
       return json({ answer, model: 'local-summary', mode: 'local' });
@@ -142,7 +142,7 @@ Deno.serve(withCors(async (request: Request) => {
       if (!isSafeAssistantAnswer(answer)) throw new Error('Провайдер вернул небезопасный ответ');
       const usage = safeProviderUsage(payload?.usage) as Record<string, number>;
       const responseModel = /^[A-Za-z0-9_.:/-]{1,120}$/.test(String(payload?.model || '')) ? String(payload.model) : model;
-      await supabase.from('ai_assistant_logs').insert({
+      await admin.from('ai_assistant_logs').insert({
         workspace_id: workspaceId,
         user_id: userResult.user.id,
         question: questionFingerprint,
@@ -154,7 +154,7 @@ Deno.serve(withCors(async (request: Request) => {
       return json({ answer, model: responseModel, mode: 'provider', usage });
     } catch (providerError) {
       const answer = fallbackAnswer(safeContext as FinancialContext);
-      await supabase.from('ai_assistant_logs').insert({
+      await admin.from('ai_assistant_logs').insert({
         workspace_id: workspaceId,
         user_id: userResult.user.id,
         question: questionFingerprint,

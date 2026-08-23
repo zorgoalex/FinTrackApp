@@ -5,7 +5,7 @@ import PasswordStepUpForm from '../components/PasswordStepUpForm';
 import IdleSessionGuard from '../components/IdleSessionGuard';
 import { isTurnstileEnabled, TURNSTILE_REQUIRED_MESSAGE } from '../components/TurnstileWidget';
 import { isStrongPassword, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolicy';
-import { clearLocalFinancialData } from '../utils/offlineStore';
+import { clearLocalFinancialData, clearLocalPrivacyData } from '../utils/offlineStore';
 import { INTERNET_REQUIRED_MESSAGE, isInternetAvailable } from '../utils/connectivity';
 import { getVerifiedTotpFactors, hasFreshPassword, hasFreshTotpAal2 } from '../utils/mfa';
 import { IDLE_ACTIVITY_STORAGE_KEY, IDLE_EXPIRED_STORAGE_KEY } from '../utils/idleSession';
@@ -163,6 +163,7 @@ export function AuthProvider({ children }) {
       const previousUserId = activeUserIdRef.current;
       if (previousUserId && previousUserId !== nextUserId) {
         await clearLocalFinancialData();
+        clearLocalPrivacyData();
       }
       activeUserIdRef.current = nextUserId;
 
@@ -495,7 +496,7 @@ export function AuthProvider({ children }) {
       await clearLocalFinancialData(userId).catch((cleanupError) => {
         console.error('AuthContext: local financial data cleanup failed', cleanupError);
       });
-      localStorage.removeItem("user");
+      clearLocalPrivacyData();
       activeUserIdRef.current = null;
       setUser(null);
     }
@@ -519,7 +520,7 @@ export function AuthProvider({ children }) {
       await clearLocalFinancialData(userId).catch((cleanupError) => {
         console.error('AuthContext: idle-session cleanup failed', cleanupError);
       });
-      localStorage.removeItem('user');
+      clearLocalPrivacyData();
       activeUserIdRef.current = null;
       setUser(null);
       window.location.replace('/login?reason=idle');

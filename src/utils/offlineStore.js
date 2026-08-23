@@ -1,6 +1,12 @@
 const DATABASE_NAME = 'fintrack-offline';
 const FINTRACK_CACHE_PREFIX = 'fintrack-';
 const OFFLINE_STORAGE_PREFERENCE = 'fintrack:offline-storage-enabled';
+const PRIVATE_LOCAL_STORAGE_KEYS = ['user', 'lastWorkspaceId'];
+const PRIVATE_LOCAL_STORAGE_PREFIXES = [
+  'dashboardBlocks_',
+  'visibleAccounts_',
+  'accountsSummaryOnly_',
+];
 
 export const OFFLINE_FINANCIAL_STORAGE_ENABLED = false;
 
@@ -51,6 +57,23 @@ export async function clearLocalFinancialData() {
     clearOfflineDataForUser(),
     clearFinTrackCaches(),
   ]);
+}
+
+export function clearLocalPrivacyData() {
+  if (typeof globalThis.localStorage === 'undefined') return;
+
+  for (const key of PRIVATE_LOCAL_STORAGE_KEYS) {
+    globalThis.localStorage.removeItem(key);
+  }
+
+  const keysToRemove = [];
+  for (let index = 0; index < globalThis.localStorage.length; index += 1) {
+    const key = globalThis.localStorage.key(index);
+    if (key && PRIVATE_LOCAL_STORAGE_PREFIXES.some((prefix) => key.startsWith(prefix))) {
+      keysToRemove.push(key);
+    }
+  }
+  for (const key of keysToRemove) globalThis.localStorage.removeItem(key);
 }
 
 function setOfflinePreferenceDisabled() {
