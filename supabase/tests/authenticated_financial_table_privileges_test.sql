@@ -3,7 +3,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
 
-SELECT plan(17);
+SELECT plan(20);
 
 SELECT ok(
   has_table_privilege('authenticated', 'public.accounts', 'SELECT, INSERT, UPDATE, DELETE'),
@@ -82,6 +82,47 @@ SELECT ok(
 SELECT ok(
   NOT has_table_privilege('anon', 'public.currencies', 'SELECT'),
   'anonymous users cannot select the currency catalog'
+);
+
+SELECT is(
+  (
+    SELECT count(*)::integer
+    FROM information_schema.role_table_grants
+    WHERE table_schema = 'public'
+      AND grantee = 'anon'
+  ),
+  0,
+  'anonymous role has no public table privileges'
+);
+
+SELECT is(
+  (
+    SELECT count(*)::integer
+    FROM pg_class sequence
+    JOIN pg_namespace namespace ON namespace.oid = sequence.relnamespace
+    WHERE namespace.nspname = 'public'
+      AND sequence.relkind = 'S'
+      AND (
+        has_sequence_privilege('anon', sequence.oid, 'SELECT')
+        OR has_sequence_privilege('anon', sequence.oid, 'USAGE')
+        OR has_sequence_privilege('anon', sequence.oid, 'UPDATE')
+      )
+  ),
+  0,
+  'anonymous role has no public sequence privileges'
+);
+
+SELECT is(
+  (
+    SELECT count(*)::integer
+    FROM pg_proc procedure
+    JOIN pg_namespace namespace ON namespace.oid = procedure.pronamespace
+    WHERE namespace.nspname = 'public'
+      AND procedure.prokind IN ('f', 'p')
+      AND has_function_privilege('anon', procedure.oid, 'EXECUTE')
+  ),
+  0,
+  'anonymous role cannot execute public functions'
 );
 
 SELECT * FROM finish();
