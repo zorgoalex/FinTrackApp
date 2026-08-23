@@ -146,10 +146,23 @@ test('PWA manifest is installable and exposes the expense shortcut', async () =>
 });
 
 test('service worker keeps install navigation and Web Push support', async () => {
-  const worker = await readFile(new URL('../public/sw.js', import.meta.url), 'utf8');
+  const [worker, main, app, boundary] = await Promise.all([
+    readFile(new URL('../public/sw.js', import.meta.url), 'utf8'),
+    readFile(new URL('../src/main.jsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/App.jsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/AppErrorBoundary.jsx', import.meta.url), 'utf8'),
+  ]);
   assert.match(worker, /request\.mode === 'navigate'/);
   assert.doesNotMatch(worker, /caches\.match\('\/index\.html'\)/);
   assert.match(worker, /event\.respondWith\(globalThis\.fetch\(request\)\)/);
+  assert.match(worker, /fintrack-static-v3/);
+  assert.match(worker, /STATIC_PATHS\.has\(url\.pathname\)/);
+  assert.doesNotMatch(worker, /return cached \|\| network/);
+  assert.match(main, /updateViaCache: 'none'/);
+  assert.match(app, /errorElement: <RouteErrorBoundary \/>/);
+  assert.match(boundary, /recoverFromStaleChunk/);
+  assert.match(boundary, /Failed to fetch dynamically imported module/);
+  assert.match(boundary, /key\.startsWith\('fintrack-'\)/);
   assert.match(worker, /addEventListener\('push'/);
   assert.match(worker, /showNotification/);
   assert.match(worker, /addEventListener\('notificationclick'/);

@@ -4,7 +4,7 @@ import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import { WorkspaceProvider } from './contexts/WorkspaceContext';
 import { ThemeProvider } from './contexts/ThemeContext';
-import AppErrorBoundary from './components/AppErrorBoundary';
+import AppErrorBoundary, { RouteErrorBoundary } from './components/AppErrorBoundary';
 
 // Lazy-loaded pages
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -46,7 +46,9 @@ const protectedLayoutWithWorkspace = (
   </ProtectedRoute>
 );
 
-const router = createBrowserRouter([
+const router = createBrowserRouter([{
+  errorElement: <RouteErrorBoundary />,
+  children: [
   {
     path: '/login',
     element: <LoginPage />
@@ -103,7 +105,8 @@ const router = createBrowserRouter([
     path: '*',
     element: <ComingSoonPage />
   }
-])
+  ]
+}])
 
 function App() {
   return (

@@ -1,5 +1,6 @@
-const CACHE_VERSION = 'fintrack-shell-v2';
+const CACHE_VERSION = 'fintrack-static-v3';
 const APP_SHELL = ['/manifest.webmanifest', '/app-icon.svg', '/favicon.svg'];
+const STATIC_PATHS = new Set(APP_SHELL);
 
 globalThis.addEventListener('install', (event) => {
   event.waitUntil(globalThis.caches.open(CACHE_VERSION).then((cache) => cache.addAll(APP_SHELL)));
@@ -26,18 +27,21 @@ globalThis.addEventListener('fetch', (event) => {
     return;
   }
 
-  event.respondWith(
-    globalThis.caches.match(request).then((cached) => {
-      const network = globalThis.fetch(request).then((response) => {
-        if (response.ok) {
-          const copy = response.clone();
-          globalThis.caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
-        }
-        return response;
-      }).catch(() => cached);
-      return cached || network;
-    })
-  );
+  if (STATIC_PATHS.has(url.pathname)) {
+    event.respondWith(globalThis.fetch(request).then((response) => {
+      if (response.ok) {
+        const copy = response.clone();
+        globalThis.caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
+      }
+      return response;
+    }).catch(() => globalThis.caches.match(request)));
+    return;
+  }
+
+  // Offline financial work is intentionally disabled. Never cache application
+  // JavaScript or CSS: an old tab must not mix an obsolete entry chunk with a
+  // newly deployed set of lazy-loaded modules.
+  event.respondWith(globalThis.fetch(request));
 });
 
 globalThis.addEventListener('push', (event) => {
