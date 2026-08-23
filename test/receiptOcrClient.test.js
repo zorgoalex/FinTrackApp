@@ -9,11 +9,19 @@ import {
 const workspaceId = '265c4155-51b1-41c3-b4ae-f08fa26b0eaa';
 
 function jsonResponse(payload, status = 200) {
-  return {
-    ok: status >= 200 && status < 300,
+  return new globalThis.Response(JSON.stringify(payload), {
     status,
-    json: async () => payload,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+function imageBlob(type = 'image/jpeg') {
+  const signatures = {
+    'image/jpeg': [0xff, 0xd8, 0xff, 0x00],
+    'image/png': [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+    'image/webp': [0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50],
   };
+  return new Blob([new Uint8Array(signatures[type])], { type });
 }
 
 function authenticatedSupabase() {
@@ -44,7 +52,7 @@ test('receipt OCR client sends the image with user auth and workspace scope', as
       });
     },
   });
-  const image = new Blob(['receipt'], { type: 'image/jpeg' });
+  const image = imageBlob('image/jpeg');
 
   const result = await client.recognize(image, {
     workspaceId,
@@ -68,7 +76,7 @@ test('receipt OCR client requires an explicit configured endpoint', async () => 
   const client = createReceiptOcrClient({ supabase: authenticatedSupabase() });
   assert.equal(client.isConfigured, false);
   await assert.rejects(
-    () => client.recognize(new Blob(['receipt'], { type: 'image/jpeg' }), { workspaceId }),
+    () => client.recognize(imageBlob('image/jpeg'), { workspaceId }),
     (error) => error instanceof ReceiptOcrClientError && error.code === 'NOT_CONFIGURED',
   );
 });
@@ -99,7 +107,7 @@ test('receipt OCR client exposes safe retryable server errors', async () => {
   });
 
   await assert.rejects(
-    () => client.recognize(new Blob(['receipt'], { type: 'image/webp' }), { workspaceId }),
+    () => client.recognize(imageBlob('image/webp'), { workspaceId }),
     (error) => error instanceof ReceiptOcrClientError
       && error.code === 'OCR_UNAVAILABLE'
       && error.retryable,

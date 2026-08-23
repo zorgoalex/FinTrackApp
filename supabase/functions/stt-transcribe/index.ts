@@ -5,6 +5,7 @@ import { createSttProvider } from '../_shared/stt/registry.ts';
 import type { TimestampGranularity } from '../_shared/stt/types.ts';
 import { consumeRateLimit } from '../_shared/rateLimit.ts';
 import { PayloadTooLargeError, readFormDataWithLimit } from '../_shared/abuseProtection.js';
+import { validateAudioSignature } from '../_shared/mediaSecurity.js';
 
 const DEFAULT_MAX_BYTES = 18 * 1024 * 1024;
 const GROQ_FREE_TIER_MAX_BYTES = 25 * 1024 * 1024;
@@ -32,7 +33,7 @@ function extensionOf(filename: string) {
   return filename.toLowerCase().split('.').pop() || '';
 }
 
-function validateAudio(file: File) {
+async function validateAudio(file: File) {
   if (file.size === 0) throw new SttError('INVALID_REQUEST', 'Аудиофайл пуст', 400);
   if (file.size > configuredMaxBytes()) {
     throw new SttError('FILE_TOO_LARGE', `Аудиофайл превышает лимит ${configuredMaxBytes()} байт`, 413);
@@ -41,6 +42,11 @@ function validateAudio(file: File) {
   const supportedByExtension = SUPPORTED_EXTENSIONS.has(extensionOf(file.name));
   if (!supportedByMime && !supportedByExtension) {
     throw new SttError('UNSUPPORTED_MEDIA_TYPE', 'Поддерживаются FLAC, MP3, MP4, M4A, OGG, WAV и WEBM', 415);
+  }
+  try {
+    await validateAudioSignature(file, extensionOf(file.name), file.type);
+  } catch {
+    throw new SttError('MEDIA_SIGNATURE_MISMATCH', 'Тип аудиофайла не соответствует его содержимому', 415);
   }
 }
 
@@ -105,7 +111,7 @@ Deno.serve(withCors(async (request: Request) => {
     const form = await readFormDataWithLimit(request, configuredMaxBytes() + 1024 * 1024);
     const audio = form.get('audio');
     if (!(audio instanceof File)) throw new SttError('INVALID_REQUEST', 'Поле audio обязательно', 400);
-    validateAudio(audio);
+    await validateAudio(audio);
 
     const language = parseLanguage(form.get('language'));
     const prompt = (Deno.env.get('STT_PROMPT')?.trim() || DEFAULT_PROMPT).slice(0, 800);

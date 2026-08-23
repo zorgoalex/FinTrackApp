@@ -8,6 +8,14 @@ import {
   OCR_TIMEOUT_MS,
   runWithOcrDeadline,
 } from './ocrPolicy.js';
+import {
+  assertDocumentFileSize,
+  assertPdfPageCount,
+  assertSourceImageDimensions,
+  DOCUMENT_MAX_TEXT_CHARS,
+  nextPdfTextBudget,
+} from './documentLimits.js';
+import { assertCsvTextSize } from '../csvSecurity.js';
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -132,6 +140,12 @@ function enhanceCanvas(canvas, contrast = 1.35) {
 
 async function imageCanvas(file, rotation = 0, monochrome = false) {
   const bitmap = await globalThis.createImageBitmap(file);
+  try {
+    assertSourceImageDimensions(bitmap.width, bitmap.height);
+  } catch (error) {
+    bitmap.close();
+    throw error;
+  }
   const target = calculateOcrImageSize(bitmap.width, bitmap.height);
   const radians = (rotation * Math.PI) / 180;
   const cosine = Math.abs(Math.cos(radians));
@@ -380,11 +394,15 @@ function groupPdfItems(items) {
 async function extractPdfText(file, onProgress) {
   const data = new Uint8Array(await file.arrayBuffer());
   const pdf = await pdfjs.getDocument({ data }).promise;
+  assertPdfPageCount(pdf.numPages);
   const pages = [];
+  let budget = { items: 0, chars: 0 };
   for (let index = 1; index <= pdf.numPages; index += 1) {
     const page = await pdf.getPage(index);
     const content = await page.getTextContent();
-    pages.push(groupPdfItems(content.items));
+    const pageText = groupPdfItems(content.items);
+    budget = nextPdfTextBudget(budget, content.items.length, pageText);
+    pages.push(pageText);
     onProgress?.({ stage: 'pdf', current: index, total: pdf.numPages });
   }
   return pages.join('\n');
@@ -505,6 +523,7 @@ async function extractImageText(file, onProgress, options = {}) {
 
 async function extractScannedPdf(file, onProgress, options) {
   const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  assertPdfPageCount(pdf.numPages);
   if (pdf.numPages > 5) throw new Error('Сканированный PDF длиннее 5 страниц. Разделите его на части для распознавания.');
   const texts = [];
   const criticalTexts = [];
@@ -515,7 +534,9 @@ async function extractScannedPdf(file, onProgress, options) {
   let engine = null;
   for (let index = 1; index <= pdf.numPages; index += 1) {
     const page = await pdf.getPage(index);
-    const viewport = page.getViewport({ scale: 2 });
+    const sourceViewport = page.getViewport({ scale: 1 });
+    const target = calculateOcrImageSize(sourceViewport.width, sourceViewport.height);
+    const viewport = page.getViewport({ scale: target.width / sourceViewport.width });
     const canvas = globalThis.document.createElement('canvas');
     canvas.width = Math.ceil(viewport.width);
     canvas.height = Math.ceil(viewport.height);
@@ -547,6 +568,7 @@ async function extractScannedPdf(file, onProgress, options) {
 }
 
 export async function extractDocument(file, onProgress, options = {}) {
+  assertDocumentFileSize(file?.size);
   const buffer = await file.arrayBuffer();
   const documentHash = await sha256Hex(buffer);
   const binaryKind = detectBinaryKind(buffer);
@@ -561,7 +583,7 @@ export async function extractDocument(file, onProgress, options = {}) {
   let sourceKind = 'image';
   if ((type === 'text/csv' || extension === 'csv') && binaryKind === 'text') {
     sourceKind = 'csv';
-    text = new globalThis.TextDecoder('utf-8').decode(buffer);
+    text = assertCsvTextSize(new globalThis.TextDecoder('utf-8').decode(buffer));
   } else if ((type === 'application/pdf' || extension === 'pdf') && binaryKind === 'pdf') {
     sourceKind = 'pdf';
     try {
@@ -599,6 +621,7 @@ export async function extractDocument(file, onProgress, options = {}) {
   } else {
     throw new Error('Содержимое файла не соответствует PDF, JPG, PNG, WEBP или CSV. Расширение файла не считается достаточной проверкой.');
   }
+  if (text.length > DOCUMENT_MAX_TEXT_CHARS) throw new Error('Извлечённый текст превышает безопасный лимит');
   const usedOcr = Boolean(ocrEngine);
   const parsed = sourceKind === 'csv'
     ? null

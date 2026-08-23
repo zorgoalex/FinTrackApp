@@ -22,7 +22,7 @@
         "npm:eslint-plugin-react@^7.37.2",
         "npm:eslint@^9.13.0",
         "npm:lucide-react@~0.263.1",
-        "npm:pdfjs-dist@^6.1.200",
+        "npm:pdfjs-dist@^6.2.108",
         "npm:postcss@^8.4.32",
         "npm:react-dom@^18.3.1",
         "npm:react-router-dom@^7.18.2",

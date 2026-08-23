@@ -6,12 +6,13 @@ import { inspectOperationsCSV, parseOperationsCSV } from '../utils/importOperati
 import { categoryTypeForOperation, operationTypesForWorkspace, OPERATION_TYPE_META } from '../utils/operationTypes';
 import { buildRulePattern, suggestCategory } from '../utils/documentImport/categories';
 import { extractDocument, prewarmDocumentOcr } from '../utils/documentImport/extract';
+import { DOCUMENT_MAX_FILE_BYTES } from '../utils/documentImport/documentLimits';
 import { OCR_TIMEOUT_MS } from '../utils/documentImport/ocrPolicy';
 import { operationFingerprint } from '../utils/documentImport/privacy';
 import { createIdempotencyTracker } from '../utils/idempotency';
 import { receiptOcrClient } from '../services/appReceiptOcr';
 
-const MAX_FILE_SIZE = 15 * 1024 * 1024;
+const PREVIEW_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 function progressLabel(progress) {
   if (!progress) return 'Анализируем документ…';
@@ -220,11 +221,11 @@ export default function ImportOperationsModal({
       return;
     }
     setFileName(file.name);
-    if (file.size > MAX_FILE_SIZE) {
+    if (file.size > DOCUMENT_MAX_FILE_BYTES) {
       setFatalError('Файл больше 15 МБ. Разделите выписку на несколько частей.');
       return;
     }
-    if (file.type.startsWith('image/') || /\.(?:jpe?g|png|webp)$/iu.test(file.name)) {
+    if (PREVIEW_IMAGE_TYPES.has(String(file.type || '').toLowerCase())) {
       const previewUrl = globalThis.URL.createObjectURL(file);
       previewUrlRef.current = previewUrl;
       setImagePreviewUrl(previewUrl);

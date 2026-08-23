@@ -1,42 +1,48 @@
+import { escapeCSVCell } from './csvSecurity.js';
+
 /**
  * Export analytics data to CSV with BOM for Excel compatibility.
  * Uses semicolon separator for Russian locale Excel.
  */
-export function exportToCSV(analytics, dateFrom, dateTo) {
+export function buildAnalyticsCSV(analytics, dateFrom, dateTo) {
   const BOM = '\uFEFF';
-  const lines = [];
+  const rows = [];
 
   // Header
-  lines.push(`Аналитика за период ${dateFrom} — ${dateTo}`);
-  lines.push('');
+  rows.push([`Аналитика за период ${dateFrom} — ${dateTo}`]);
+  rows.push([]);
 
   // Summary
-  lines.push('Тип;Сумма');
-  lines.push(`Доходы;${analytics.totalIncome}`);
-  lines.push(`Расходы;${analytics.totalExpense}`);
-  lines.push(`Зарплаты сотрудникам;${analytics.totalSalary}`);
-  lines.push(`Баланс;${analytics.balance}`);
-  lines.push(`Всего операций;${analytics.operationCount}`);
-  lines.push('');
+  rows.push(['Тип', 'Сумма']);
+  rows.push(['Доходы', analytics.totalIncome]);
+  rows.push(['Расходы', analytics.totalExpense]);
+  rows.push(['Зарплаты сотрудникам', analytics.totalSalary]);
+  rows.push(['Баланс', analytics.balance]);
+  rows.push(['Всего операций', analytics.operationCount]);
+  rows.push([]);
 
   // Category breakdown
   if (analytics.categoryBreakdown.length > 0) {
-    lines.push('Категория;Сумма;Количество операций');
+    rows.push(['Категория', 'Сумма', 'Количество операций']);
     analytics.categoryBreakdown.forEach(cat => {
-      lines.push(`${cat.name};${cat.amount};${cat.count}`);
+      rows.push([cat.name, cat.amount, cat.count]);
     });
-    lines.push('');
+    rows.push([]);
   }
 
   // Tag breakdown
   if (analytics.tagBreakdown.length > 0) {
-    lines.push('Тег;Сумма;Количество операций');
+    rows.push(['Тег', 'Сумма', 'Количество операций']);
     analytics.tagBreakdown.forEach(tag => {
-      lines.push(`${tag.name};${tag.amount};${tag.count}`);
+      rows.push([tag.name, tag.amount, tag.count]);
     });
   }
 
-  const csv = BOM + lines.join('\r\n');
+  return BOM + rows.map((row) => row.map(escapeCSVCell).join(';')).join('\r\n');
+}
+
+export function exportToCSV(analytics, dateFrom, dateTo) {
+  const csv = buildAnalyticsCSV(analytics, dateFrom, dateTo);
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -44,15 +50,6 @@ export function exportToCSV(analytics, dateFrom, dateTo) {
   a.download = `analytics_${dateFrom}_${dateTo}.csv`;
   a.click();
   URL.revokeObjectURL(url);
-}
-
-function escapeCSVCell(value) {
-  if (value === null || value === undefined) return '';
-  let text = String(value);
-  // Prevent spreadsheet formula execution for user-controlled text fields.
-  if (/^[=+@\t\r]/.test(text)) text = `'${text}`;
-  if (/[;"\r\n]/.test(text)) text = `"${text.replace(/"/g, '""')}"`;
-  return text;
 }
 
 /**

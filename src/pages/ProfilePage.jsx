@@ -6,6 +6,7 @@ import PasswordInput from '../components/PasswordInput';
 import MfaSettings from '../components/MfaSettings';
 import TurnstileWidget, { isTurnstileEnabled, TURNSTILE_REQUIRED_MESSAGE } from '../components/TurnstileWidget';
 import { isStrongPassword, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolicy';
+import { safeTelegramUrl } from '../utils/externalUrls';
 
 async function invokeTelegram(action) {
   const result = await supabase.functions.invoke('telegram-link', { body: { action } });
@@ -94,14 +95,15 @@ export default function ProfilePage() {
     if (popup) popup.opener = null;
     const { data, error: invokeError } = await invokeTelegram('create');
     setTelegramBusy(false);
-    if (invokeError || data?.error || !data?.url) {
+    const telegramUrl = safeTelegramUrl(data?.url);
+    if (invokeError || data?.error || !telegramUrl) {
       if (popup) popup.close();
       setTelegramError(data?.error || 'Не удалось создать ссылку Telegram');
       return;
     }
-    setTelegramLink({ url: data.url, expires_at: data.expires_at, bot_username: data.bot_username });
+    setTelegramLink({ url: telegramUrl, expires_at: data.expires_at, bot_username: data.bot_username });
     setNow(Date.now());
-    if (popup) popup.location.href = data.url;
+    if (popup) popup.location.href = telegramUrl;
   };
 
   const checkTelegram = async () => {

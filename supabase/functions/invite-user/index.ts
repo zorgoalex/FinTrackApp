@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders, withCors } from '../_shared/cors.ts';
+import { corsHeaders, normalizeAllowedAppBaseUrl, withCors } from '../_shared/cors.ts';
 import { consumeRateLimit, opaqueValue } from '../_shared/rateLimit.ts';
 import { recordSecurityEventSafely } from '../_shared/securityEvents.ts';
 import { PayloadTooLargeError, fetchWithTimeout, readJsonWithLimit } from '../_shared/abuseProtection.js';
@@ -52,7 +52,7 @@ Deno.serve(withCors(async (req: Request) => {
 
   try {
     const resendApiKey = Deno.env.get('RESEND_API_KEY');
-    const appBaseUrl = Deno.env.get('APP_BASE_URL');
+    const appBaseUrl = normalizeAllowedAppBaseUrl(req, Deno.env.get('APP_BASE_URL'));
     if (!appBaseUrl) {
       return new Response(JSON.stringify({ error: 'Server misconfiguration: APP_BASE_URL is required.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

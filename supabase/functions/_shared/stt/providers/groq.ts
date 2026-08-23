@@ -1,9 +1,11 @@
 import { SttError } from '../errors.ts';
 import type { SttProvider, SttRequest, SttResult } from '../types.ts';
+import { readResponseJsonWithLimit } from '../../abuseProtection.js';
 
 const GROQ_TRANSCRIPTIONS_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
 const DEFAULT_MODEL = 'whisper-large-v3';
 const DEFAULT_TIMEOUT_MS = 45_000;
+const MAX_PROVIDER_RESPONSE_BYTES = 2 * 1024 * 1024;
 
 type GroqSegment = {
   start?: number;
@@ -40,15 +42,6 @@ function parseRetryAfter(value: string | null): number | null {
   return Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
 }
 
-async function providerMessage(response: Response): Promise<string> {
-  try {
-    const payload = await response.json();
-    return String(payload?.error?.message || payload?.message || `HTTP ${response.status}`).slice(0, 300);
-  } catch {
-    return `HTTP ${response.status}`;
-  }
-}
-
 export class GroqSttProvider implements SttProvider {
   readonly id = 'groq' as const;
   readonly #apiKey: string;
@@ -57,7 +50,8 @@ export class GroqSttProvider implements SttProvider {
 
   constructor(options: { apiKey: string; model?: string; timeoutMs?: number }) {
     this.#apiKey = options.apiKey.trim();
-    this.#model = options.model?.trim() || DEFAULT_MODEL;
+    const configuredModel = options.model?.trim() || '';
+    this.#model = /^[A-Za-z0-9_.:/-]{1,120}$/.test(configuredModel) ? configuredModel : DEFAULT_MODEL;
     this.#timeoutMs = options.timeoutMs || DEFAULT_TIMEOUT_MS;
     if (!this.#apiKey) {
       throw new SttError('PROVIDER_NOT_CONFIGURED', 'Groq STT не настроен', 503);
@@ -97,7 +91,7 @@ export class GroqSttProvider implements SttProvider {
     }
 
     if (!response.ok) {
-      const message = await providerMessage(response);
+      await response.body?.cancel().catch(() => {});
       if (response.status === 429) {
         throw new SttError(
           'PROVIDER_RATE_LIMITED',
@@ -108,17 +102,17 @@ export class GroqSttProvider implements SttProvider {
         );
       }
       const retryable = response.status >= 500;
-      throw new SttError('PROVIDER_ERROR', `Groq отклонил аудио: ${message}`, retryable ? 502 : 422, retryable);
+      throw new SttError('PROVIDER_ERROR', 'Провайдер отклонил аудиофайл', retryable ? 502 : 422, retryable);
     }
 
     let payload: GroqResponse;
     try {
-      payload = await response.json();
+      payload = await readResponseJsonWithLimit(response, MAX_PROVIDER_RESPONSE_BYTES);
     } catch {
       throw new SttError('INVALID_PROVIDER_RESPONSE', 'Groq вернул некорректный ответ', 502, true);
     }
 
-    const transcript = String(payload.text || '').trim();
+    const transcript = String(payload.text || '').trim().slice(0, 200_000);
     if (!transcript && !Array.isArray(payload.segments)) {
       throw new SttError('INVALID_PROVIDER_RESPONSE', 'Groq не вернул результат распознавания', 502, true);
     }
@@ -127,22 +121,22 @@ export class GroqSttProvider implements SttProvider {
       transcript,
       provider: this.id,
       model: this.#model,
-      language: payload.language || request.language || null,
+      language: /^[a-z]{2}$/i.test(String(payload.language || '')) ? String(payload.language).toLowerCase() : request.language || null,
       duration_seconds: finiteNumber(payload.duration),
-      segments: (payload.segments || []).map((segment) => ({
+      segments: (payload.segments || []).slice(0, 10_000).map((segment) => ({
         start_seconds: finiteNumber(segment.start) || 0,
         end_seconds: finiteNumber(segment.end) || 0,
-        text: String(segment.text || '').trim(),
+        text: String(segment.text || '').trim().slice(0, 2_000),
         avg_log_probability: finiteNumber(segment.avg_logprob),
         no_speech_probability: finiteNumber(segment.no_speech_prob),
         compression_ratio: finiteNumber(segment.compression_ratio),
       })),
-      words: (payload.words || []).map((word) => ({
+      words: (payload.words || []).slice(0, 20_000).map((word) => ({
         start_seconds: finiteNumber(word.start) || 0,
         end_seconds: finiteNumber(word.end) || 0,
-        text: String(word.word || '').trim(),
+        text: String(word.word || '').trim().slice(0, 256),
       })),
-      request_id: payload.x_groq?.id || response.headers.get('x-request-id') || null,
+      request_id: String(payload.x_groq?.id || response.headers.get('x-request-id') || '').replace(/[^A-Za-z0-9_.:-]/g, '').slice(0, 128) || null,
       latency_ms: Math.round(performance.now() - startedAt),
     };
   }

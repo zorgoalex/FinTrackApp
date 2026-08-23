@@ -1,3 +1,10 @@
+import {
+  assertCsvShape,
+  assertCsvTextSize,
+  CSV_MAX_CELL_CHARS,
+  CsvSecurityError,
+} from './csvSecurity.js';
+
 const TYPE_MAP = new Map([
   ['доход', 'income'],
   ['income', 'income'],
@@ -34,7 +41,24 @@ function parseDelimitedRecords(text, delimiter) {
   let cells = [];
   let current = '';
   let quoted = false;
-  const source = String(text ?? '').replace(/\r\n?/g, '\n');
+  let totalCells = 0;
+  const source = assertCsvTextSize(text).replace(/\r\n?/g, '\n');
+  const pushCell = () => {
+    totalCells += 1;
+    assertCsvShape({
+      records: records.length,
+      columns: cells.length + 1,
+      cellChars: current.length,
+      totalCells,
+    });
+    cells.push(current.trim());
+    current = '';
+  };
+  const pushRecord = () => {
+    if (cells.some((cell) => cell !== '')) records.push(cells);
+    assertCsvShape({ records: records.length, columns: cells.length, cellChars: 0, totalCells });
+    cells = [];
+  };
   for (let index = 0; index < source.length; index += 1) {
     const char = source[index];
     if (char === '"') {
@@ -45,24 +69,31 @@ function parseDelimitedRecords(text, delimiter) {
         quoted = !quoted;
       }
     } else if (char === delimiter && !quoted) {
-      cells.push(current.trim());
-      current = '';
+      pushCell();
     } else if (char === '\n' && !quoted) {
-      cells.push(current.trim());
-      if (cells.some((cell) => cell !== '')) records.push(cells);
-      cells = [];
-      current = '';
+      pushCell();
+      pushRecord();
     } else {
       current += char;
+      if (current.length > CSV_MAX_CELL_CHARS) {
+        throw new CsvSecurityError('Одна из ячеек CSV слишком длинная');
+      }
     }
   }
-  cells.push(current.trim());
-  if (cells.some((cell) => cell !== '')) records.push(cells);
+  if (quoted) throw new CsvSecurityError('CSV содержит незакрытую кавычку', 'CSV_INVALID_QUOTES');
+  pushCell();
+  pushRecord();
   return records;
 }
 
 function delimiterScore(text, delimiter, sampleStart = 0) {
-  const records = parseDelimitedRecords(text, delimiter).slice(sampleStart, sampleStart + 8);
+  let records;
+  try {
+    records = parseDelimitedRecords(text, delimiter).slice(sampleStart, sampleStart + 8);
+  } catch (error) {
+    if (error instanceof CsvSecurityError) return -1;
+    throw error;
+  }
   if (!records.length) return -1;
   const widths = records.map((record) => record.length);
   const maxWidth = Math.max(...widths);

@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders, withCors } from '../_shared/cors.ts';
-import { PayloadTooLargeError, fetchWithTimeout, readJsonWithLimit } from '../_shared/abuseProtection.js';
+import { PayloadTooLargeError, fetchWithTimeout, readJsonWithLimit, readResponseJsonWithLimit } from '../_shared/abuseProtection.js';
 import { consumeRateLimit } from '../_shared/rateLimit.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
@@ -8,6 +8,7 @@ const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN') ?? '';
 const MAX_REQUEST_BYTES = 2 * 1024;
+const MAX_TELEGRAM_RESPONSE_BYTES = 64 * 1024;
 
 const response = (body: unknown, status = 200, headers: Record<string, string> = {}) => new Response(JSON.stringify(body), {
   status,
@@ -16,9 +17,11 @@ const response = (body: unknown, status = 200, headers: Record<string, string> =
 
 async function getBotUsername() {
   const result = await fetchWithTimeout(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getMe`, {}, 8_000);
-  const payload = await result.json();
+  const payload = await readResponseJsonWithLimit(result, MAX_TELEGRAM_RESPONSE_BYTES);
   if (!result.ok || !payload?.ok || !payload?.result?.username) throw new Error('Telegram-бот недоступен');
-  return String(payload.result.username);
+  const username = String(payload.result.username);
+  if (!/^[A-Za-z0-9_]{5,32}$/.test(username)) throw new Error('Telegram-бот вернул некорректное имя');
+  return username;
 }
 
 Deno.serve(withCors(async (request: Request) => {
@@ -56,8 +59,11 @@ Deno.serve(withCors(async (request: Request) => {
       ]);
       if (error) throw error;
       const link = data?.[0];
-      if (!link?.token) throw new Error('Не удалось создать ссылку');
-      return response({ linked: false, bot_username: botUsername, url: `https://t.me/${botUsername}?start=${link.token}`, expires_at: link.expires_at });
+      const token = String(link?.token || '');
+      if (!/^[A-Za-z0-9_-]{8,256}$/.test(token)) throw new Error('Не удалось создать ссылку');
+      const telegramUrl = new URL(`https://t.me/${botUsername}`);
+      telegramUrl.searchParams.set('start', token);
+      return response({ linked: false, bot_username: botUsername, url: telegramUrl.toString(), expires_at: link.expires_at });
     }
     if (action === 'unlink') {
       const { error } = await client.rpc('unlink_my_telegram_account');
@@ -67,12 +73,8 @@ Deno.serve(withCors(async (request: Request) => {
     return response({ error: 'Unknown action' }, 400);
   } catch (error) {
     if (error instanceof PayloadTooLargeError) return response({ error: 'Запрос слишком большой' }, 413);
-    const message = error instanceof Error
-      ? error.message
-      : error && typeof error === 'object' && 'message' in error
-        ? String(error.message)
-        : 'Ошибка Telegram-привязки';
-    console.error('telegram-link:', message, error);
-    return response({ error: message }, 400);
+    const message = error instanceof Error ? error.message : 'unknown';
+    console.error('telegram-link:', message.slice(0, 120));
+    return response({ error: 'Не удалось обработать Telegram-привязку' }, 400);
   }
 }));

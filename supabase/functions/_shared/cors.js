@@ -34,6 +34,17 @@ export function isAllowedRedirectOrigin(request, origin) {
   return isLocalFunctionRequest(request) && LOCAL_BROWSER_ORIGIN.test(origin);
 }
 
+export function normalizeAllowedAppBaseUrl(request, value) {
+  try {
+    const url = new URL(String(value ?? '').trim());
+    if (url.username || url.password || url.search || url.hash || url.pathname !== '/') return null;
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+    return isAllowedRedirectOrigin(request, url.origin) ? url.origin : null;
+  } catch {
+    return null;
+  }
+}
+
 export function corsHeadersFor(request) {
   const headers = new Headers(corsHeaders);
   const origin = request.headers.get('Origin');
