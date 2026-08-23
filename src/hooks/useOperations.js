@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../contexts/AuthContext';
 import { INTERNET_REQUIRED_MESSAGE, isInternetAvailable } from '../utils/connectivity';
+import { createIdempotencyTracker } from '../utils/idempotency';
 
 const EMPTY_PERIOD_SUMMARY = {
   income: 0,
@@ -124,6 +125,10 @@ export function useOperations(workspaceId, options = {}) {
   const [totalCount, setTotalCount] = useState(0);
   const [serverSummary, setServerSummary] = useState(null);
   const loadRequestRef = useRef(0);
+  const writeRequestTrackerRef = useRef(null);
+  if (!writeRequestTrackerRef.current) {
+    writeRequestTrackerRef.current = createIdempotencyTracker();
+  }
 
   const loadSummary = useCallback(async () => {
     if (!workspaceId) {
@@ -307,8 +312,8 @@ export function useOperations(workspaceId, options = {}) {
         const isCrossCurrency = data.from_currency
           && data.to_currency
           && data.from_currency !== data.to_currency;
-        const rpcName = isCrossCurrency ? 'create_transfer_v2' : 'create_transfer';
-        const rpcParams = isCrossCurrency
+        const rpcName = isCrossCurrency ? 'create_transfer_v2_idempotent' : 'create_transfer_idempotent';
+        const baseRpcParams = isCrossCurrency
           ? {
               p_workspace_id: workspaceId,
               p_user_id: userId,
@@ -331,33 +336,17 @@ export function useOperations(workspaceId, options = {}) {
               p_description: data?.description || null,
               p_operation_date: data?.operation_date || new Date().toISOString().slice(0, 10),
             };
+        const rpcParams = {
+          ...baseRpcParams,
+          p_tag_names: data?.tagNames || [],
+        };
+        const writeRequest = writeRequestTrackerRef.current.acquire(rpcName, rpcParams);
 
         const { data: transferResult, error: transferErr } = await supabase
-          .rpc(rpcName, rpcParams);
+          .rpc(rpcName, { ...rpcParams, p_client_request_id: writeRequest.requestId });
 
         if (transferErr) throw transferErr;
-
-        // Link tags to both transfer operations
-        const transferTagNames = data?.tagNames || [];
-        if (transferTagNames.length > 0 && transferResult?.[0]) {
-          const { out_operation_id, in_operation_id } = transferResult[0];
-          const tagIds = (await Promise.all(transferTagNames.map(async (tagName) => {
-            const trimmed = tagName.trim();
-            if (!trimmed) return null;
-            const { data: existing } = await supabase
-              .from('tags').select('id').eq('workspace_id', workspaceId).eq('name', trimmed).maybeSingle();
-            if (existing?.id) return existing.id;
-            const { data: inserted } = await supabase
-              .from('tags').insert({ workspace_id: workspaceId, name: trimmed, color: '#6B7280' }).select('id').single();
-            return inserted?.id || null;
-          }))).filter(Boolean);
-          if (tagIds.length > 0) {
-            const links = [out_operation_id, in_operation_id]
-              .filter(Boolean)
-              .flatMap(opId => tagIds.map(tagId => ({ operation_id: opId, tag_id: tagId })));
-            await supabase.from('operation_tags').insert(links);
-          }
-        }
+        writeRequestTrackerRef.current.complete(writeRequest.key);
 
         if (refreshAfter) await loadOperations();
         return transferResult?.[0] || { success: true };
@@ -396,11 +385,16 @@ export function useOperations(workspaceId, options = {}) {
       setLoading(true);
       setError(null);
 
-      const { data: insertedData, error: insertError } = await supabase.rpc('create_operation_with_allocations', createParams);
+      const writeRequest = writeRequestTrackerRef.current.acquire('create_operation_idempotent', createParams);
+      const { data: insertedData, error: insertError } = await supabase.rpc('create_operation_idempotent', {
+        ...createParams,
+        p_client_request_id: writeRequest.requestId,
+      });
 
       if (insertError) {
         throw insertError;
       }
+      writeRequestTrackerRef.current.complete(writeRequest.key);
 
       if (refreshAfter) await loadOperations();
 

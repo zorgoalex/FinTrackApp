@@ -9,6 +9,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '
 const OPERATION_TYPES = new Set(['income', 'expense', 'personal_salary', 'employee_salary']);
 const MAX_API_BODY_BYTES = 64 * 1024;
 const MAX_EXPORT_ROWS = 5_000;
+const IDEMPOTENCY_KEY_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function jsonResponse(data: unknown, status = 200, headers: Record<string, string> = {}) {
   return new Response(JSON.stringify(data), {
@@ -19,6 +20,19 @@ function jsonResponse(data: unknown, status = 200, headers: Record<string, strin
 
 function errorResponse(error: string, status: number, headers: Record<string, string> = {}) {
   return jsonResponse({ error }, status, headers);
+}
+
+function idempotencyKey(req: Request, body: Record<string, unknown>) {
+  const value = req.headers.get('Idempotency-Key') || body.client_request_id;
+  return typeof value === 'string' && IDEMPOTENCY_KEY_PATTERN.test(value) ? value : null;
+}
+
+function financialWriteError(error: { message?: string }) {
+  const message = error.message || 'Financial write failed';
+  if (/Идентификатор запроса уже использован|Достигнут лимит beta/.test(message)) {
+    return errorResponse(message, 409);
+  }
+  return errorResponse(message, 500);
 }
 
 async function getAuthenticatedClient(req: Request) {
@@ -240,7 +254,7 @@ async function exportOperations(
 async function createOperation(
   supabase: ReturnType<typeof createClient>,
   workspaceId: string,
-  userId: string,
+  clientRequestId: string,
   body: Record<string, unknown>,
 ) {
   const { amount, type, description, category_id, operation_date, tag_ids, account_id } = body;
@@ -269,36 +283,44 @@ async function createOperation(
   );
   if ('error' in money) return errorResponse(money.error, 422);
 
-  const { data, error } = await supabase
-    .from('operations')
-    .insert({
-      workspace_id: workspaceId,
-      user_id: userId,
-      amount: numericAmount,
-      type: operationType,
-      description: description || null,
-      category_id: category_id || null,
-      account_id: money.accountId,
-      operation_date: operationDate,
-      currency: money.currency,
-      exchange_rate: money.exchangeRate,
-      base_amount: money.baseAmount,
-    })
-    .select()
-    .single();
-
-  if (error) return errorResponse(error.message, 500);
-
+  let tagNames: string[] = [];
   if (Array.isArray(tag_ids) && tag_ids.length > 0) {
-    const tagRows = tag_ids.map((tag_id: string) => ({
-      operation_id: data.id,
-      tag_id,
-    }));
-    const { error: tagError } = await supabase
-      .from('operation_tags')
-      .insert(tagRows);
+    const requestedTagIds = [...new Set(tag_ids.filter((tagId): tagId is string => typeof tagId === 'string'))];
+    if (requestedTagIds.length !== tag_ids.length) {
+      return errorResponse('tag_ids must contain unique tag UUIDs', 422);
+    }
+    const { data: tagRows, error: tagError } = await supabase
+      .from('tags')
+      .select('id, name')
+      .eq('workspace_id', workspaceId)
+      .in('id', requestedTagIds);
     if (tagError) return errorResponse(tagError.message, 500);
+    if ((tagRows || []).length !== requestedTagIds.length) {
+      return errorResponse('One or more tags do not belong to this workspace', 422);
+    }
+    tagNames = ((tagRows || []) as Array<{ name: string }>).map((tag) => tag.name).sort();
   }
+
+  const { data, error } = await supabase.rpc('create_operation_idempotent', {
+    p_client_request_id: clientRequestId,
+    p_workspace_id: workspaceId,
+    p_amount: numericAmount,
+    p_type: operationType,
+    p_description: description || '',
+    p_operation_date: operationDate,
+    p_category_id: category_id || null,
+    p_counterparty_id: null,
+    p_account_id: money.accountId,
+    p_currency: money.currency,
+    p_exchange_rate: money.exchangeRate,
+    p_base_amount: money.baseAmount,
+    p_debt_id: null,
+    p_debt_applied_amount: null,
+    p_allocations: [],
+    p_tag_names: tagNames,
+  });
+
+  if (error) return financialWriteError(error);
 
   return jsonResponse(data, 201);
 }
@@ -586,6 +608,7 @@ async function createTransfer(
   supabase: ReturnType<typeof createClient>,
   workspaceId: string,
   userId: string,
+  clientRequestId: string,
   body: Record<string, unknown>,
 ) {
   const { from_account_id, to_account_id, amount, description, operation_date } = body;
@@ -593,7 +616,8 @@ async function createTransfer(
     return errorResponse('from_account_id, to_account_id, and amount are required', 400);
   }
 
-  const { data, error } = await supabase.rpc('create_transfer', {
+  const { data, error } = await supabase.rpc('create_transfer_idempotent', {
+    p_client_request_id: clientRequestId,
     p_workspace_id: workspaceId,
     p_user_id: userId,
     p_from_account_id: from_account_id,
@@ -601,9 +625,10 @@ async function createTransfer(
     p_amount: amount,
     p_description: description || null,
     p_operation_date: operation_date || new Date().toISOString().split('T')[0],
+    p_tag_names: [],
   });
 
-  if (error) return errorResponse(error.message, 500);
+  if (error) return financialWriteError(error);
   return jsonResponse(data?.[0] || data, 201);
 }
 
@@ -709,7 +734,11 @@ Deno.serve(withCors(async (req) => {
       if (segments[2] === 'operations') {
         if (segments.length === 3) {
           if (method === 'GET') return await getOperations(supabase, workspaceId, url);
-          if (method === 'POST') return await createOperation(supabase, workspaceId, user.id, body);
+          if (method === 'POST') {
+            const requestId = idempotencyKey(req, body);
+            if (!requestId) return errorResponse('Idempotency-Key must be a UUID', 400);
+            return await createOperation(supabase, workspaceId, requestId, body);
+          }
         }
         // GET /workspaces/:id/operations/export
         if (segments.length === 4 && segments[3] === 'export' && method === 'GET') {
@@ -740,7 +769,9 @@ Deno.serve(withCors(async (req) => {
       // /workspaces/:id/transfers
       if (segments[2] === 'transfers') {
         if (segments.length === 3 && method === 'POST') {
-          return await createTransfer(supabase, workspaceId, user.id, body);
+          const requestId = idempotencyKey(req, body);
+          if (!requestId) return errorResponse('Idempotency-Key must be a UUID', 400);
+          return await createTransfer(supabase, workspaceId, user.id, requestId, body);
         }
         if (segments.length === 4) {
           if (method === 'PATCH') return await updateTransfer(supabase, workspaceId, segments[3], body);

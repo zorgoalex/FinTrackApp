@@ -7,7 +7,7 @@ const LOCAL_FUNCTION_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 const LOCAL_BROWSER_ORIGIN = /^http:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/;
 
 export const corsHeaders = {
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, idempotency-key',
   'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
   'Access-Control-Max-Age': '600',
   Vary: 'Origin',

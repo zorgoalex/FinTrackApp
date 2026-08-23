@@ -8,6 +8,7 @@ import { buildRulePattern, suggestCategory } from '../utils/documentImport/categ
 import { extractDocument, prewarmDocumentOcr } from '../utils/documentImport/extract';
 import { OCR_TIMEOUT_MS } from '../utils/documentImport/ocrPolicy';
 import { operationFingerprint } from '../utils/documentImport/privacy';
+import { createIdempotencyTracker } from '../utils/idempotency';
 import { receiptOcrClient } from '../services/appReceiptOcr';
 
 const MAX_FILE_SIZE = 15 * 1024 * 1024;
@@ -64,6 +65,10 @@ export default function ImportOperationsModal({
   const cameraInputRef = useRef(null);
   const processingControllerRef = useRef(null);
   const previewUrlRef = useRef('');
+  const importRequestTrackerRef = useRef(null);
+  if (!importRequestTrackerRef.current) {
+    importRequestTrackerRef.current = createIdempotencyTracker();
+  }
   const { getRate } = useCurrencies(workspaceId);
   const [recognitionMode, setRecognitionMode] = useState(() => receiptOcrClient.isConfigured ? 'server' : 'local');
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
@@ -128,6 +133,7 @@ export default function ImportOperationsModal({
     setCsvTemplates([]);
     setSelectedTemplateId('');
     setTemplateName('');
+    importRequestTrackerRef.current.clear();
     if (inputRef.current) inputRef.current.value = '';
     if (cameraInputRef.current) cameraInputRef.current.value = '';
   };
@@ -397,7 +403,7 @@ export default function ImportOperationsModal({
         rule_pattern: row.rule_pattern || null,
         tagNames: row.tagNames || [],
       }));
-      const { data: result, error: importError } = await supabase.rpc('confirm_import', {
+      const importParams = {
         p_workspace_id: workspaceId,
         p_source_kind: documentMeta.sourceKind,
         p_bank: documentMeta.bank || 'unknown',
@@ -405,9 +411,14 @@ export default function ImportOperationsModal({
         p_rows: rpcRows,
         p_template_id: selectedTemplateId || null,
         p_metadata: { parser: documentMeta.ocrEngine || 'local-redacted', redacted_types: (documentMeta.sensitiveData || []).map((item) => item.type || item.label) },
-        p_request_id: globalThis.crypto.randomUUID(),
+      };
+      const importRequest = importRequestTrackerRef.current.acquire('confirm_import_idempotent', importParams);
+      const { data: result, error: importError } = await supabase.rpc('confirm_import_idempotent', {
+        ...importParams,
+        p_request_id: importRequest.requestId,
       });
       if (importError) throw importError;
+      importRequestTrackerRef.current.complete(importRequest.key);
       setProgress(result?.confirmed_count || 0);
       await onRefresh();
       resetDocument();
