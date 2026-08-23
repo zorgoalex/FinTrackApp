@@ -106,12 +106,17 @@ export function AuthProvider({ children }) {
     setPasswordRequest(null);
   }, []);
 
-  const requireFreshPassword = useCallback(async (reason = 'Это действие требует повторного ввода текущего пароля') => {
+  const requireFreshPassword = useCallback(async (
+    reason = 'Это действие требует повторного ввода текущего пароля',
+    { force = false } = {},
+  ) => {
     if (!isInternetAvailable()) throw new Error(INTERNET_REQUIRED_MESSAGE);
 
-    const { data: assurance, error: assuranceError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-    if (assuranceError) throw assuranceError;
-    if (hasFreshPassword(assurance)) return true;
+    if (!force) {
+      const { data: assurance, error: assuranceError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (assuranceError) throw assuranceError;
+      if (hasFreshPassword(assurance)) return true;
+    }
 
     if (pendingPasswordRef.current) finishPasswordRequest(false);
     return new Promise((resolve) => {

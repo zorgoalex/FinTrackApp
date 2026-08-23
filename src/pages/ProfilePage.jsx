@@ -158,7 +158,10 @@ export default function ProfilePage() {
   const exportMyData = async () => {
     setExportError('');
     setExportMessage('');
-    const confirmed = await requireFreshPassword('Скачивание полного экспорта требует текущего пароля');
+    const confirmed = await requireFreshPassword(
+      'Скачивание полного экспорта требует текущего пароля',
+      { force: true },
+    );
     if (!confirmed) return;
     setExportBusy(true);
     try {

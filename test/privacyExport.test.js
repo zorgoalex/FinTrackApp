@@ -41,16 +41,34 @@ test('privacy export SQL exposes only a fresh-password authorization and redacte
 });
 
 test('profile UI requires fresh password and production smoke covers privacy export CORS', async () => {
-  const [profile, config, smoke, legal] = await Promise.all([
+  const [profile, auth, config, smoke, legal] = await Promise.all([
     readFile(new URL('../src/pages/ProfilePage.jsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contexts/AuthContext.jsx', import.meta.url), 'utf8'),
     readFile(new URL('../supabase/config.toml', import.meta.url), 'utf8'),
     readFile(new URL('../scripts/production-security-smoke.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/pages/LegalPage.jsx', import.meta.url), 'utf8'),
   ]);
-  assert.match(profile, /requireFreshPassword\('Скачивание полного экспорта/);
+  assert.match(profile, /requireFreshPassword\([\s\S]*Скачивание полного экспорта[\s\S]*\{ force: true \}/);
+  assert.match(auth, /if \(!force\)[\s\S]*hasFreshPassword\(assurance\)/);
   assert.match(profile, /downloadMyPrivacyExport\(supabase\)/);
   assert.match(profile, /Скачать мои данные/);
   assert.match(config, /\[functions\.privacy-export\]\s+verify_jwt = true/);
   assert.match(smoke, /'privacy-export'/);
   assert.match(legal, /Файл формируется по запросу и не сохраняется на сервере/);
+});
+
+test('authenticated navigation stays mounted and optional TOTP refresh is non-blocking', async () => {
+  const [app, workspace, gate] = await Promise.all([
+    readFile(new URL('../src/App.jsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contexts/WorkspaceContext.jsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/OptionalMfaGate.jsx', import.meta.url), 'utf8'),
+  ]);
+
+  assert.equal((app.match(/element: protectedLayoutWithWorkspace/g) || []).length, 1);
+  assert.match(app, /element: protectedLayoutWithWorkspace,[\s\S]*path: '\/operations'[\s\S]*path: '\/profile'/);
+  assert.match(workspace, /const workspaceIdFromPath = pathname\.match/);
+  assert.doesNotMatch(gate, /useLocation/);
+  assert.match(gate, /refresh\(\{ blocking: true \}\)/);
+  assert.match(gate, /const refreshInBackground = \(\) => refresh\(\)/);
+  assert.doesNotMatch(gate, /window\.addEventListener\('focus', refresh\)/);
 });

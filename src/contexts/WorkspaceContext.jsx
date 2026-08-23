@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from './AuthContext';
 import { useAuth } from './AuthContext';
 import { cacheReference, getCachedReference } from '../utils/offlineStore';
@@ -17,10 +17,11 @@ const CURRENCY_SYMBOLS = {
 };
 
 export function WorkspaceProvider({ children }) {
-  const { workspaceId: workspaceIdFromParams } = useParams();
+  const { pathname } = useLocation();
   const [searchParams] = useSearchParams();
   // Workspace ID can come from URL path (/workspace/:id) or from query param (?workspaceId=...)
-  const workspaceId = workspaceIdFromParams || searchParams.get('workspaceId') || null;
+  const workspaceIdFromPath = pathname.match(/^\/workspace\/([^/]+)/)?.[1] || null;
+  const workspaceId = workspaceIdFromPath || searchParams.get('workspaceId') || null;
   const { user, requireFreshPassword } = useAuth();
   const navigate = useNavigate();
   

@@ -1,27 +1,29 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
 import { supabase, useAuth } from '../contexts/AuthContext';
 import { getVerifiedTotpFactors, hasTotpAal2 } from '../utils/mfa';
 import MfaChallengeForm from './MfaChallengeForm';
 
 export default function OptionalMfaGate({ children }) {
   const { user, logout } = useAuth();
-  const location = useLocation();
   const [state, setState] = useState({ loading: true, assurance: null, factors: [], error: '' });
   const [verifyBusy, setVerifyBusy] = useState(false);
   const [verifyError, setVerifyError] = useState('');
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async ({ blocking = false } = {}) => {
     if (!user?.id) return;
-    setState((current) => ({ ...current, loading: true, error: '' }));
+    if (blocking) setState((current) => ({ ...current, loading: true, error: '' }));
     const [{ data: factorsData, error: factorsError }, { data: assurance, error: assuranceError }] = await Promise.all([
       supabase.auth.mfa.listFactors(),
       supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
     ]);
     const loadError = factorsError || assuranceError;
     if (loadError) {
-      setState({ loading: false, assurance: null, factors: [], error: loadError.message || 'Не удалось проверить двухфакторную защиту' });
+      if (blocking) {
+        setState({ loading: false, assurance: null, factors: [], error: loadError.message || 'Не удалось проверить двухфакторную защиту' });
+      } else {
+        console.error('OptionalMfaGate: background refresh failed', loadError);
+      }
       return;
     }
     setState({
@@ -30,12 +32,13 @@ export default function OptionalMfaGate({ children }) {
       factors: getVerifiedTotpFactors(factorsData?.all),
       error: '',
     });
-  }, [location.pathname, location.search, user?.id]);
+  }, [user?.id]);
 
   useEffect(() => {
-    refresh();
-    window.addEventListener('focus', refresh);
-    return () => window.removeEventListener('focus', refresh);
+    refresh({ blocking: true });
+    const refreshInBackground = () => refresh();
+    window.addEventListener('focus', refreshInBackground);
+    return () => window.removeEventListener('focus', refreshInBackground);
   }, [refresh]);
 
   if (state.loading) {

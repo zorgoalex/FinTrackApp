@@ -80,101 +80,19 @@ const router = createBrowserRouter([
     element: <ProtectedRoute><WorkspaceCreatePage /></ProtectedRoute>
   },
   {
-    path: '/workspace/:workspaceId',
     element: protectedLayoutWithWorkspace,
     children: [
-      {
-        index: true,
-        element: <WorkspacePage />
-      },
-      {
-        path: 'settings',
-        element: <WorkspaceSettingsPage />
-      },
-      {
-        path: 'dictionaries',
-        element: <DictionariesPage />
-      }
-    ]
-  },
-  {
-    path: '/operations',
-    element: protectedLayoutWithWorkspace,
-    children: [
-      {
-        index: true,
-        element: <OperationPage />
-      }
-    ]
-  },
-  {
-    path: '/analytics',
-    element: protectedLayoutWithWorkspace,
-    children: [
-      {
-        index: true,
-        element: <AnalyticsPage />
-      }
-    ]
-  },
-  {
-    path: '/debts',
-    element: protectedLayoutWithWorkspace,
-    children: [
-      {
-        index: true,
-        element: <DebtsPage />
-      }
-    ]
-  },
-  {
-    path: '/budgets',
-    element: protectedLayoutWithWorkspace,
-    children: [
-      {
-        index: true,
-        element: <BudgetsPage />
-      }
-    ]
-  },
-  {
-    path: '/scheduled',
-    element: protectedLayoutWithWorkspace,
-    children: [
-      {
-        index: true,
-        element: <ScheduledPage />
-      }
-    ]
-  },
-  {
-    path: '/cashflow',
-    element: protectedLayoutWithWorkspace,
-    children: [
-      {
-        index: true,
-        element: <CashflowPage />
-      }
-    ]
-  },
-  {
-    path: '/assistant',
-    element: protectedLayoutWithWorkspace,
-    children: [
-      {
-        index: true,
-        element: <AssistantPage />
-      }
-    ]
-  },
-  {
-    path: '/profile',
-    element: protectedLayoutWithWorkspace,
-    children: [
-      {
-        index: true,
-        element: <ProfilePage />
-      }
+      { path: '/workspace/:workspaceId', element: <WorkspacePage /> },
+      { path: '/workspace/:workspaceId/settings', element: <WorkspaceSettingsPage /> },
+      { path: '/workspace/:workspaceId/dictionaries', element: <DictionariesPage /> },
+      { path: '/operations', element: <OperationPage /> },
+      { path: '/analytics', element: <AnalyticsPage /> },
+      { path: '/debts', element: <DebtsPage /> },
+      { path: '/budgets', element: <BudgetsPage /> },
+      { path: '/scheduled', element: <ScheduledPage /> },
+      { path: '/cashflow', element: <CashflowPage /> },
+      { path: '/assistant', element: <AssistantPage /> },
+      { path: '/profile', element: <ProfilePage /> },
     ]
   },
   {
