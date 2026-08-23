@@ -41,6 +41,7 @@ export default function LegalPage() {
 
         <section className="space-y-3">
           <h2 className="text-xl font-semibold">Поддержка и запросы по данным</h2>
+          <p className="text-sm leading-6">Полный машиночитаемый JSON-экспорт можно скачать в личном кабинете после повторного ввода текущего пароля. Он включает данные аккаунта и принадлежащих вам пространств, а в пространствах других владельцев — только связанную с вами активность. Пароли, одноразовые токены, Web Push endpoints и ключи шифрования исключаются. Файл формируется по запросу и не сохраняется на сервере.</p>
           <p className="text-sm leading-6">Единый канал: <a className="font-medium text-primary-600 underline" href={`mailto:${supportEmail}`}>{supportEmail}</a>.</p>
         </section>
 

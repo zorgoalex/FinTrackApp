@@ -10,6 +10,7 @@ export const BROWSER_FUNCTIONS = [
   'invite-user',
   'login-user',
   'password-auth',
+  'privacy-export',
   'security-event',
   'send-test-push',
   'stt-transcribe',

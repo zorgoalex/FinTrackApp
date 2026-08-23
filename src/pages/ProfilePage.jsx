@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AlertTriangle, ExternalLink, KeyRound, Layers, LogOut, MessageCircle, RefreshCw, Trash2, Unlink, User } from 'lucide-react';
+import { AlertTriangle, Download, ExternalLink, KeyRound, Layers, LogOut, MessageCircle, RefreshCw, Trash2, Unlink, User } from 'lucide-react';
 import { supabase, useAuth } from '../contexts/AuthContext';
 import PasswordInput from '../components/PasswordInput';
 import MfaSettings from '../components/MfaSettings';
 import TurnstileWidget, { isTurnstileEnabled, TURNSTILE_REQUIRED_MESSAGE } from '../components/TurnstileWidget';
 import { isStrongPassword, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolicy';
 import { safeTelegramUrl } from '../utils/externalUrls';
+import { downloadMyPrivacyExport } from '../utils/privacyExport';
 
 async function invokeTelegram(action) {
   const result = await supabase.functions.invoke('telegram-link', { body: { action } });
@@ -21,7 +22,7 @@ async function invokeTelegram(action) {
 
 export default function ProfilePage() {
   const navigate = useNavigate();
-  const { user, updatePassword, logout } = useAuth();
+  const { user, updatePassword, logout, requireFreshPassword } = useAuth();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [password, setPassword] = useState('');
@@ -45,6 +46,9 @@ export default function ProfilePage() {
   const [deleteError, setDeleteError] = useState('');
   const [deleteCaptchaToken, setDeleteCaptchaToken] = useState('');
   const deleteTurnstileRef = useRef(null);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportError, setExportError] = useState('');
+  const [exportMessage, setExportMessage] = useState('');
 
   const loadTelegram = useCallback(async ({ silent = false } = {}) => {
     const { data, error: invokeError } = await invokeTelegram('status');
@@ -149,6 +153,22 @@ export default function ProfilePage() {
   const signOut = async () => {
     await logout().catch(() => undefined);
     navigate('/login', { replace: true });
+  };
+
+  const exportMyData = async () => {
+    setExportError('');
+    setExportMessage('');
+    const confirmed = await requireFreshPassword('Скачивание полного экспорта требует текущего пароля');
+    if (!confirmed) return;
+    setExportBusy(true);
+    try {
+      const result = await downloadMyPrivacyExport(supabase);
+      setExportMessage(`Экспорт скачан · ${Math.max(1, Math.ceil(result.bytes / 1024))} КБ`);
+    } catch (exportException) {
+      setExportError(exportException.message || 'Не удалось подготовить экспорт данных');
+    } finally {
+      setExportBusy(false);
+    }
   };
 
   const deleteAccount = async () => {
@@ -270,6 +290,22 @@ export default function ProfilePage() {
         <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary-50 text-primary-600 dark:bg-primary-950/40 dark:text-primary-300"><Layers size={20} /></span>
         <span><span className="block text-sm font-semibold">Мои пространства</span><span className="block text-xs text-gray-500">Выбор и создание пространств</span></span>
       </button>
+
+      <section className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+        <div className="flex items-start gap-3">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300"><Download size={20} /></span>
+          <div className="min-w-0 flex-1">
+            <h2 className="font-semibold">Скачать мои данные</h2>
+            <p className="mt-1 text-xs leading-5 text-gray-500">JSON-файл содержит данные аккаунта, ваши настройки, принадлежащие вам пространства и только вашу активность в общих пространствах. Пароли, токены и ключи уведомлений исключены.</p>
+          </div>
+        </div>
+        {exportError && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-2 text-sm text-red-600 dark:bg-red-950/30">{exportError}</p>}
+        {exportMessage && <p role="status" className="mt-3 rounded-lg bg-green-50 p-2 text-sm text-green-700 dark:bg-green-950/30 dark:text-green-300">{exportMessage}</p>}
+        <button type="button" disabled={exportBusy} onClick={exportMyData} className="btn-primary mt-3 flex min-h-11 w-full items-center justify-center gap-2 disabled:opacity-50">
+          <Download size={17} /> {exportBusy ? 'Готовим защищённый экспорт…' : 'Скачать JSON'}
+        </button>
+        <p className="mt-2 text-xs text-gray-400">Потребуется повторно ввести текущий пароль. Лимит — 3 экспорта за 24 часа.</p>
+      </section>
 
       <section className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
         <div className="mb-4 flex items-center gap-2"><KeyRound size={19} className="text-primary-600" /><h2 className="font-semibold">Сменить пароль</h2></div>
