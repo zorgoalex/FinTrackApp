@@ -3,7 +3,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
 
-SELECT plan(20);
+SELECT plan(22);
 
 SELECT ok(
   has_table_privilege('authenticated', 'public.accounts', 'SELECT, INSERT, UPDATE, DELETE'),
@@ -123,6 +123,16 @@ SELECT is(
   ),
   0,
   'anonymous role cannot execute public functions'
+);
+
+SELECT ok(
+  NOT has_function_privilege('authenticated', 'public.create_user_profile()', 'EXECUTE'),
+  'authenticated cannot execute the profile trigger function directly'
+);
+
+SELECT ok(
+  NOT has_function_privilege('authenticated', 'public.protect_operation_reconciliation()', 'EXECUTE'),
+  'authenticated cannot execute the reconciliation trigger function directly'
 );
 
 SELECT * FROM finish();
