@@ -260,6 +260,7 @@ specdata/
 .vercel/
 artifacts/security-stage-2-1/
 artifacts/security-stage-2-2/
+artifacts/playwright-security/
 
 # AI helpers
 for_GJ_AI/

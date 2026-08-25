@@ -42,6 +42,21 @@ Baseline window: **24 августа 2026 года, 19:50–19:58 UTC**.
 - Day 0 owner smoke и пользовательские сценарии не начинались.
 - Дата начала семидневного наблюдения не установлена: она появится только после baseline-записи и подключения первого согласованного участника.
 
+## Локальная готовность browser security acceptance
+
+Дополнение от **25 августа 2026 года, 17:59 UTC**:
+
+- Подготовлены два local-only Playwright-этапа: последовательная смена Owner/Outsider/Member/Viewer в одном BrowserContext и одновременная работа четырёх изолированных BrowserContext.
+- Финальный совместный прогон Chromium: **2/2 PASS за 21.6 секунды, retries 0**.
+- Подтверждены RLS/BOLA-отказы перекрёстного чтения и записи, очистка приватного browser state при logout, параллельные записи Owner/Member и немедленное применение понижения Member → Viewer к уже открытой сессии.
+- Синтетические `@example.invalid` users, workspaces и operations удалены teardown; canary-записи до удаления оставались неизменными.
+- Общий application gate после изменений: lint PASS, **148/148 Node tests**, production build PASS.
+- Строгий локальный SQL/TAP gate: **20 файлов, 328 planned assertions, PASS**.
+- Раннер отклоняет remote/production URL до старта. Production, реальные данные, сообщения участникам, push, deploy, migration и production configuration не затрагивались.
+- Network trace и video отключены; failed traces предыдущих отладочных прогонов удалены. Секреты в evidence не сохраняются.
+
+Вердикт этого подэтапа: **READY к воспроизводимому локальному запуску двух browser-security тестов**. Результат усиливает техническую приёмку, но не заменяет 3–5 реальных beta-участников и семидневное эксплуатационное наблюдение.
+
 ## Pilot journal
 
 ```text

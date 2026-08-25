@@ -24,7 +24,11 @@
     "supabase:start": "npx supabase start",
     "supabase:stop": "npx supabase stop",
     "supabase:status": "npx supabase status",
-    "supabase:reset": "npx supabase db reset"
+    "supabase:reset": "npx supabase db reset",
+    "security:test:browser": "node scripts/run-security-browser-e2e.mjs",
+    "security:test:browser:list": "node scripts/run-security-browser-e2e.mjs --list",
+    "security:test:browser:sequential": "node scripts/run-security-browser-e2e.mjs --grep @sequential",
+    "security:test:browser:concurrent": "node scripts/run-security-browser-e2e.mjs --grep @concurrent"
   },
   "dependencies": {
     "@paddleocr/paddleocr-js": "^0.4.2",
@@ -43,6 +47,7 @@
     "ws": "^8.21.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^6.0.5",

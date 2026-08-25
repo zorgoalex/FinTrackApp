@@ -25,7 +25,7 @@ jobs:
 
   database:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
         with:
@@ -43,3 +43,7 @@ jobs:
         run: npm run test:sql
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run local browser security acceptance
+        run: npm run security:test:browser

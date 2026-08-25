@@ -4,6 +4,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 
 const browserGlobals = {
+  caches: 'readonly',
   alert: 'readonly',
   Blob: 'readonly',
   clearTimeout: 'readonly',
@@ -15,6 +16,7 @@ const browserGlobals = {
   FormData: 'readonly',
   localStorage: 'readonly',
   MediaRecorder: 'readonly',
+  indexedDB: 'readonly',
   navigator: 'readonly',
   prompt: 'readonly',
   setTimeout: 'readonly',
@@ -85,6 +87,18 @@ export default [
         fetch: 'readonly',
         process: 'readonly',
         setTimeout: 'readonly',
+        URL: 'readonly',
+      },
+    },
+  },
+  {
+    files: ['playwright.config.js', 'e2e/security/**/*.js'],
+    languageOptions: {
+      globals: {
+        ...browserGlobals,
+        fetch: 'readonly',
+        process: 'readonly',
+        URL: 'readonly',
       },
     },
   },
