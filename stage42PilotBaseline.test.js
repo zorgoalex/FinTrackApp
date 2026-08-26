@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import {
@@ -39,23 +40,30 @@ test('monitor evidence is healthy only while the latest successful run is fresh'
 test('backup stays pending until the first scheduled post-deploy run deadline', () => {
   const deployedAt = '2026-08-26T03:47:56Z';
   const deadline = nextBackupDeadline(deployedAt);
-  assert.equal(deadline.toISOString(), new Date(Date.UTC(2026, 7, 27, 2, 17) + BACKUP_SCHEDULE_GRACE_MS).toISOString());
+  assert.equal(deadline.toISOString(), new Date(Date.UTC(2026, 7, 26, 22, 0) + BACKUP_SCHEDULE_GRACE_MS).toISOString());
   assert.equal(
     evaluateBackupCoverage([run()], deployedAt, new Date('2026-08-26T14:00:00Z')).status,
     'pending',
   );
   assert.equal(
-    evaluateBackupCoverage([run()], deployedAt, new Date('2026-08-27T03:30:00Z')).status,
+    evaluateBackupCoverage([run()], deployedAt, new Date('2026-08-26T23:30:00Z')).status,
     'fail',
   );
 });
 
 test('a successful backup after deployment closes the backup gate', () => {
   const result = evaluateBackupCoverage(
-    [run({ databaseId: 2, createdAt: '2026-08-27T02:17:00Z', updatedAt: '2026-08-27T02:20:00Z' })],
+    [run({ databaseId: 2, createdAt: '2026-08-26T22:00:00Z', updatedAt: '2026-08-26T22:03:00Z' })],
     '2026-08-26T03:47:56Z',
-    new Date('2026-08-27T03:00:00Z'),
+    new Date('2026-08-26T22:30:00Z'),
   );
   assert.equal(result.status, 'pass');
   assert.equal(result.firstAfterDeploy.databaseId, 2);
+});
+
+test('encrypted backup is scheduled for 03:00 Asia/Qyzylorda', async () => {
+  const workflow = await readFile('.github/workflows/encrypted-backup.yml', 'utf8');
+  assert.match(workflow, /Asia\/Qyzylorda is UTC\+5 year-round/);
+  assert.match(workflow, /cron: '0 22 \* \* \*'/);
+  assert.doesNotMatch(workflow, /cron: '17 2 \* \* \*'/);
 });

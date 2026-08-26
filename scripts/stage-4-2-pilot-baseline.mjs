@@ -84,8 +84,8 @@ export function nextBackupDeadline(deployedAt) {
     deployed.getUTCFullYear(),
     deployed.getUTCMonth(),
     deployed.getUTCDate(),
-    2,
-    17,
+    22,
+    0,
   ));
   if (next <= deployed) next.setUTCDate(next.getUTCDate() + 1);
   return new Date(next.getTime() + BACKUP_SCHEDULE_GRACE_MS);
