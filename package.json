@@ -28,7 +28,8 @@
     "security:test:browser": "node scripts/run-security-browser-e2e.mjs",
     "security:test:browser:list": "node scripts/run-security-browser-e2e.mjs --list",
     "security:test:browser:sequential": "node scripts/run-security-browser-e2e.mjs --grep @sequential",
-    "security:test:browser:concurrent": "node scripts/run-security-browser-e2e.mjs --grep @concurrent"
+    "security:test:browser:concurrent": "node scripts/run-security-browser-e2e.mjs --grep @concurrent",
+    "pilot:baseline": "node scripts/stage-4-2-pilot-baseline.mjs"
   },
   "dependencies": {
     "@paddleocr/paddleocr-js": "^0.4.2",
