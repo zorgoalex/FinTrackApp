@@ -370,7 +370,9 @@ export function AuthProvider({ children }) {
       }
       return {
         success: true,
-        requiresEmailConfirmation: Boolean(data?.requiresEmailConfirmation),
+        requiresEmailConfirmation: Boolean(
+          data?.requiresEmailConfirmation || !data?.access_token || !data?.refresh_token
+        ),
       };
     } catch (e) {
       setError(friendlyAuthError(e, "Ошибка регистрации"));

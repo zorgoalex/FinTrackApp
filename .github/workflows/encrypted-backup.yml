@@ -2,8 +2,8 @@ name: Encrypted production backup
 
 on:
   schedule:
-    # Asia/Qyzylorda is UTC+5 year-round: 22:00 UTC runs at 03:00 local time.
-    - cron: '0 22 * * *'
+    # Asia/Qyzylorda is UTC+5 year-round: 22:17 UTC runs at 03:17 local time.
+    - cron: '17 22 * * *'
   workflow_dispatch:
 
 permissions:

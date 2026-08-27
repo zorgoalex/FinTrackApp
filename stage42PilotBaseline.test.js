@@ -61,9 +61,9 @@ test('a successful backup after deployment closes the backup gate', () => {
   assert.equal(result.firstAfterDeploy.databaseId, 2);
 });
 
-test('encrypted backup is scheduled for 03:00 Asia/Qyzylorda', async () => {
+test('encrypted backup is scheduled for 03:17 Asia/Qyzylorda', async () => {
   const workflow = await readFile('.github/workflows/encrypted-backup.yml', 'utf8');
   assert.match(workflow, /Asia\/Qyzylorda is UTC\+5 year-round/);
-  assert.match(workflow, /cron: '0 22 \* \* \*'/);
-  assert.doesNotMatch(workflow, /cron: '17 2 \* \* \*'/);
+  assert.match(workflow, /cron: '17 22 \* \* \*'/);
+  assert.doesNotMatch(workflow, /cron: '0 22 \* \* \*'/);
 });

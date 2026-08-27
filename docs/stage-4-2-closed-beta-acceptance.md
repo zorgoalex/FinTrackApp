@@ -1,8 +1,8 @@
 # Stage 4.2 — закрытый beta-пилот и эксплуатационная приёмка
 
-Статус на **24 августа 2026 года, 19:58 UTC**: выполнен pre-pilot baseline. Наблюдаемая неделя ещё не началась, участники не подключены.
+Статус на **27 августа 2026 года, 13:26 Asia/Qyzylorda**: owner, Member и Viewer core smoke выполнены, первый post-deploy backup успешен. Наблюдаемая неделя ещё не началась, реальные участники не подключены.
 
-Текущий промежуточный вердикт: **CONDITIONAL GO только к Day 0 owner smoke** после подтверждения владельцем когорты, admission policy и optional scope/support. Это не финальный GO этапа 4.2 и не разрешение на open self-service.
+Текущий промежуточный вердикт: **CONDITIONAL GO к завершению owner-only gates перед T0**. Ролевой smoke и post-deploy backup закрыты; остаётся подтверждение фактического времени следующего scheduled backup. Это не финальный GO этапа 4.2 и не разрешение на open self-service.
 
 ## Границы проверки
 
@@ -59,6 +59,74 @@ Baseline window: **24 августа 2026 года, 19:50–19:58 UTC**.
 
 ## Pilot journal
 
+### Day 0 preparation — 26 августа 2026 года
+
+Baseline window: **26 августа 2026 года, 18:23–18:38 UTC**.
+
+| Контур | Фактически проверенное состояние |
+| --- | --- |
+| Git/release | `HEAD = origin/main = 29cbb5c70b55c1140acf727927f2810d8c2ee82c`, divergence `0/0`; production bundle показывает `29cbb5c · production`. |
+| GitHub CI | Quality `32998994686` и Security `32998994709` для `29cbb5c` завершились `success`. |
+| Production/Vercel | Deployment `6109323114` имеет Production status `success`; `https://fintrackapp.vip` отвечает HTTP 200. |
+| Production monitor | Ручной post-deploy run `32999403254` для `29cbb5c` завершился `success` в `2026-08-26T18:23:37Z`; отдельный ненагрузочный smoke проверил 12 Edge Functions. |
+| Encrypted backup | Первый backup после deployment `29cbb5c` ещё не наступил. Новый schedule: `22:00 UTC` / `03:00 Asia/Qyzylorda`; контрольный срок — `2026-08-26T22:45:00Z` / `27 августа 03:45` local. Текущий baseline: `CONDITIONAL_BACKUP_PENDING`. |
+| Supabase network restrictions | Read-only CLI подтвердил `status: applied`, IPv4 `[]`, IPv6 `[]`. Настройки не изменялись. |
+| Public browser smoke | Desktop login и mobile `390×844` login/signup доступны; build SHA совпадает, горизонтального overflow и console errors нет, beta-consent и автоматический security-check контур присутствуют. Формы, CAPTCHA и login не отправлялись. |
+| Owner-authenticated Day 0 smoke | Завершён в `2026-08-26T18:45Z`–`19:28Z` только в отдельном синтетическом workspace; подробности ниже. Пароли, OTP, cookies и токены не запрашивались. |
+| Security-event aggregates | `blocked`: owner-controlled SQL session unavailable. Это зафиксированное допустимое pre-T0 ограничение; файл `scripts/stage-4-2-security-event-aggregates.sql` проверен и содержит только агрегаты без identifiers, metadata и финансовых строк. |
+
+Решения владельца для пилота:
+
+- cohort: **3 участника**;
+- admission: **текущая регистрация с confirmation**, ссылка распространяется только среди согласованной когорты;
+- scope первой недели: **core finance only**;
+- optional-функции: **not-in-scope**;
+- support channel: **прямые сообщения владельцу в существующем мессенджере**;
+- triage owner: **владелец**;
+- beta warning и independent-copy warning: **explicitly acknowledged**;
+- security-event aggregates: **documented owner-SQL blocked**, без ослабления DB allowlist.
+
+`T0` не установлен: реальные участники не подключались и сообщения им не отправлялись.
+
+### Day 0 owner-controlled core smoke — 27 августа 2026 года
+
+Smoke window: **26 августа 2026 года, 18:45–19:28 UTC**.
+
+| Проверка | Результат без PII |
+| --- | --- |
+| Отдельный workspace | `PILOT TEST 2026-08-26`, personal, owner role — PASS. Существующие пространства не изменялись. |
+| Счета | Автоматический основной KZT-счёт и второй синтетический KZT-счёт с нулевым opening balance — PASS. |
+| Income create/edit | `1111 KZT` создан, затем изменён на `1222 KZT` и описание с префиксом `PILOT TEST` — PASS. |
+| Expense create/split | `444 KZT` создан и физически разделён на две части по `222 KZT` в том же synthetic workspace — PASS. |
+| Transfer | `333 KZT` между двумя synthetic KZT-счетами — PASS; общий income/expense balance не изменился. |
+| Analytics | До удаления одной части: 4 операции, income `1222`, expense `444`, balance `778 KZT`; после удаления: 3 операции, income `1222`, expense `222`, balance `1000 KZT` — PASS. |
+| Search и filters | Поиск по synthetic description возвращает одну строку; income-filter скрывает expense и transfer — PASS. |
+| Mobile viewport | `390×844`, operations и split state доступны, horizontal overflow отсутствует — PASS. |
+| Delete operation | После явного owner approval удалена ровно одна synthetic expense-part `222 KZT`; вторая часть осталась — PASS. |
+| Logout/isolation | После logout `/login`; прямой private route перенаправляет на `/login`, synthetic workspace text не раскрывается — PASS. |
+| Relogin/continuity | После самостоятельного owner relogin оставшиеся income, expense-part и transfer сохранились; итоговая analytics согласована — PASS. |
+| Member/Viewer | Member account: registration, mandatory email confirmation, invitation acceptance и role assignment выполнены; create/read/delete synthetic expense `101 KZT` с маркером `PILOT MEMBER TEST` — PASS. Viewer invitation принято: роль `Наблюдатель`, owner-created synthetic data читаются, кнопки `Доход`, `Расход` и `Перевод` disabled — PASS. Email не фиксировались. |
+| Optional-функции | `not-in-scope`; OCR/AI/STT, Push, email, Telegram и exports не запускались. |
+
+Operational observations:
+
+- повторяется console error загрузки Tesseract OCR worker с `cdn.jsdelivr.net`; OCR не запускался и остаётся `not-in-scope`, core smoke не затронут. Классификация: **Low / optional observation**;
+- один раз после relogin появился `useCategories: load error`, но категории были полностью доступны до и после reload, операции и фильтры работали. Классификация: **Low / transient observation**.
+- первая signup-попытка вернула `Регистрация временно недоступна`; один контролируемый retry прошёл, а вход до email confirmation был отклонён. Классификация: **Medium / transient admission observation**;
+- production signup-форма не содержит повторного ввода пароля, а явная post-signup инструкция проверить email не была показана до перехода на login; само confirmation enforcement сработало. Повторный ввод пароля и проверка совпадения подготовлены локально, но ещё не опубликованы. Классификация: **Medium / registration UX**;
+- invitation фактически было принято и membership создано, но повторный запрос одноразового token показал ложное `already accepted`. Классификация: **Medium / invitation idempotency UX**.
+
+### Первый post-deploy encrypted backup
+
+Run `33034898929` на SHA `29cbb5c` — **PASS**: configuration validation, temporary network window open/close, dump creation/verification, encryption, retention gate, private R2 upload и local cleanup успешны.
+Workflow настроен на `0 22 * * *` (`03:00 Asia/Qyzylorda`), но первый запуск был создан в `2026-08-27T02:57:50Z`, то есть в `07:57` local. Backup gate закрыт по результату, а соблюдение нового времени остаётся неподтверждённым до следующего scheduled run; начало часа является известной зоной задержек GitHub Actions.
+
+Оставшиеся pre-T0 gates:
+
+- подтвердить следующий scheduled backup около `03:00` local либо после отдельного разрешения перенести cron с начала часа на минуту внутри 03:00–03:59.
+
+Вердикт Day 0 core smoke: **PASS**, Critical/High findings не обнаружены. До закрытия оставшихся gates и отдельного разрешения участников не подключать, `T0` не начинать.
+
 ```text
 UTC date/time: 2026-08-24T19:50:16Z
 Participant: SYSTEM
@@ -90,14 +158,20 @@ Next action: obtain owner pilot decisions, then perform Day 0 owner-controlled s
 
 ## Решение на текущем шаге
 
-**CONDITIONAL GO к подготовке Day 0 owner smoke**, потому что Git/CI/production/Supabase baseline зелёный и Critical/High findings не обнаружены.
+**CONDITIONAL GO к завершению pre-T0 gates**: Git/CI/production/Supabase baseline зелёный, Day 0 owner, Member и Viewer core smoke пройдены, post-deploy backup успешен, Critical/High findings не обнаружены.
 
-Условия снятия pre-pilot conditional status:
+Подтверждено владельцем и проверено:
 
-1. владелец подтверждает 3–5 доверенных участников и beta-условия;
-2. владелец выбирает admission policy;
-3. владелец определяет optional scope, support channel и ответственного за triage;
-4. безопасно фиксируются агрегаты security events либо документируется временная недоступность owner-controlled SQL;
-5. owner-controlled аккаунт проходит Day 0 core smoke на синтетических данных.
+- когорта — 3 доверенных участника; beta-условия и предупреждение о самостоятельной копии данных подтверждены;
+- admission policy — текущая регистрация с confirmation и ограниченное распространение ссылки;
+- первая неделя — `core finance only`, optional-функции — `not-in-scope`;
+- support channel — личные сообщения владельцу в существующем мессенджере; triage owner — владелец;
+- недоступность owner-controlled SQL для агрегатов security events принята как документированное ограничение до T0;
+- Day 0 owner core smoke на синтетических данных пройден, включая сохранность после logout/relogin.
+- Member create/read/delete smoke на синтетических данных пройден;
+- Viewer acceptance/read/write-deny smoke пройден: общие данные читаются, финансовые write-actions отключены;
+- первый post-deploy encrypted backup на актуальном production SHA прошёл все обязательные шаги, включая закрытие временного network window.
 
-Финальный Stage 4.2 GO невозможен до семи календарных дней наблюдения, минимум трёх участников и прохождения обязательной матрицы. Open self-service остаётся вне scope.
+До снятия pre-T0 conditional status остаётся подтверждение фактического запуска backup в пределах согласованного часа `03:00–03:59 Asia/Qyzylorda`.
+
+Participant T0 не начат. Приглашение участников требует отдельного разрешения владельца после закрытия оставшегося пункта. Финальный Stage 4.2 GO невозможен до семи календарных дней наблюдения, минимум трёх участников и прохождения обязательной матрицы. Open self-service остаётся вне scope.

@@ -22,3 +22,18 @@ test('password fields expose an accessible show and hide control', async () => {
     assert.doesNotMatch(source, /type=["']password["']/);
   }
 });
+
+test('signup requires matching password confirmation before submission', async () => {
+  const source = await readFile('src/pages/SignupPage.jsx', 'utf8');
+
+  assert.match(source, /passwordConfirmation/);
+  assert.match(source, /password !== passwordConfirmation/);
+  assert.match(source, /Пароли не совпадают/);
+  assert.match(source, /placeholder="Повторите пароль"/);
+});
+
+test('signup shows email confirmation instructions whenever no session is returned', async () => {
+  const source = await readFile('src/contexts/AuthContext.jsx', 'utf8');
+
+  assert.match(source, /requiresEmailConfirmation:[\s\S]*!data\?\.access_token[\s\S]*!data\?\.refresh_token/);
+});

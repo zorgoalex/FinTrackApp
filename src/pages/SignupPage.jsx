@@ -14,6 +14,7 @@ export default function SignupPage() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [localError, setLocalError] = useState("");
   const [confirmationSent, setConfirmationSent] = useState(false);
   const [legalAccepted, setLegalAccepted] = useState(false);
@@ -29,6 +30,10 @@ export default function SignupPage() {
     }
     if (!isStrongPassword(password)) {
       setLocalError(PASSWORD_POLICY_MESSAGE);
+      return;
+    }
+    if (password !== passwordConfirmation) {
+      setLocalError("Пароли не совпадают");
       return;
     }
     if (!/^[\p{L}\p{N}_]{3,21}$/u.test(username)) {
@@ -67,6 +72,7 @@ export default function SignupPage() {
           <input type="text" className="input-field" placeholder="Логин" value={username} onChange={(e)=>setUsername(e.target.value)} autoComplete="username" minLength={3} maxLength={21} required />
           <input type="email" className="input-field" placeholder="Email" value={email} onChange={(e)=>setEmail(e.target.value)} required />
           <PasswordInput placeholder="Пароль — не менее 8 символов" value={password} onChange={(e)=>setPassword(e.target.value)} autoComplete="new-password" minLength={8} required />
+          <PasswordInput placeholder="Повторите пароль" aria-label="Повторите пароль" value={passwordConfirmation} onChange={(e)=>setPasswordConfirmation(e.target.value)} autoComplete="new-password" minLength={8} required />
           <label className="flex items-start gap-2 text-xs leading-5 text-gray-600 dark:text-gray-300">
             <input type="checkbox" checked={legalAccepted} onChange={(event) => setLegalAccepted(event.target.checked)} className="mt-1 h-4 w-4 shrink-0" required />
             <span>Я принимаю <Link to="/legal" target="_blank" className="font-medium text-primary-600 underline">условия закрытого beta-теста и политику обработки данных</Link>.</span>

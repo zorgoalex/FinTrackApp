@@ -3,6 +3,17 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../contexts/AuthContext'; // Assuming supabase is exported from AuthContext
 import { CheckCircle, XCircle, Loader } from 'lucide-react';
 
+async function invitationErrorMessage(error, data) {
+  if (data?.error) return String(data.error);
+  try {
+    const payload = await error?.context?.json();
+    if (payload?.error) return String(payload.error);
+  } catch {
+    // The Functions client may expose a response body only once.
+  }
+  return 'Не удалось принять приглашение.';
+}
+
 export default function InvitationAcceptPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -27,8 +38,7 @@ export default function InvitationAcceptPage() {
         });
 
         if (functionError) {
-          const errorMessage = functionError.context?.errorMessage || 'Не удалось принять приглашение.';
-          throw new Error(errorMessage);
+          throw new Error(await invitationErrorMessage(functionError, data));
         }
 
         setSuccess(true);

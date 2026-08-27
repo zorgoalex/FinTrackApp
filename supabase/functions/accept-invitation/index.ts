@@ -37,7 +37,7 @@ Deno.serve(withCors(async (req: Request) => {
     // Get the invitation token from the request body
     const { token } = await req.json();
     if (!token) {
-      return new Response(JSON.stringify({ error: 'Missing invitation token.' }), {
+      return new Response(JSON.stringify({ error: 'Токен приглашения не указан.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,
       });
@@ -51,21 +51,13 @@ Deno.serve(withCors(async (req: Request) => {
       .single();
 
     if (findError || !invitation) {
-      return new Response(JSON.stringify({ error: 'Invitation not found.' }), {
+      return new Response(JSON.stringify({ error: 'Приглашение не найдено или ссылка недействительна.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 404,
       });
     }
 
-    // 2. Validate the invitation
-    if (invitation.status !== 'pending') {
-      return new Response(JSON.stringify({ error: `This invitation has already been ${invitation.status}.` }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 410, // Gone
-      });
-    }
-
-    // Security check: Ensure the logged-in user is the one who was invited
+    // 2. Validate the recipient before disclosing invitation state.
     const invitedEmail = invitation.invited_email?.trim().toLowerCase();
     const acceptingEmail = acceptingUser.email?.trim().toLowerCase();
     const recipientSubject = await opaqueValue(invitedEmail || 'unknown');
@@ -75,10 +67,61 @@ Deno.serve(withCors(async (req: Request) => {
           workspaceId: invitation.workspace_id, subjectHash: recipientSubject,
           metadata: { reason: 'recipient_mismatch' },
         }, req);
-        return new Response(JSON.stringify({ error: 'This invitation is intended for a different email address.' }), {
+        return new Response(JSON.stringify({ error: 'Это приглашение предназначено для другого email.' }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 403, // Forbidden
         });
+    }
+
+    // A repeated request from the accepted recipient is safe and must be idempotent.
+    if (invitation.status === 'accepted') {
+      const { data: existingMember, error: memberLookupError } = await supabaseAdmin
+        .from('workspace_members')
+        .select('workspace_id')
+        .eq('workspace_id', invitation.workspace_id)
+        .eq('user_id', acceptingUser.id)
+        .maybeSingle();
+
+      if (memberLookupError) {
+        console.error('Accepted invitation membership lookup failed', memberLookupError.code || 'unknown');
+        return new Response(JSON.stringify({ error: 'Не удалось проверить принятое приглашение.' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 500,
+        });
+      }
+
+      if (existingMember) {
+        await recordSecurityEventSafely(supabaseAdmin, {
+          eventType: 'invitation.accept', outcome: 'success', actorUserId: acceptingUser.id,
+          workspaceId: invitation.workspace_id, subjectHash: recipientSubject,
+          metadata: { role: String(invitation.role), idempotent: true },
+        }, req);
+        return new Response(JSON.stringify({
+          success: true,
+          workspaceId: invitation.workspace_id,
+          alreadyAccepted: true,
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        });
+      }
+
+      await recordSecurityEventSafely(supabaseAdmin, {
+        eventType: 'invitation.accept', outcome: 'failure', actorUserId: acceptingUser.id,
+        workspaceId: invitation.workspace_id, subjectHash: recipientSubject,
+        metadata: { reason: 'accepted_membership_missing' },
+      }, req);
+      return new Response(JSON.stringify({ error: 'Не удалось подтвердить принятое приглашение.' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 409,
+      });
+    }
+
+    if (invitation.status !== 'pending') {
+      return new Response(JSON.stringify({ error: 'Приглашение больше не активно.' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 410, // Gone
+      });
     }
 
     if (new Date(invitation.expires_at) < new Date()) {
@@ -89,7 +132,7 @@ Deno.serve(withCors(async (req: Request) => {
         workspaceId: invitation.workspace_id, subjectHash: recipientSubject,
         metadata: { reason: 'expired' },
       }, req);
-      return new Response(JSON.stringify({ error: 'This invitation has expired.' }), {
+      return new Response(JSON.stringify({ error: 'Срок действия приглашения истёк.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 410, // Gone
       });
